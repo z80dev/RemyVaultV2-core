@@ -1,0 +1,12 @@
+[project]
+name = "remyvaultv2"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "ape-foundry>=0.8.7",
+    "ape-hardhat>=0.8.5",
+    "ape-vyper>=0.8.8",
+    "eth-ape>=0.8.24",
+]
