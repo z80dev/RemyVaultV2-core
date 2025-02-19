@@ -11,3 +11,5 @@ wheels/
 .venv
 /.python-version
 /node_modules/
+/cache/
+/out/
