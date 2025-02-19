@@ -1,0 +1,3 @@
+[submodule "lib/snekmate"]
+	path = lib/snekmate
+	url = https://github.com/pcaversaccio/snekmate
