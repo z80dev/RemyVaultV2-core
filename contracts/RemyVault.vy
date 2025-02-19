@@ -6,8 +6,6 @@
 from ethereum.ercs import IERC20 as ERC20
 from ethereum.ercs import IERC721 as ERC721
 
-token_implementation_address: address
-
 erc20: public(ERC20)
 erc721: public(ERC721)
 
@@ -73,10 +71,10 @@ interface DN404:
     def setBaseURI(uri: String[128]): nonpayable
 
 @deploy
-def __init__(_token_implementation_address: address, erc721_address: address, fees: uint256[2]):
+def __init__(_token_address: address, erc721_address: address, fees: uint256[2]):
     self.erc721 = ERC721(erc721_address)
-    self.erc20 = ERC20(_token_implementation_address)
-    extcall DN404(_token_implementation_address).setSkipNFT(True)
+    self.erc20 = ERC20(_token_address)
+    extcall DN404(_token_address).setSkipNFT(True)
     self.active = True
     self.owner = msg.sender
     self.mint_fee = fees[0] * 10 ** 18
