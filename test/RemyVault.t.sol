@@ -50,6 +50,7 @@ contract RemyVaultTest is Test {
         vault = IVault(deployCode("RemyVault", abi.encode(address(token), address(nft))));
         Ownable(address(token)).transfer_ownership(address(vault));
         Ownable(address(nft)).transfer_ownership(address(vault));
+        excludeSender(address(vault));
     }
 
     function testSetup() public view {
@@ -60,6 +61,7 @@ contract RemyVaultTest is Test {
 
     function testDeposit() public {
         // mint a token to this contract
+        vm.prank(address(vault));
         nft.mint(address(this), 1);
 
         // approve the vault to transfer the token
@@ -85,6 +87,7 @@ contract RemyVaultTest is Test {
         // mint n tokens to this contract & store their tokenIds
         uint256[] memory tokenIds = new uint256[](n);
         for (uint256 i = 0; i < n; i++) {
+            vm.prank(address(vault));
             nft.mint(address(this), i);
             tokenIds[i] = i;
         }
@@ -106,6 +109,7 @@ contract RemyVaultTest is Test {
 
     function testWithdraw() public {
         // mint a token to this contract
+        vm.prank(address(vault));
         nft.mint(address(this), 1);
 
         // approve the vault to transfer the token
@@ -137,6 +141,7 @@ contract RemyVaultTest is Test {
         // mint n tokens to this contract & store their tokenIds
         uint256[] memory tokenIds = new uint256[](n);
         for (uint256 i = 0; i < n; i++) {
+            vm.prank(address(vault));
             nft.mint(address(this), i);
             tokenIds[i] = i;
         }
@@ -161,14 +166,14 @@ contract RemyVaultTest is Test {
     }
 
     // can't get excludeContract/selector/sender to work, so commenting out for now
-    // function invariant_tokenSupply() public {
-    //     // token's totalSupply should be equal to the number of tokenIds the vault owns, * UNIT
-    //     // we can get that number with quoteDeposit
-    //     uint256 vaultNFTBalance = nft.balanceOf(address(vault));
-    //     uint256 totalSupply = token.totalSupply();
-    //     uint256 quoteDeposit = vault.quoteDeposit(vaultNFTBalance);
-    //     assertGe(totalSupply, quoteDeposit);
-    // }
+    function invariant_tokenSupply() public {
+        // token's totalSupply should be equal to the number of tokenIds the vault owns, * UNIT
+        // we can get that number with quoteDeposit
+        uint256 vaultNFTBalance = nft.balanceOf(address(vault));
+        uint256 totalSupply = token.totalSupply();
+        uint256 quoteDeposit = vault.quoteDeposit(vaultNFTBalance);
+        assertEq(totalSupply, quoteDeposit);
+    }
 
     function onERC721Received(address, address, uint256, bytes memory) public pure returns (bytes4) {
         return this.onERC721Received.selector;
