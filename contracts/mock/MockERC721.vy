@@ -16,7 +16,6 @@ def __init__(
 
 @external
 def mint(to: address, token_id: uint256):
-    ow._check_owner()
     erc721._mint(to, token_id)
 
 exports: erc721.__interface__
