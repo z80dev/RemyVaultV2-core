@@ -91,7 +91,6 @@ The test suite (`RemyVault.t.sol`) includes:
 - Basic setup verification
 - Single deposit/withdraw testing
 - Batch operation testing
-- Invariant checking for token supply
 
 ## Contributing
 

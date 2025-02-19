@@ -14,8 +14,4 @@ def __init__(
     ownable.__init__()
     erc20.__init__(name_, symbol_, decimals_, name_eip712_, version_eip712_)
 
-@external
-def setSkipNFT(bool_: bool) -> bool:
-    return True
-
 exports: erc20.__interface__

@@ -1,4 +1,4 @@
 [profile.default]
 libs = ["node_modules", "lib", "lib/snekmate/src"]
-src = "contracts"
 skip = ["**/lib/snekmate/**"]
+show_metrics = true
