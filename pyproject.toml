@@ -9,4 +9,5 @@ dependencies = [
     "ape-hardhat>=0.8.5",
     "ape-vyper>=0.8.8",
     "eth-ape>=0.8.24",
+    "snekmate>=0.1.0",
 ]

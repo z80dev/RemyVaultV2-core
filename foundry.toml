@@ -1,2 +1,7 @@
-[profile.local]
+[profile]
+default = { libs = ["node_modules", "lib"] }
 src = "contracts"
+skip = ["**/lib/snekmate/**"]
+libs = ["lib", "lib/snekmate/src"]
+# Assuming you have a virtual environment in `.venv` and are using Python 3.12
+#libs = ["lib", ".venv/lib/python3.12/site-packages/"]

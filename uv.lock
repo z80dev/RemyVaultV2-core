@@ -1504,6 +1504,7 @@ dependencies = [
     { name = "ape-hardhat" },
     { name = "ape-vyper" },
     { name = "eth-ape" },
+    { name = "snekmate" },
 ]
 
 [package.metadata]
@@ -1512,6 +1513,7 @@ requires-dist = [
     { name = "ape-hardhat", specifier = ">=0.8.5" },
     { name = "ape-vyper", specifier = ">=0.8.8" },
     { name = "eth-ape", specifier = ">=0.8.24" },
+    { name = "snekmate", specifier = ">=0.1.0" },
 ]
 
 [[package]]
@@ -1576,6 +1578,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050 },
+]
+
+[[package]]
+name = "snekmate"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a5/47/33f865f94c8892e3be93eaa103289709dd373442a02dc689452b18527f62/snekmate-0.1.0.tar.gz", hash = "sha256:8446b4c1aac8bf80b5e6a7e4fe7e9b2547200fabd9577bf6e22a2e79ba88d5de", size = 94723 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/14/1c/8d5285626ee40f297cc4bf944ffcb1c4bf02c966fb34ee8c452ab9b232d7/snekmate-0.1.0-py3-none-any.whl", hash = "sha256:0f56078c4237f2f57704ec6c974378751c5f30fb2c19f406aec2f173c002ab85", size = 112946 },
 ]
 
 [[package]]
