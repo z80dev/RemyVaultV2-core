@@ -166,7 +166,7 @@ contract RemyVaultTest is Test {
     }
 
     // can't get excludeContract/selector/sender to work, so commenting out for now
-    function invariant_tokenSupply() public {
+    function invariant_tokenSupply() public view {
         // token's totalSupply should be equal to the number of tokenIds the vault owns, * UNIT
         // we can get that number with quoteDeposit
         uint256 vaultNFTBalance = nft.balanceOf(address(vault));
