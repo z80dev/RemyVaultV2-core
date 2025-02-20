@@ -1,12 +1,24 @@
 # pragma version ^0.4.0
 
+################################################################################
+# INTERFACE IMPORTS
+################################################################################
+
 from ethereum.ercs import IERC20
 from ethereum.ercs import IERC721
-
 from . import ManagedToken as IManagedToken
+
+################################################################################
+# STATE VARIABLES
+################################################################################
 
 erc20: public(IERC20)
 erc721: public(IERC721)
+UNIT: constant(uint256) = 1000 * 10 ** 18
+
+################################################################################
+# EVENTS
+################################################################################
 
 event Deposit:
     recipient: indexed(address)
@@ -18,12 +30,18 @@ event Withdraw:
     token_ids: DynArray[uint256, 100]
     erc20_amt: uint256
 
-UNIT: constant(uint256) = 1000 * 10 ** 18
+################################################################################
+# CONSTRUCTOR
+################################################################################
 
 @deploy
 def __init__(_token_address: address, erc721_address: address):
     self.erc721 = IERC721(erc721_address)
     self.erc20 = IERC20(_token_address)
+
+################################################################################
+# DEPOSIT FUNCTIONS
+################################################################################
 
 @nonreentrant
 @external
@@ -46,6 +64,10 @@ def batchDeposit(tokenIds: DynArray[uint256, 100], recipient: address) -> uint25
     mint_amount: uint256 = self.mint_erc20(recipient, len(tokenIds))
     log Deposit(recipient, tokenIds, mint_amount)
     return mint_amount
+
+################################################################################
+# WITHDRAW FUNCTIONS
+################################################################################
 
 @nonreentrant
 @external
@@ -70,6 +92,10 @@ def batchWithdraw(tokenIds: DynArray[uint256, 100], recipient: address) -> uint2
     log Withdraw(recipient, tokenIds, total_amount)
     return total_amount
 
+################################################################################
+# INTERNAL BURN/MINT HELPERS
+################################################################################
+
 @internal
 def mint_erc20(recipient: address, num_tokens: uint256) -> uint256:
     erc20_amt: uint256 = num_tokens * UNIT
@@ -80,6 +106,10 @@ def mint_erc20(recipient: address, num_tokens: uint256) -> uint256:
 def burn_erc20(holder: address, num_tokens: uint256):
     extcall self.erc20.transferFrom(holder, self, num_tokens * UNIT)
     extcall IManagedToken(self.erc20.address).burn(num_tokens * UNIT)
+
+################################################################################
+# EXTERNAL QUOTE FUNCTIONS
+################################################################################
 
 @pure
 @external
