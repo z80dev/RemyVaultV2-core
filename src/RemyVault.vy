@@ -6,7 +6,7 @@
 
 from ethereum.ercs import IERC20
 from ethereum.ercs import IERC721
-from . import ManagedToken as IManagedToken
+from interfaces import ManagedToken as IManagedToken
 
 ################################################################################
 # STATE VARIABLES
