@@ -1,9 +1,6 @@
 [submodule "lib/snekmate"]
 	path = lib/snekmate
 	url = https://github.com/pcaversaccio/snekmate
-[submodule "lib/dn404"]
-	path = lib/dn404
-	url = https://github.com/vectorized/dn404
 [submodule "lib/forge-std"]
 	path = lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
