@@ -225,13 +225,13 @@ contract RemyVaultHook is BaseHook {
         PoolKey calldata key,
         IPoolManager.SwapParams calldata params,
         BalanceDelta delta,
-        bytes calldata
+        bytes calldata hookData
     ) internal override returns (bytes4 selector, int128 deltaAdjustment) {
         // Only allow swaps from valid pools
         if (!validPools[key.toId()]) revert InvalidPool();
         
         // Determine if this is a buy or sell of NFTs
-        bool isBuyingNFT;
+        bool isBuyingVaultToken;
         Currency tokenIn;
         Currency tokenOut;
         
@@ -243,29 +243,30 @@ contract RemyVaultHook is BaseHook {
             tokenOut = key.currency0;
         }
         
-        // If tokenOut is vault token, user is buying an NFT
-        isBuyingNFT = (tokenOut == Currency.wrap(address(vaultToken)));
+        // If tokenOut is vault token, user is buying vault tokens (and optionally NFTs)
+        isBuyingVaultToken = (tokenOut == Currency.wrap(address(vaultToken)));
         
         bool isExactInput = params.amountSpecified < 0;
         uint256 amountSpecifiedAbs = uint256(params.amountSpecified < 0 ? 
                                             -params.amountSpecified : 
                                             params.amountSpecified);
         
-        if (isBuyingNFT) {
-            // Handle buying NFT
-            return _handleBuyNFT(sender, delta, amountSpecifiedAbs, isExactInput);
+        if (isBuyingVaultToken) {
+            // Handle buying vault tokens (with optional NFT)
+            return _handleBuyNFT(sender, delta, amountSpecifiedAbs, isExactInput, hookData);
         } else {
-            // Handle selling NFT
-            return _handleSellNFT(sender, delta, amountSpecifiedAbs, isExactInput);
+            // Handle selling NFT (with NFT token IDs in hookData)
+            return _handleSellNFT(sender, delta, amountSpecifiedAbs, isExactInput, hookData);
         }
     }
     
     /**
-     * @notice Implements the NFT buying logic
+     * @notice Implements the buying logic with optional NFT purchase
      * @param buyer The buyer's address
      * @param delta Balance delta from the swap
      * @param amountSpecified The amount specified for the swap
      * @param isExactInput Whether this is an exact input swap
+     * @param hookData Optional data to control behavior (can include NFT purchase flag)
      * @return selector The function selector
      * @return deltaAdjustment Optional adjustment to the balance delta
      */
@@ -273,16 +274,31 @@ contract RemyVaultHook is BaseHook {
         address buyer, 
         BalanceDelta delta, 
         uint256 amountSpecified,
-        bool isExactInput
+        bool isExactInput,
+        bytes calldata hookData
     ) internal returns (bytes4 selector, int128 deltaAdjustment) {
-        // Check if we have NFTs in inventory
-        if (inventory.length == 0) revert NoInventory();
-        
         // Calculate the amount of tokens we received (positive delta for the hook)
-        int256 tokensReceived;
-        uint256 vaultTokenAmount;
+        int256 tokensReceived = _getTokensReceived(delta);
         
-        // Get received amount
+        // Parse hook data to determine if NFT purchase is requested
+        // Default to false if no data provided
+        bool includeNFT = hookData.length >= 32 ? abi.decode(hookData, (bool)) : false;
+        
+        // Handle NFT purchase if requested and tokens received is sufficient
+        if (includeNFT) {
+            _processNFTPurchase(buyer, uint256(tokensReceived));
+        }
+        
+        // No delta adjustment needed
+        return (IHooks(address(0)).afterSwap.selector, 0);
+    }
+    
+    /**
+     * @notice Helper function to get tokens received from a delta
+     * @param delta The balance delta from a swap
+     * @return tokensReceived The amount of tokens received
+     */
+    function _getTokensReceived(BalanceDelta delta) internal pure returns (int256 tokensReceived) {
         int128 amount0 = delta.amount0();
         int128 amount1 = delta.amount1();
         
@@ -291,11 +307,25 @@ contract RemyVaultHook is BaseHook {
         } else if (amount1 > 0) {
             tokensReceived = int256(amount1);
         }
+    }
+    
+    /**
+     * @notice Helper function to process an NFT purchase
+     * @param buyer The buyer's address
+     * @param tokensReceived The amount of tokens received
+     */
+    function _processNFTPurchase(address buyer, uint256 tokensReceived) internal {
+        // Check if we have NFTs in inventory
+        if (inventory.length == 0) revert NoInventory();
         
-        // Calculate the ETH fee (we need to convert from vault token value to ETH value)
-        // In a real implementation, you would need to fetch the current ETH/vault token price
-        // For simplicity, we'll assume we can get this conversion rate
-        uint256 ethFee = (uint256(tokensReceived) * buyFee) / FEE_DENOMINATOR;
+        // Calculate the number of NFTs the user can buy
+        uint256 nftUnit = remyVault.quoteDeposit(1);
+        
+        // Ensure the user has enough tokens for at least one NFT
+        if (tokensReceived < nftUnit) revert InsufficientBalance();
+        
+        // Calculate the ETH fee only for the NFT portion
+        uint256 ethFee = (nftUnit * buyFee) / FEE_DENOMINATOR;
         
         // The fee is collected in ETH which would be directly sent by the user
         // This would be implemented with additional logic to handle the ETH payment
@@ -314,11 +344,8 @@ contract RemyVaultHook is BaseHook {
         // Transfer NFT to buyer
         nftCollection.transferFrom(address(this), buyer, tokenId);
         
-        emit NFTBought(buyer, tokenId, uint256(tokensReceived));
+        emit NFTBought(buyer, tokenId, nftUnit);
         emit InventoryChanged(arrayOfOne(tokenId), false);
-        
-        // No delta adjustment needed
-        return (IHooks(address(0)).afterSwap.selector, 0);
     }
     
     /**
@@ -327,6 +354,7 @@ contract RemyVaultHook is BaseHook {
      * @param delta Balance delta from the swap
      * @param amountSpecified The amount specified for the swap
      * @param isExactInput Whether this is an exact input swap
+     * @param hookData Additional data containing NFT token IDs to sell
      * @return selector The function selector
      * @return deltaAdjustment Optional adjustment to the balance delta
      */
@@ -334,47 +362,77 @@ contract RemyVaultHook is BaseHook {
         address seller, 
         BalanceDelta delta, 
         uint256 amountSpecified,
-        bool isExactInput
+        bool isExactInput,
+        bytes calldata hookData
     ) internal returns (bytes4 selector, int128 deltaAdjustment) {
-        // For selling NFT, the user is swapping vault tokens
-        // We need to take their NFT and mint vault tokens in return
+        // For selling NFT, we need to take the user's NFTs and deposit them to mint vault tokens
         
-        // First we check if the hook has received vault tokens
-        int256 vaultTokensReceived;
-        int128 amount0 = delta.amount0();
-        int128 amount1 = delta.amount1();
-        address vaultTokenAddress = address(vaultToken);
-        
-        if (amount0 > 0 && Currency.unwrap(Currency.wrap(vaultTokenAddress)) == vaultTokenAddress) {
-            vaultTokensReceived = int256(amount0);
-        } else if (amount1 > 0 && Currency.unwrap(Currency.wrap(vaultTokenAddress)) == vaultTokenAddress) {
-            vaultTokensReceived = int256(amount1);
+        // Decode the token IDs from hookData
+        uint256[] memory tokenIdsToSell;
+        if (hookData.length > 0) {
+            tokenIdsToSell = abi.decode(hookData, (uint256[]));
+        } else {
+            // If no token IDs provided, we can't process the sale
+            return (IHooks(address(0)).afterSwap.selector, 0);
         }
         
-        // Calculate how many NFTs we need to take from the user
+        // Check if we have any NFTs to sell
+        if (tokenIdsToSell.length == 0) {
+            return (IHooks(address(0)).afterSwap.selector, 0);
+        }
+        
+        // Verify ownership of all NFTs
+        for (uint256 i = 0; i < tokenIdsToSell.length; i++) {
+            if (nftCollection.ownerOf(tokenIdsToSell[i]) != seller) {
+                revert NotOwner();
+            }
+        }
+        
+        // Calculate how many tokens should be minted from these NFTs
         uint256 nftUnit = remyVault.quoteDeposit(1);
-        uint256 nftCount = uint256(vaultTokensReceived) / nftUnit;
+        uint256 expectedTokenAmount = tokenIdsToSell.length * nftUnit;
         
-        // No sell fee is applied, so users get the full value for their NFTs
+        // Check if the expected token amount matches what the user is trying to get
+        // Get the expected output amount (negative for the hook, positive for the user)
+        int128 amount0 = delta.amount0();
+        int128 amount1 = delta.amount1();
+        int256 expectedUserDelta = 0;
         
-        // Get token IDs owned by the seller
-        // This would typically require off-chain integration to know which NFTs the user owns
-        // For the hook, we'll expose methods for users to specify which NFTs they want to sell
+        // Find which of the deltas is for the vault token
+        address vaultTokenAddress = address(vaultToken);
+        if (amount0 < 0 && Currency.unwrap(Currency.wrap(vaultTokenAddress)) == vaultTokenAddress) {
+            expectedUserDelta = -int256(amount0); // User receives positive amount of vault tokens
+        } else if (amount1 < 0 && Currency.unwrap(Currency.wrap(vaultTokenAddress)) == vaultTokenAddress) {
+            expectedUserDelta = -int256(amount1); // User receives positive amount of vault tokens
+        }
         
-        // For simplicity in this example, let's assume the contract maintains a mapping of NFTs that
-        // users want to sell. In a real implementation, this would be handled via hook data
-        // or a separate user interaction before the swap
+        // If the expected amount doesn't match, revert
+        if (uint256(expectedUserDelta) > expectedTokenAmount) {
+            revert InsufficientBalance();
+        }
         
-        // Get token payment for the NFTs
-        uint256 paymentAmount = nftCount * nftUnit;
+        // Process the NFTs
+        for (uint256 i = 0; i < tokenIdsToSell.length; i++) {
+            uint256 tokenId = tokenIdsToSell[i];
+            
+            // Transfer NFT from seller to hook
+            // Note: User must have approved this contract to transfer their NFTs
+            nftCollection.transferFrom(seller, address(this), tokenId);
+            
+            // Add to inventory 
+            if (!isInInventory[tokenId]) {
+                inventory.push(tokenId);
+                isInInventory[tokenId] = true;
+            }
+        }
         
-        // Transfer the NFTs from the user to the hook
-        // For simplicity, assume the user has set approval before calling swap
-        // In a real implementation, use hookData to pass tokenIds
-        // transferAndAddToInventory(seller, tokenIds);
+        // Deposit NFTs to RemyVault to get vault tokens
+        nftCollection.setApprovalForAll(address(remyVault), true);
+        remyVault.batchDeposit(tokenIdsToSell, address(this));
         
-        // This is a placeholder for the actual implementation
-        // In a real implementation, you'd get tokenIds from hookData
+        // Emit events
+        emit NFTSold(seller, tokenIdsToSell[0], expectedTokenAmount);
+        emit InventoryChanged(tokenIdsToSell, true);
         
         // No adjustment needed
         return (IHooks(address(0)).afterSwap.selector, 0);
@@ -382,8 +440,9 @@ contract RemyVaultHook is BaseHook {
 
     // ============ External Functions ============
     
+    
     /**
-     * @notice Allows users to sell specific NFTs to the hook
+     * @notice Direct sell of NFTs to the hook (not using swap)
      * @param tokenIds Array of token IDs to sell
      */
     function sellNFTs(uint256[] calldata tokenIds) external {
@@ -423,6 +482,71 @@ contract RemyVaultHook is BaseHook {
     }
     
     /**
+     * @notice Allows users to buy vault tokens with optional NFTs from the hook
+     * @param tokenAmount Amount of vault tokens to buy
+     * @param tokenIds Array of token IDs to buy (empty array for token-only purchase)
+     */
+    function buyVaultTokens(uint256 tokenAmount, uint256[] calldata tokenIds) external payable {
+        uint256 count = tokenIds.length;
+        // Calculate payment amount
+        uint256 nftUnit = remyVault.quoteDeposit(1);
+        uint256 tokenPayment = tokenAmount;
+        
+        // Calculate ETH fee (only applies if buying NFTs)
+        uint256 ethFee = 0;
+        if (count > 0) {
+            // Verify NFTs are in inventory
+            for (uint256 i = 0; i < count; i++) {
+                uint256 tokenId = tokenIds[i];
+                if (!isInInventory[tokenId]) revert NoInventory();
+            }
+            
+            // Apply fee only to the NFT portion
+            uint256 nftPayment = count * nftUnit;
+            ethFee = (nftPayment * buyFee) / FEE_DENOMINATOR;
+            
+            // Ensure token amount is sufficient for the NFTs
+            if (tokenAmount < nftPayment) revert InsufficientBalance();
+        }
+        
+        // Verify that enough ETH was sent for the fee
+        if (msg.value < ethFee) revert InsufficientBalance();
+        
+        // Transfer token payment from buyer to hook
+        vaultToken.transferFrom(msg.sender, address(this), tokenPayment);
+        
+        // Transfer NFTs to buyer if requested
+        if (count > 0) {
+            for (uint256 i = 0; i < count; i++) {
+                uint256 tokenId = tokenIds[i];
+                
+                // Remove from inventory
+                removeFromInventory(tokenId);
+                
+                // Transfer NFT
+                nftCollection.transferFrom(address(this), msg.sender, tokenId);
+            }
+            
+            emit InventoryChanged(tokenIds, false);
+            emit NFTBought(msg.sender, tokenIds[0], count * nftUnit);
+        }
+        
+        // Transfer ETH fee to fee recipient
+        if (ethFee > 0 && feeRecipient != address(0)) {
+            (bool success, ) = feeRecipient.call{value: ethFee}("");
+            require(success, "ETH transfer failed");
+            emit FeesCollected(feeRecipient, ethFee);
+        }
+        
+        // Refund any excess ETH
+        uint256 refund = msg.value - ethFee;
+        if (refund > 0) {
+            (bool success, ) = msg.sender.call{value: refund}("");
+            require(success, "ETH refund failed");
+        }
+    }
+    
+    /**
      * @notice Allows users to buy specific NFTs from the hook
      * @param tokenIds Array of token IDs to buy
      */
@@ -441,8 +565,6 @@ contract RemyVaultHook is BaseHook {
         uint256 tokenPayment = count * nftUnit;
         
         // Calculate ETH fee
-        // In a real implementation, you would need to get the ETH price of the token
-        // For simplicity, we'll use a placeholder conversion rate
         uint256 ethFee = (tokenPayment * buyFee) / FEE_DENOMINATOR;
         
         // Verify that enough ETH was sent for the fee

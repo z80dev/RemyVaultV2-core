@@ -2,3 +2,13 @@
 libs = ["node_modules", "lib", "lib/snekmate/src"]
 skip = ["**/lib/snekmate/**"]
 show_metrics = true
+via_ir = true
+optimizer = true
+optimizer_runs = 200
+
+# Add remappings
+remappings = [
+    "solmate/=lib/solmate/src/",
+    "@uniswap/v4-core/=lib/v4-periphery/lib/v4-core/",
+    "@uniswap/v4-periphery/=lib/v4-periphery/"
+]
