@@ -4,15 +4,11 @@ pragma solidity ^0.8.13;
 import "forge-std/Test.sol";
 import "src/interfaces/IInventoryMetavault.sol";
 import "src/interfaces/IRemyVault.sol";
+import "src/interfaces/IERC20.sol";
 import {ReentrancyAttacker} from "./helpers/ReentrancyAttacker.sol";
 
-interface IERC20 {
-    function transfer(address to, uint256 value) external returns (bool);
-    function transferFrom(address from, address to, uint256 value) external returns (bool);
-    function balanceOf(address owner) external view returns (uint256);
-    function approve(address spender, uint256 value) external returns (bool);
-    function allowance(address owner, address spender) external view returns (uint256);
-    function totalSupply() external view returns (uint256);
+// Additional ERC20 functions for our mock tokens
+interface IMockERC20 is IERC20 {
     function mint(address to, uint256 value) external;
     function burn(uint256 amount) external;
 }
@@ -34,11 +30,12 @@ interface IMockERC721 {
  * @title InventoryMetavaultTest
  * @dev Comprehensive test suite for the InventoryMetavault contract
  *
- * This test suite validates all aspects of the InventoryMetavault protocol including:
+ * This test suite validates all aspects of the single-collection InventoryMetavault protocol including:
  * - Basic deposit/withdraw functionality
  * - NFT tracking and management
  * - ERC20 balance invariants
  * - Core vault integration
+ * - ERC4626 compliance
  */
 contract InventoryMetavaultTest is Test {
     // Mock ERC721 token for NFTs
@@ -46,9 +43,6 @@ contract InventoryMetavaultTest is Test {
     
     // Mock ERC20 token for core vault
     address public vaultToken;
-    
-    // Mock ERC20 token for metavault shares
-    address public sharesToken;
     
     // RemyVault contract instance
     IRemyVault public coreVault;
@@ -59,6 +53,7 @@ contract InventoryMetavaultTest is Test {
     // Test user addresses
     address public alice;
     address public bob;
+    address public charlie;
     address public owner;
     
     // Unit value constant from the Remy protocol
@@ -76,11 +71,11 @@ contract InventoryMetavaultTest is Test {
         owner = address(this);
         alice = makeAddr("alice");
         bob = makeAddr("bob");
+        charlie = makeAddr("charlie");
         
         // Deploy mock contracts
         nft = IMockERC721(deployCode("MockERC721", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
         vaultToken = deployCode("MockERC20");
-        sharesToken = deployCode("MockERC20");
         
         // Deploy core vault
         coreVault = IRemyVault(deployCode("RemyVault", abi.encode(vaultToken, address(nft))));
@@ -92,32 +87,43 @@ contract InventoryMetavaultTest is Test {
         vm.prank(owner);
         Ownable(address(nft)).transfer_ownership(address(coreVault));
         
-        // Deploy metavault
-        metavault = IInventoryMetavault(deployCode("InventoryMetavault", abi.encode(address(coreVault), sharesToken)));
-        
-        // Transfer ownership of shares token to the metavault
-        vm.prank(owner);
-        Ownable(sharesToken).transfer_ownership(address(metavault));
-        
-        // Add NFT contract to metavault supported contracts
-        vm.prank(owner);
-        metavault.add_nft_contract(address(nft));
+        // Deploy metavault as an ERC4626
+        // For the constructor, we pass the remy_vault address, name, and symbol
+        metavault = IInventoryMetavault(deployCode("InventoryMetavault", 
+            abi.encode(address(coreVault), "MetaVault Shares", "MVS")));
     }
-
+    
     /**
      * @dev Test basic setup of the metavault
      */
-    function testSetup() public view {
+    function testSetup() public {
+        // Print debug information
+        console.log("metavault.remy_vault():", metavault.remy_vault());
+        console.log("expected remy_vault:", address(coreVault));
+        console.log("metavault.asset():", metavault.asset());
+        console.log("expected asset:", vaultToken);
+        console.log("metavault.decimals():", metavault.decimals());
+        
         // Verify metavault references are correct
         assertEq(metavault.remy_vault(), address(coreVault));
-        assertEq(metavault.vault_erc20(), vaultToken);
-        assertEq(metavault.shares_token(), sharesToken);
-        
-        // Verify NFT contract is supported
-        assertTrue(metavault.is_supported_contract(address(nft)));
+        assertEq(metavault.asset(), vaultToken);
+        assertEq(metavault.nft_collection(), address(nft));
         
         // Verify initial inventory is empty
-        assertEq(metavault.get_available_inventory(address(nft)), 0);
+        assertEq(metavault.get_available_inventory(), 0);
+        
+        // Verify markup is set to the default
+        assertEq(metavault.MARKUP_BPS(), 1100);
+        
+        // Verify contract is not paused initially
+        assertFalse(metavault.paused());
+        
+        // Verify ERC4626 specific setup
+        assertEq(metavault.name(), "MetaVault Shares");
+        assertEq(metavault.symbol(), "MVS");
+        assertEq(metavault.decimals(), 18);
+        assertEq(metavault.totalSupply(), 0);
+        assertEq(metavault.totalAssets(), 0);
     }
 
     /**
@@ -132,18 +138,23 @@ contract InventoryMetavaultTest is Test {
         // Alice deposits the NFT into the metavault
         vm.startPrank(alice);
         nft.approve(address(metavault), 1);
-        uint256 sharesMinted = metavault.deposit_nfts(address(nft), toArray(1));
+        uint256 sharesMinted = metavault.deposit_nfts(toArray(1), alice);
         vm.stopPrank();
         
         // Verify metavault now owns the NFT
         assertEq(nft.ownerOf(1), address(metavault));
         
         // Verify metavault inventory was updated
-        assertEq(metavault.get_available_inventory(address(nft)), 1);
+        assertEq(metavault.get_available_inventory(), 1);
+        assertTrue(metavault.is_token_in_inventory(1));
         
         // Verify Alice received correct amount of shares tokens
-        assertEq(IERC20(sharesToken).balanceOf(alice), sharesMinted);
-        assertEq(sharesMinted, UNIT);
+        assertEq(metavault.balanceOf(alice), sharesMinted);
+        assertEq(sharesMinted, UNIT); // First deposit gets 1:1 ratio
+        
+        // Verify totalAssets and totalSupply are updated correctly
+        assertEq(metavault.totalAssets(), UNIT);
+        assertEq(metavault.totalSupply(), UNIT);
     }
 
     /**
@@ -164,20 +175,25 @@ contract InventoryMetavaultTest is Test {
         // Alice deposits the NFTs into the metavault
         vm.startPrank(alice);
         nft.setApprovalForAll(address(metavault), true);
-        uint256 sharesMinted = metavault.deposit_nfts(address(nft), tokenIds);
+        uint256 sharesMinted = metavault.deposit_nfts(tokenIds, alice);
         vm.stopPrank();
         
         // Verify metavault now owns the NFTs
         for (uint256 i = 0; i < numNfts; i++) {
             assertEq(nft.ownerOf(tokenIds[i]), address(metavault));
+            assertTrue(metavault.is_token_in_inventory(tokenIds[i]));
         }
         
         // Verify metavault inventory was updated
-        assertEq(metavault.get_available_inventory(address(nft)), numNfts);
+        assertEq(metavault.get_available_inventory(), numNfts);
         
         // Verify Alice received correct amount of shares tokens
-        assertEq(IERC20(sharesToken).balanceOf(alice), sharesMinted);
+        assertEq(metavault.balanceOf(alice), sharesMinted);
         assertEq(sharesMinted, numNfts * UNIT);
+        
+        // Verify totalAssets and totalSupply are updated correctly
+        assertEq(metavault.totalAssets(), numNfts * UNIT);
+        assertEq(metavault.totalSupply(), numNfts * UNIT);
     }
 
     /**
@@ -191,25 +207,33 @@ contract InventoryMetavaultTest is Test {
         
         vm.startPrank(alice);
         nft.approve(address(metavault), 1);
-        metavault.deposit_nfts(address(nft), toArray(1));
+        metavault.deposit_nfts(toArray(1), alice);
         
         // Get initial balances
-        uint256 initialSharesBalance = IERC20(sharesToken).balanceOf(alice);
+        uint256 initialSharesBalance = metavault.balanceOf(alice);
         
         // Approve and withdraw the NFT
-        IERC20(sharesToken).approve(address(metavault), UNIT);
-        uint256 sharesBurned = metavault.withdraw_nfts(address(nft), toArray(1));
+        metavault.approve(address(metavault), UNIT);
+        (uint256 sharesBurned, uint256 feeTokensClaimed) = metavault.withdraw_nfts(toArray(1), true, alice);
         vm.stopPrank();
         
         // Verify Alice now owns the NFT
         assertEq(nft.ownerOf(1), alice);
         
         // Verify metavault inventory was updated
-        assertEq(metavault.get_available_inventory(address(nft)), 0);
+        assertEq(metavault.get_available_inventory(), 0);
+        assertFalse(metavault.is_token_in_inventory(1));
         
         // Verify Alice's shares were burned
-        assertEq(IERC20(sharesToken).balanceOf(alice), initialSharesBalance - sharesBurned);
+        assertEq(metavault.balanceOf(alice), initialSharesBalance - sharesBurned);
         assertEq(sharesBurned, UNIT);
+        
+        // Initially there should be no fee tokens claimed as no purchases have occurred yet
+        assertEq(feeTokensClaimed, 0);
+        
+        // Verify totalAssets and totalSupply are updated correctly
+        assertEq(metavault.totalAssets(), 0);
+        assertEq(metavault.totalSupply(), 0);
     }
 
     /**
@@ -226,7 +250,7 @@ contract InventoryMetavaultTest is Test {
         coreVault.deposit(1, alice);
         
         // Alice should now have vault tokens
-        uint256 initialVaultTokenBalance = IERC20(vaultToken).balanceOf(alice);
+        uint256 initialVaultTokenBalance = IMockERC20(vaultToken).balanceOf(alice);
         assertEq(initialVaultTokenBalance, UNIT);
         
         // To withdraw through metavault, Alice needs to have shares
@@ -237,24 +261,27 @@ contract InventoryMetavaultTest is Test {
         
         vm.startPrank(alice);
         nft.approve(address(metavault), 2);
-        metavault.deposit_nfts(address(nft), toArray(2));
+        metavault.deposit_nfts(toArray(2), alice);
         
         // Now Alice can withdraw NFT #1 from the core vault through the metavault
-        uint256 initialSharesBalance = IERC20(sharesToken).balanceOf(alice);
-        IERC20(sharesToken).approve(address(metavault), UNIT);
+        uint256 initialSharesBalance = metavault.balanceOf(alice);
+        metavault.approve(address(metavault), UNIT);
         
         // Transfer some vault tokens to metavault for the core vault withdrawal
-        IERC20(vaultToken).transfer(address(metavault), UNIT);
+        IMockERC20(vaultToken).transfer(address(metavault), UNIT);
         
         // Withdraw the NFT from core vault
-        uint256 sharesBurned = metavault.withdraw_nfts(address(nft), toArray(1));
+        (uint256 sharesBurned, uint256 feeTokensClaimed) = metavault.withdraw_nfts(toArray(1), true, alice);
         vm.stopPrank();
         
         // Verify Alice now owns NFT #1
         assertEq(nft.ownerOf(1), alice);
         
         // Verify Alice's shares were burned
-        assertEq(IERC20(sharesToken).balanceOf(alice), initialSharesBalance - sharesBurned);
+        assertEq(metavault.balanceOf(alice), initialSharesBalance - sharesBurned);
+        
+        // Since there were no purchases yet, fees should be zero
+        assertEq(feeTokensClaimed, 0);
     }
 
     /**
@@ -268,261 +295,373 @@ contract InventoryMetavaultTest is Test {
         
         vm.startPrank(alice);
         nft.approve(address(metavault), 1);
-        metavault.deposit_nfts(address(nft), toArray(1));
+        metavault.deposit_nfts(toArray(1), alice);
         vm.stopPrank();
         
         // Give Bob some vault tokens to purchase the NFT
         vm.startPrank(address(coreVault));
-        IERC20(vaultToken).mint(bob, UNIT * 2);
+        IMockERC20(vaultToken).mint(bob, UNIT * 2);
         vm.stopPrank();
         
         // Calculate purchase price with 10% markup
         uint256 expectedPrice = UNIT * MARKUP_BPS / BPS_DENOMINATOR;
         
+        // Record initial total assets
+        uint256 initialTotalAssets = metavault.totalAssets();
+        
         // Bob purchases the NFT
         vm.startPrank(bob);
-        IERC20(vaultToken).approve(address(metavault), expectedPrice);
-        uint256 pricePaid = metavault.purchase_nfts(address(nft), toArray(1));
+        IMockERC20(vaultToken).approve(address(metavault), expectedPrice);
+        uint256 pricePaid = metavault.purchase_nfts(toArray(1));
         vm.stopPrank();
         
         // Verify Bob now owns the NFT
         assertEq(nft.ownerOf(1), bob);
         
         // Verify metavault inventory was updated
-        assertEq(metavault.get_available_inventory(address(nft)), 0);
+        assertEq(metavault.get_available_inventory(), 0);
+        assertFalse(metavault.is_token_in_inventory(1));
         
         // Verify correct price was paid
         assertEq(pricePaid, expectedPrice);
-        assertEq(IERC20(vaultToken).balanceOf(bob), UNIT * 2 - pricePaid);
-        assertEq(IERC20(vaultToken).balanceOf(address(metavault)), pricePaid);
+        assertEq(IMockERC20(vaultToken).balanceOf(bob), UNIT * 2 - pricePaid);
+        assertEq(IMockERC20(vaultToken).balanceOf(address(metavault)), pricePaid);
+        
+        // Verify fee accumulation
+        uint256 feeAmount = pricePaid - UNIT;
+        assertEq(metavault.accumulated_fees(), feeAmount);
+        
+        // Verify totalAssets reflects the change - inventory value decreased but fee tokens increased
+        uint256 expectedTotalAssets = initialTotalAssets - UNIT + feeAmount;
+        assertEq(metavault.totalAssets(), expectedTotalAssets);
     }
-
+    
     /**
-     * @dev Test that ERC20 share balances can only increase for users
+     * @dev Test ERC4626 standard compliance - convertToShares
      */
-    function testSharesBalanceOnlyIncrease() public {
-        // Mint multiple NFTs to Alice for testing
-        vm.startPrank(address(coreVault));
-        for (uint256 i = 1; i <= 5; i++) {
-            nft.mint(alice, i);
-        }
-        vm.stopPrank();
-
-        // Initial balance should be 0
-        assertEq(IERC20(sharesToken).balanceOf(alice), 0);
-        
-        // Deposit NFTs one by one and verify balance only increases
-        uint256 currentBalance = 0;
-        vm.startPrank(alice);
-        
-        for (uint256 i = 1; i <= 5; i++) {
-            nft.approve(address(metavault), i);
-            metavault.deposit_nfts(address(nft), toArray(i));
-            
-            uint256 newBalance = IERC20(sharesToken).balanceOf(alice);
-            assertGt(newBalance, currentBalance, "Balance should increase after deposit");
-            currentBalance = newBalance;
-        }
-        
-        vm.stopPrank();
-    }
-
-    /**
-     * @dev Test withdrawing multiple NFTs
-     */
-    function testBatchWithdraw() public {
-        uint256 numNfts = 3;
-        uint256[] memory tokenIds = new uint256[](numNfts);
-        
-        // Mint and deposit NFTs
-        vm.startPrank(address(coreVault));
-        for (uint256 i = 0; i < numNfts; i++) {
-            tokenIds[i] = i + 1;
-            nft.mint(alice, tokenIds[i]);
-        }
-        vm.stopPrank();
-        
-        vm.startPrank(alice);
-        nft.setApprovalForAll(address(metavault), true);
-        uint256 sharesMinted = metavault.deposit_nfts(address(nft), tokenIds);
-        
-        // Approve and withdraw the NFTs
-        IERC20(sharesToken).approve(address(metavault), sharesMinted);
-        uint256 sharesBurned = metavault.withdraw_nfts(address(nft), tokenIds);
-        vm.stopPrank();
-        
-        // Verify Alice now owns the NFTs
-        for (uint256 i = 0; i < numNfts; i++) {
-            assertEq(nft.ownerOf(tokenIds[i]), alice);
-        }
-        
-        // Verify metavault inventory was updated
-        assertEq(metavault.get_available_inventory(address(nft)), 0);
-        
-        // Verify shares were burned correctly
-        assertEq(sharesBurned, sharesMinted);
-        assertEq(IERC20(sharesToken).balanceOf(alice), 0);
-    }
-
-    /**
-     * @dev Test admin functions for adding and removing NFT contracts
-     */
-    function testAddRemoveNftContract() public {
-        // Deploy a new NFT contract
-        address newNft = deployCode("MockERC721", abi.encode("NEW", "NEW", "https://", "NEW", "1.0"));
-        
-        // Initially the new NFT shouldn't be supported
-        assertFalse(metavault.is_supported_contract(newNft));
-        
-        // Add the new NFT contract
-        vm.prank(owner);
-        metavault.add_nft_contract(newNft);
-        
-        // Verify it's now supported
-        assertTrue(metavault.is_supported_contract(newNft));
-        
-        // Remove the NFT contract
-        vm.prank(owner);
-        metavault.remove_nft_contract(newNft);
-        
-        // Verify it's no longer supported
-        assertFalse(metavault.is_supported_contract(newNft));
-    }
-
-    /**
-     * @dev Test that attempting to deposit an unsupported NFT contract fails
-     */
-    function testDepositUnsupportedContract() public {
-        // Deploy a new NFT contract
-        address newNft = deployCode("MockERC721", abi.encode("NEW", "NEW", "https://", "NEW", "1.0"));
-        
-        // Mint an NFT to Alice
-        vm.prank(owner);
-        IMockERC721(newNft).mint(alice, 1);
-        
-        // Attempt to deposit should fail
-        vm.startPrank(alice);
-        IMockERC721(newNft).approve(address(metavault), 1);
-        vm.expectRevert(); // "NFT contract not supported"
-        metavault.deposit_nfts(newNft, toArray(1));
-        vm.stopPrank();
-    }
-
-    /**
-     * @dev Test the purchase quote function
-     */
-    function testQuotePurchase() public {
-        // Quote for 1 NFT
-        uint256 quote1 = metavault.quote_purchase(address(nft), 1);
-        assertEq(quote1, UNIT * MARKUP_BPS / BPS_DENOMINATOR);
-        
-        // Quote for multiple NFTs
-        uint256 count = 5;
-        uint256 quote5 = metavault.quote_purchase(address(nft), count);
-        assertEq(quote5, count * UNIT * MARKUP_BPS / BPS_DENOMINATOR);
-    }
-
-    /**
-     * @dev Test depositing with insufficient approval fails
-     */
-    function testDepositWithoutApproval() public {
-        // Mint an NFT to Alice
-        vm.prank(address(coreVault));
-        nft.mint(alice, 1);
-        
-        // Attempt to deposit without approval should fail
-        vm.startPrank(alice);
-        vm.expectRevert();
-        metavault.deposit_nfts(address(nft), toArray(1));
-        vm.stopPrank();
-    }
-
-    /**
-     * @dev Test withdrawing without sufficient shares token approval fails
-     */
-    function testWithdrawWithoutTokenApproval() public {
-        // Mint and deposit an NFT
+    function testConvertToSharesWithFees() public {
+        // 1. Initial deposit by Alice
         vm.startPrank(address(coreVault));
         nft.mint(alice, 1);
         vm.stopPrank();
         
         vm.startPrank(alice);
         nft.approve(address(metavault), 1);
-        metavault.deposit_nfts(address(nft), toArray(1));
-        
-        // Attempt to withdraw without shares token approval should fail
-        // Don't approve the shares token
-        vm.expectRevert();
-        metavault.withdraw_nfts(address(nft), toArray(1));
+        uint256 aliceShares = metavault.deposit_nfts(toArray(1), alice);
         vm.stopPrank();
+        
+        // Verify initial 1:1 ratio
+        assertEq(aliceShares, UNIT);
+        assertEq(metavault.convertToShares(UNIT), UNIT);
+        
+        // 2. Bob buys the NFT with markup, generating fees
+        vm.startPrank(address(coreVault));
+        IMockERC20(vaultToken).mint(bob, UNIT * 2);
+        vm.stopPrank();
+        
+        vm.startPrank(bob);
+        IMockERC20(vaultToken).approve(address(metavault), UNIT * 2);
+        uint256 pricePaid = metavault.purchase_nfts(toArray(1));
+        vm.stopPrank();
+        
+        // Fee amount is the markup
+        uint256 feeAmount = pricePaid - UNIT;
+        
+        // 3. Verify conversion rate changed due to fees
+        // Now totalAssets = feeAmount, totalSupply = UNIT
+        // So 1 token should convert to less than 1 share
+        uint256 sharesPerToken = metavault.convertToShares(UNIT);
+        assertLt(sharesPerToken, UNIT);
+        
+        // Precise calculation: shares = assets * totalSupply / totalAssets
+        uint256 expectedShares = UNIT * UNIT / feeAmount;
+        assertEq(sharesPerToken, expectedShares);
     }
-
+    
     /**
-     * @dev Test purchasing without sufficient vault token approval fails
+     * @dev Test ERC4626 standard compliance - convertToAssets
      */
-    function testPurchaseWithoutTokenApproval() public {
-        // Mint and deposit an NFT to the metavault
+    function testConvertToAssetsWithFees() public {
+        // 1. Initial deposit by Alice
         vm.startPrank(address(coreVault));
         nft.mint(alice, 1);
         vm.stopPrank();
         
         vm.startPrank(alice);
         nft.approve(address(metavault), 1);
-        metavault.deposit_nfts(address(nft), toArray(1));
+        uint256 aliceShares = metavault.deposit_nfts(toArray(1), alice);
         vm.stopPrank();
         
-        // Give Bob some vault tokens
-        vm.prank(address(coreVault));
-        IERC20(vaultToken).mint(bob, UNIT * 2);
+        // Verify initial 1:1 ratio
+        assertEq(aliceShares, UNIT);
+        assertEq(metavault.convertToAssets(UNIT), UNIT);
         
-        // Attempt to purchase without token approval should fail
+        // 2. Bob buys the NFT with markup, generating fees
+        vm.startPrank(address(coreVault));
+        IMockERC20(vaultToken).mint(bob, UNIT * 2);
+        vm.stopPrank();
+        
         vm.startPrank(bob);
-        vm.expectRevert();
-        metavault.purchase_nfts(address(nft), toArray(1));
+        IMockERC20(vaultToken).approve(address(metavault), UNIT * 2);
+        uint256 pricePaid = metavault.purchase_nfts(toArray(1));
         vm.stopPrank();
+        
+        // Fee amount is the markup
+        uint256 feeAmount = pricePaid - UNIT;
+        
+        // 3. Verify conversion rate changed due to fees
+        // Now totalAssets = feeAmount, totalSupply = UNIT
+        // So 1 share should convert to more than 1 token
+        uint256 assetsPerShare = metavault.convertToAssets(UNIT);
+        assertEq(assetsPerShare, feeAmount);
     }
-
+    
     /**
-     * @dev Test purchasing with insufficient balance fails
+     * @dev Test ERC4626 standard compliance - maxWithdraw and previewWithdraw
      */
-    function testPurchaseInsufficientBalance() public {
-        // Mint and deposit an NFT to the metavault
+    function testMaxWithdrawAndPreview() public {
+        // 1. Initial deposit by Alice
         vm.startPrank(address(coreVault));
         nft.mint(alice, 1);
         vm.stopPrank();
         
         vm.startPrank(alice);
         nft.approve(address(metavault), 1);
-        metavault.deposit_nfts(address(nft), toArray(1));
+        uint256 aliceShares = metavault.deposit_nfts(toArray(1), alice);
         vm.stopPrank();
         
-        // Give Bob insufficient vault tokens
-        uint256 price = metavault.quote_purchase(address(nft), 1);
-        vm.prank(address(coreVault));
-        IERC20(vaultToken).mint(bob, price - 1);
+        // 2. Verify maxWithdraw returns Alice's share of total assets
+        uint256 maxWithdraw = metavault.maxWithdraw(alice);
+        assertEq(maxWithdraw, UNIT);
         
-        // Attempt to purchase with insufficient balance should fail
+        // 3. Generate fees through purchase
+        vm.startPrank(address(coreVault));
+        IMockERC20(vaultToken).mint(bob, UNIT * 2);
+        vm.stopPrank();
+        
         vm.startPrank(bob);
-        IERC20(vaultToken).approve(address(metavault), price);
-        vm.expectRevert();
-        metavault.purchase_nfts(address(nft), toArray(1));
+        IMockERC20(vaultToken).approve(address(metavault), UNIT * 2);
+        uint256 pricePaid = metavault.purchase_nfts(toArray(1));
         vm.stopPrank();
+        
+        uint256 feeAmount = pricePaid - UNIT;
+        
+        // 4. After fees, Alice's maxWithdraw should be the fee amount
+        maxWithdraw = metavault.maxWithdraw(alice);
+        assertEq(maxWithdraw, feeAmount);
+        
+        // 5. previewWithdraw should show how many shares needed for a given asset amount
+        uint256 sharesToBurn = metavault.previewWithdraw(feeAmount);
+        assertEq(sharesToBurn, aliceShares);
     }
-
+    
     /**
-     * @dev Test purchasing non-existent inventory fails
+     * @dev Test the sequential deposit with fee in between scenario
      */
-    function testPurchaseNonExistentInventory() public {
-        // Give Bob some vault tokens
-        vm.prank(address(coreVault));
-        IERC20(vaultToken).mint(bob, UNIT * 2);
-        
-        // Attempt to purchase non-existent inventory
-        vm.startPrank(bob);
-        IERC20(vaultToken).approve(address(metavault), UNIT * 2);
-        vm.expectRevert(); // "Not enough inventory"
-        metavault.purchase_nfts(address(nft), toArray(1));
+    function testSequentialDepositWithFeeInBetween() public {
+        // 1. First user deposits
+        vm.startPrank(address(coreVault));
+        nft.mint(alice, 1);
         vm.stopPrank();
+        
+        vm.startPrank(alice);
+        nft.approve(address(metavault), 1);
+        uint256 aliceShares = metavault.deposit_nfts(toArray(1), alice);
+        vm.stopPrank();
+        
+        // 2. Second user deposits
+        vm.startPrank(address(coreVault));
+        nft.mint(bob, 2);
+        vm.stopPrank();
+        
+        vm.startPrank(bob);
+        nft.approve(address(metavault), 2);
+        uint256 bobShares = metavault.deposit_nfts(toArray(2), bob);
+        vm.stopPrank();
+        
+        // Both should get the same shares per NFT ratio at this point
+        assertEq(bobShares, aliceShares);
+        
+        // 3. Charlie buys an NFT, generating fees
+        vm.startPrank(address(coreVault));
+        IMockERC20(vaultToken).mint(charlie, UNIT * 2);
+        vm.stopPrank();
+        
+        vm.startPrank(charlie);
+        IMockERC20(vaultToken).approve(address(metavault), UNIT * 2);
+        uint256 pricePaid = metavault.purchase_nfts(toArray(1));
+        vm.stopPrank();
+        
+        uint256 feeAmount = pricePaid - UNIT;
+        
+        // 4. New user deposits after fees accumulated
+        vm.startPrank(address(coreVault));
+        nft.mint(address(0xdead), 3);
+        vm.stopPrank();
+        
+        vm.startPrank(address(0xdead));
+        nft.approve(address(metavault), 3);
+        uint256 newShares = metavault.deposit_nfts(toArray(3), address(0xdead));
+        vm.stopPrank();
+        
+        // New user should get fewer shares than previous users for the same amount of NFTs
+        assertLt(newShares, aliceShares);
+        
+        // Calculate expected shares: assets * totalSupply / totalAssets
+        // Now totalAssets = 1 NFT + fee amount, totalSupply = 2 * UNIT
+        uint256 totalAssets = UNIT + feeAmount;
+        uint256 totalSupply = 2 * UNIT; // Alice and Bob combined
+        uint256 expectedShares = UNIT * totalSupply / totalAssets;
+        assertEq(newShares, expectedShares);
+    }
+    
+    /**
+     * @dev Test redeem_for_tokens function
+     */
+    function testRedeemForTokens() public {
+        // 1. Alice deposits an NFT
+        vm.startPrank(address(coreVault));
+        nft.mint(alice, 1);
+        vm.stopPrank();
+        
+        vm.startPrank(alice);
+        nft.approve(address(metavault), 1);
+        uint256 aliceShares = metavault.deposit_nfts(toArray(1), alice);
+        vm.stopPrank();
+        
+        // 2. Bob buys the NFT, generating fees
+        vm.startPrank(address(coreVault));
+        IMockERC20(vaultToken).mint(bob, UNIT * 2);
+        vm.stopPrank();
+        
+        vm.startPrank(bob);
+        IMockERC20(vaultToken).approve(address(metavault), UNIT * 2);
+        uint256 pricePaid = metavault.purchase_nfts(toArray(1));
+        vm.stopPrank();
+        
+        uint256 feeAmount = pricePaid - UNIT;
+        
+        // 3. Alice redeems half her shares for tokens
+        uint256 sharesToRedeem = aliceShares / 2;
+        uint256 expectedTokens = sharesToRedeem * feeAmount / aliceShares;
+        
+        vm.startPrank(alice);
+        metavault.approve(address(metavault), sharesToRedeem);
+        uint256 tokensReceived = metavault.redeem_for_tokens(sharesToRedeem, alice);
+        vm.stopPrank();
+        
+        // Verify tokens received
+        assertEq(tokensReceived, expectedTokens);
+        assertEq(IMockERC20(vaultToken).balanceOf(alice), expectedTokens);
+        
+        // Verify shares were burned
+        assertEq(metavault.balanceOf(alice), aliceShares - sharesToRedeem);
+        
+        // Verify accumulated fees were reduced
+        assertEq(metavault.accumulated_fees(), feeAmount - expectedTokens);
+    }
+    
+    /**
+     * @dev Test claim_fees function
+     */
+    function testClaimFees() public {
+        // 1. Alice deposits an NFT
+        vm.startPrank(address(coreVault));
+        nft.mint(alice, 1);
+        vm.stopPrank();
+        
+        vm.startPrank(alice);
+        nft.approve(address(metavault), 1);
+        uint256 aliceShares = metavault.deposit_nfts(toArray(1), alice);
+        vm.stopPrank();
+        
+        // 2. Bob buys the NFT, generating fees
+        vm.startPrank(address(coreVault));
+        IMockERC20(vaultToken).mint(bob, UNIT * 2);
+        vm.stopPrank();
+        
+        vm.startPrank(bob);
+        IMockERC20(vaultToken).approve(address(metavault), UNIT * 2);
+        uint256 pricePaid = metavault.purchase_nfts(toArray(1));
+        vm.stopPrank();
+        
+        uint256 feeAmount = pricePaid - UNIT;
+        
+        // 3. Alice claims her fees
+        uint256 expectedFees = metavault.get_user_fee_share(alice);
+        assertEq(expectedFees, feeAmount); // Alice should get all fees as the only shareholder
+        
+        vm.startPrank(alice);
+        uint256 claimedFees = metavault.claim_fees();
+        vm.stopPrank();
+        
+        // Verify fees claimed
+        assertEq(claimedFees, expectedFees);
+        assertEq(IMockERC20(vaultToken).balanceOf(alice), claimedFees);
+        
+        // Verify accumulated fees were reduced
+        assertEq(metavault.accumulated_fees(), 0);
+    }
+    
+    /**
+     * @dev Test multiple depositors and fee distribution
+     */
+    function testMultipleDepositorsAndFeeDistribution() public {
+        // 1. Alice and Bob both deposit an NFT
+        vm.startPrank(address(coreVault));
+        nft.mint(alice, 1);
+        nft.mint(bob, 2);
+        vm.stopPrank();
+        
+        vm.startPrank(alice);
+        nft.approve(address(metavault), 1);
+        uint256 aliceShares = metavault.deposit_nfts(toArray(1), alice);
+        vm.stopPrank();
+        
+        vm.startPrank(bob);
+        nft.approve(address(metavault), 2);
+        uint256 bobShares = metavault.deposit_nfts(toArray(2), bob);
+        vm.stopPrank();
+        
+        // 2. Charlie buys one of the NFTs
+        vm.startPrank(address(coreVault));
+        IMockERC20(vaultToken).mint(charlie, UNIT * 2);
+        vm.stopPrank();
+        
+        vm.startPrank(charlie);
+        IMockERC20(vaultToken).approve(address(metavault), UNIT * 2);
+        uint256 pricePaid = metavault.purchase_nfts(toArray(1));
+        vm.stopPrank();
+        
+        uint256 feeAmount = pricePaid - UNIT;
+        
+        // 3. Verify fee shares
+        uint256 totalShares = aliceShares + bobShares;
+        uint256 aliceFeeShare = aliceShares * feeAmount / totalShares;
+        uint256 bobFeeShare = bobShares * feeAmount / totalShares;
+        
+        assertEq(metavault.get_user_fee_share(alice), aliceFeeShare);
+        assertEq(metavault.get_user_fee_share(bob), bobFeeShare);
+        
+        // 4. Alice claims her fees
+        vm.startPrank(alice);
+        uint256 aliceClaimedFees = metavault.claim_fees();
+        vm.stopPrank();
+        
+        assertEq(aliceClaimedFees, aliceFeeShare);
+        assertEq(IMockERC20(vaultToken).balanceOf(alice), aliceFeeShare);
+        
+        // 5. Bob withdraws with his NFT + fees
+        vm.startPrank(bob);
+        metavault.approve(address(metavault), bobShares);
+        (uint256 sharesBurned, uint256 feeTokensClaimed) = metavault.withdraw_nfts(toArray(2), true, bob);
+        vm.stopPrank();
+        
+        assertEq(feeTokensClaimed, bobFeeShare);
+        assertEq(IMockERC20(vaultToken).balanceOf(bob), bobFeeShare);
+        
+        // 6. Verify all fees are now distributed
+        assertEq(metavault.accumulated_fees(), 0);
     }
 
     // Helper function to convert a single uint256 to an array

@@ -6,24 +6,50 @@
 
 from ethereum.ercs import IERC20
 from ethereum.ercs import IERC721
-from interfaces import ManagedToken as IManagedToken
-from snekmate.auth import ownable
+from ethereum.ercs import IERC4626
+from . import RemyVaultV2 as IRemyVault
 
-initializes: ownable
+# Commented out until needed
+# from interfaces.ManagedToken import IManagedToken
+from snekmate.extensions import erc4626
+from snekmate.utils import math
+
+# Use modules
+initializes: erc4626
+
+# Export all ERC4626 functions (overriding totalAssets)
+exports: (
+    erc4626.asset,
+    erc4626.deposit,
+    erc4626.withdraw,
+    erc4626.mint,
+    erc4626.redeem,
+    erc4626.maxDeposit,
+    erc4626.maxMint,
+    erc4626.maxWithdraw,
+    erc4626.maxRedeem,
+    erc4626.previewDeposit,
+    erc4626.previewMint,
+    erc4626.previewWithdraw,
+    erc4626.previewRedeem,
+    erc4626.convertToShares,
+    erc4626.convertToAssets,
+    erc4626.decimals,
+    erc4626.name,
+    erc4626.symbol,
+    
+    # ERC20 functions
+    erc4626.totalSupply,
+    erc4626.balanceOf,
+    erc4626.transfer,
+    erc4626.allowance,
+    erc4626.approve,
+    erc4626.transferFrom
+)
 
 ################################################################################
 # INTERFACE DEFINITIONS
 ################################################################################
-
-interface IRemyVault:
-    def erc20() -> address: view
-    def erc721() -> address: view
-    def quoteDeposit(count: uint256) -> uint256: pure
-    def quoteWithdraw(count: uint256) -> uint256: pure
-    def deposit(tokenId: uint256, recipient: address): nonpayable
-    def batchDeposit(tokenIds: DynArray[uint256, 100], recipient: address) -> uint256: nonpayable
-    def withdraw(tokenId: uint256, recipient: address): nonpayable
-    def batchWithdraw(tokenIds: DynArray[uint256, 100], recipient: address) -> uint256: nonpayable
 
 interface IERC721Receiver:
     def onERC721Received(operator: address, from_address: address, token_id: uint256, data: Bytes[1024]) -> bytes4: nonpayable
@@ -32,119 +58,205 @@ interface IERC721Receiver:
 # STATE VARIABLES
 ################################################################################
 
-# We'll use snekmate's ownable functionality directly
-
 # Core Remy Vault reference
 remy_vault: public(IRemyVault)
 
-# ERC20 token of the core vault
-vault_erc20: public(IERC20)
+# NFT collection address - immutable from initialization
+nft_collection: public(address)
 
-# Metavault ERC20 token that represents shares of the inventory metavault
-shares_token: public(IERC20)
+# Inventory count for the NFT collection
+inventory_count: public(uint256)
 
-# Inventory of NFT contracts we are tracking
-# contract_address => is_supported
-supported_nfts: HashMap[address, bool]
-
-# Inventory count per contract
-# contract_address => count
-nft_inventory: HashMap[address, uint256]
-
-# Track specific token IDs owned per contract
-# contract_address => token_id => is_owned
-nft_token_ids: HashMap[address, HashMap[uint256, bool]]
+# Track specific token IDs owned in the inventory
+# token_id => is_owned
+token_inventory: HashMap[uint256, bool]
 
 # Fee percentage (10% markup = 110% of base price)
-MARKUP_BPS: constant(uint256) = 1100 # 110%
+MARKUP_BPS: public(uint256)
 BPS_DENOMINATOR: constant(uint256) = 1000
+MAX_MARKUP_BPS: constant(uint256) = 2000  # 200% maximum markup cap
+
+# Dynamic pricing enabled flag (default: disabled)
+dynamic_pricing_enabled: public(bool)
+
+# Max inventory for scaling (above this is considered "full inventory")
+MAX_INVENTORY_SCALE: public(uint256)
+
+# Minimum markup percentage (base fee even at max inventory)
+MIN_MARKUP_BPS: public(uint256)
 
 # Unit value for calculations
-UNIT: constant(uint256) = 1000 * 10 ** 18
+UNIT: constant(uint256) = 1000 * 10**18
+
+# Emergency pause controls
+paused: public(bool)
+
+# Total vault tokens from fees accumulated
+accumulated_fees: public(uint256)
+
+# Structure for tracking fee events
+struct FeeEvent:
+    timestamp: uint256
+    amount: uint256
+
+# History of fee events
+fee_events: public(DynArray[FeeEvent, 100])
+
+# Liquidity threshold - maintain at least this percentage of vault tokens relative to inventory value
+# Default: 30% (300 BPS)
+LIQUIDITY_THRESHOLD_BPS: public(uint256)
 
 ################################################################################
 # EVENTS
 ################################################################################
 
-event NftContractAdded:
-    nft_contract: indexed(address)
-
-event NftContractRemoved:
-    nft_contract: indexed(address)
-
 event InventoryDeposit:
     user: indexed(address)
-    nft_contract: indexed(address)
     token_ids: DynArray[uint256, 100]
     shares_minted: uint256
 
 event InventoryWithdraw:
     user: indexed(address)
-    nft_contract: indexed(address)
     token_ids: DynArray[uint256, 100]
     shares_burned: uint256
+    fee_tokens_claimed: uint256  # Fee tokens claimed during withdrawal
 
 event InventoryPurchase:
     buyer: indexed(address) 
-    nft_contract: indexed(address)
     token_ids: DynArray[uint256, 100]
     vault_tokens_paid: uint256
 
-################################################################################
-# EVENTS (CONTINUED)
-################################################################################
+# For inventory tracking
+event TokenRegistered:
+    token_id: indexed(uint256)
+
+# For fee distribution
+event FeesDistributed:
+    recipient: indexed(address)
+    amount: uint256
+    
+# For liquidity management
+event LiquidityAlert:
+    current_liquidity_bps: uint256
+    needed_tokens: uint256
+    available_tokens: uint256
 
 ################################################################################
 # ADMIN FUNCTIONS
 ################################################################################
 
 @external
-def add_nft_contract(nft_contract: address):
+def deposit_vault_tokens(amount: uint256):
     """
-    @dev Add an NFT contract to the supported inventory
-    @param nft_contract Address of the NFT contract to support
+    @dev Deposit core vault tokens to the metavault (liquidity injection)
+    @param amount Amount of vault tokens to deposit
+    @notice This function allows users to provide vault tokens for future withdrawals
     """
-    ownable._check_owner()
-    self.supported_nfts[nft_contract] = True
-    log NftContractAdded(nft_contract)
-
-@external
-def remove_nft_contract(nft_contract: address):
-    """
-    @dev Remove an NFT contract from the supported inventory
-    @param nft_contract Address of the NFT contract to remove
-    """
-    ownable._check_owner()
-    assert self.nft_inventory[nft_contract] == 0, "Cannot remove contract with inventory"
-    self.supported_nfts[nft_contract] = False
-    log NftContractRemoved(nft_contract)
-
-# For inventory tracking
-event TokenRegistered:
-    nft_contract: indexed(address)
-    token_id: indexed(uint256)
-
-@external
-def register_token_in_inventory(nft_contract: address, token_id: uint256):
-    """
-    @dev Manually register a token ID as being in our inventory
-    @notice This is useful when tokens are directly transferred to the contract
-            without using the deposit function
-    @param nft_contract The NFT contract address
-    @param token_id The token ID to register
-    """
-    ownable._check_owner()
+    assert not self.paused, "Contract is paused"
+    asset_address: address = erc4626.asset
+    asset: IERC20 = IERC20(asset_address)
+    assert extcall asset.transferFrom(msg.sender, self, amount)
     
-    # Verify we actually own this token
-    nft: IERC721 = IERC721(nft_contract)
-    owner: address = staticcall nft.ownerOf(token_id)
-    assert owner == self, "Contract doesn't own this token"
+    # Check if more liquidity is needed after deposit
+    liquidity_check: (uint256, uint256, uint256) = self._check_liquidity()
+    current_liquidity_bps: uint256 = liquidity_check[0]
+    needed_tokens: uint256 = liquidity_check[1]
+    available_tokens: uint256 = liquidity_check[2]
     
-    # Register the token
-    if not self.nft_token_ids[nft_contract][token_id]:
-        self.nft_token_ids[nft_contract][token_id] = True
-        self.nft_inventory[nft_contract] += 1
-        log TokenRegistered(nft_contract, token_id)
+    # If still below threshold, emit an alert
+    if current_liquidity_bps < self.LIQUIDITY_THRESHOLD_BPS and needed_tokens > available_tokens:
+        log LiquidityAlert(current_liquidity_bps, needed_tokens, available_tokens)
+    
+
+################################################################################
+# ERC4626 OVERRIDE FUNCTIONS
+################################################################################
+
+@internal
+@view
+def _get_total_assets() -> uint256:
+    """
+    @dev Returns the total amount of the underlying assets held by the vault
+    @return The total assets amount
+    """
+    # Base assets from inventory (NFTs converted to token value)
+    inventory_value: uint256 = self.inventory_count * UNIT
+    
+    # Add accumulated fees
+    total_value: uint256 = inventory_value + self.accumulated_fees
+    
+    # Add any direct token holdings (excluding accumulated fees to avoid double counting)
+    asset_address: address = erc4626.asset
+    asset: IERC20 = IERC20(asset_address)
+    vault_token_balance: uint256 = staticcall asset.balanceOf(self)
+    
+    if vault_token_balance > self.accumulated_fees:
+        direct_holdings: uint256 = vault_token_balance - self.accumulated_fees
+        total_value += direct_holdings
+        
+    return total_value
+
+@view
+@external
+def totalAssets() -> uint256:
+    """
+    @dev Returns the total amount of the underlying assets held by the vault
+    @return The total assets amount
+    """
+    return self._get_total_assets()
+
+@view
+@internal
+def _convertToShares(assets: uint256, rounding_up: bool) -> uint256:
+    """
+    @dev Override the standard conversion to account for our fee model
+    @param assets Assets to convert to shares
+    @param rounding_up Whether to round up or down
+    @return Shares amount
+    """
+    # Get total supply of shares
+    supply: uint256 = self._total_supply()
+    
+    # If there are no shares yet, use 1:1 conversion
+    if supply == 0:
+        return assets
+    
+    # Get the total value of the vault including accumulated fees
+    total_assets: uint256 = self._get_total_assets()
+    
+    # If there are no assets, use 1:1 conversion
+    if total_assets == 0:
+        return assets
+    
+    # Convert assets to shares based on the current ratio
+    # This ensures new depositors get fewer shares when the vault has accumulated fees
+    return math._mul_div(assets, supply, total_assets, rounding_up)
+
+@view
+@internal
+def _convertToAssets(shares: uint256, rounding_up: bool) -> uint256:
+    """
+    @dev Override the standard conversion to account for our fee model
+    @param shares Shares to convert to assets
+    @param rounding_up Whether to round up or down
+    @return Assets amount
+    """
+    # Get total supply of shares
+    supply: uint256 = self._total_supply()
+    
+    # If there are no shares, use 1:1 conversion
+    if supply == 0:
+        return shares
+    
+    # Get the total value of the vault including accumulated fees
+    total_assets: uint256 = self._get_total_assets()
+    
+    # If there are no assets, use 1:1 conversion
+    if total_assets == 0:
+        return shares
+    
+    # Convert shares to assets based on the current ratio
+    return math._mul_div(shares, total_assets, supply, rounding_up)
 
 ################################################################################
 # CORE FUNCTIONS - DEPOSIT/WITHDRAW
@@ -152,53 +264,59 @@ def register_token_in_inventory(nft_contract: address, token_id: uint256):
 
 @nonreentrant
 @external
-def deposit_nfts(nft_contract: address, token_ids: DynArray[uint256, 100]) -> uint256:
+def deposit_nfts(token_ids: DynArray[uint256, 100], receiver: address = msg.sender) -> uint256:
     """
     @dev Deposit NFTs into the metavault inventory and receive shares
-    @param nft_contract The address of the NFT contract
     @param token_ids Array of NFT token IDs to deposit
+    @param receiver Address that will receive the shares
     @return Amount of share tokens minted
     """
-    assert self.supported_nfts[nft_contract], "NFT contract not supported"
+    assert not self.paused, "Contract is paused"
+    assert len(token_ids) > 0, "Empty token array"
     
     # Transfer NFTs to this contract
-    nft: IERC721 = IERC721(nft_contract)
+    nft: IERC721 = IERC721(self.nft_collection)
     for token_id: uint256 in token_ids:
+        # Transfer the token
         extcall nft.transferFrom(msg.sender, self, token_id)
+        
         # Track this specific token ID
-        self.nft_token_ids[nft_contract][token_id] = True
+        assert not self.token_inventory[token_id], "Token already in inventory"
+        self.token_inventory[token_id] = True
     
     # Update inventory count
-    self.nft_inventory[nft_contract] += len(token_ids)
+    self.inventory_count += len(token_ids)
     
-    # Mint shares tokens (1 share per NFT)
-    shares_amount: uint256 = len(token_ids) * UNIT
-    extcall IManagedToken(self.shares_token.address).mint(msg.sender, shares_amount)
+    # Convert NFTs to equivalent asset amount (1 NFT = UNIT tokens)
+    asset_amount: uint256 = len(token_ids) * UNIT
     
-    log InventoryDeposit(msg.sender, nft_contract, token_ids, shares_amount)
+    # Calculate shares amount using our conversion function
+    shares_amount: uint256 = self._convertToShares(asset_amount, False)
+    
+    # Mint shares directly with ERC4626 mint function
+    erc4626._deposit(self, receiver, 0, shares_amount)
+    
+    log InventoryDeposit(msg.sender, token_ids, shares_amount)
     return shares_amount
 
 @nonreentrant
 @external
-def withdraw_nfts(nft_contract: address, token_ids: DynArray[uint256, 100]) -> uint256:
+def withdraw_nfts(token_ids: DynArray[uint256, 100], withdraw_underlying_tokens: bool = True, receiver: address = msg.sender) -> (uint256, uint256):
     """
-    @dev Withdraw NFTs by burning shares - NFTs can come from either metavault inventory or core vault
-    @param nft_contract The address of the NFT contract
+    @dev Withdraw NFTs by burning shares
     @param token_ids Array of NFT token IDs to withdraw
-    @return Amount of share tokens burned
+    @param withdraw_underlying_tokens If true, also withdraw the user's share of accumulated fee tokens
+    @param receiver Address that will receive the NFTs
+    @return tuple of (Amount of share tokens burned, Amount of underlying vault tokens distributed)
     """
-    assert self.supported_nfts[nft_contract], "NFT contract not supported"
+    assert not self.paused, "Contract is paused"
+    assert len(token_ids) > 0, "Empty token array"
     
-    # Calculate shares to burn
-    shares_amount: uint256 = len(token_ids) * UNIT
+    # Convert NFTs to equivalent asset amount
+    asset_amount: uint256 = len(token_ids) * UNIT
     
-    # Burn shares tokens
-    extcall self.shares_token.transferFrom(msg.sender, self, shares_amount)
-    extcall IManagedToken(self.shares_token.address).burn(shares_amount)
-    
-    # Get core vault's ERC721 address
-    core_vault_nft_address: address = staticcall self.remy_vault.erc721()
-    is_core_nft: bool = (nft_contract == core_vault_nft_address)
+    # Calculate shares required using our conversion function - round up for withdraw
+    shares_amount: uint256 = self._convertToShares(asset_amount, True)
     
     # Track which tokens are served from inventory vs. core vault
     inventory_token_ids: DynArray[uint256, 100] = []
@@ -206,117 +324,124 @@ def withdraw_nfts(nft_contract: address, token_ids: DynArray[uint256, 100]) -> u
     
     # Separate token IDs for processing
     for token_id: uint256 in token_ids:
-        # Try to get the token from our inventory first if we have it
-        if nft_contract == core_vault_nft_address and self._is_token_in_metavault_inventory(token_id):
+        if self.token_inventory[token_id]:
             inventory_token_ids.append(token_id)
         else:
-            # Otherwise get it from the core vault
+            # For core vault tokens, verify the core vault owns them
+            nft: IERC721 = IERC721(self.nft_collection)
+            core_token_owner: address = staticcall nft.ownerOf(token_id)
+            assert core_token_owner == self.remy_vault.address, "Token not owned by core vault"
             core_vault_token_ids.append(token_id)
     
+    # Calculate fee share proportional to shares being burned
+    fee_tokens_to_claim: uint256 = 0
+    
+    # If there are accumulated fees and user wants to withdraw them
+    if withdraw_underlying_tokens and self.accumulated_fees > 0:
+        # Calculate proportional share of accumulated fees based on share of total supply
+        total_supply: uint256 = self._total_supply()
+        if total_supply > 0:
+            fee_tokens_to_claim = shares_amount * self.accumulated_fees // total_supply
+            
+            # Cap to actual available amount
+            if fee_tokens_to_claim > self.accumulated_fees:
+                fee_tokens_to_claim = self.accumulated_fees
+    
+    # Burn shares using the ERC4626 redeem function
+    erc4626._withdraw(msg.sender, self, msg.sender, 0, shares_amount)
+            
+    # Update accumulated fees if claiming
+    if fee_tokens_to_claim > 0:
+        self.accumulated_fees -= fee_tokens_to_claim
+    
     # Process tokens from our inventory
-    nft: IERC721 = IERC721(nft_contract)
+    nft: IERC721 = IERC721(self.nft_collection)
     for token_id: uint256 in inventory_token_ids:
-        extcall nft.safeTransferFrom(self, msg.sender, token_id)
+        extcall nft.safeTransferFrom(self, receiver, token_id, b"")
+        
         # Remove token ID from tracking
-        self.nft_token_ids[nft_contract][token_id] = False
-        # Update inventory count
-        self.nft_inventory[nft_contract] -= 1
+        self.token_inventory[token_id] = False
+    
+    # Update inventory count
+    self.inventory_count -= len(inventory_token_ids)
     
     # Process tokens from core vault - withdraw directly to user
+    vault_tokens_needed: uint256 = 0
     if len(core_vault_token_ids) > 0:
-        if is_core_nft:
-            # We need to have enough vault tokens to withdraw from the core vault
-            vault_tokens_needed: uint256 = len(core_vault_token_ids) * UNIT
-            
-            # First check if we have enough vault tokens in our balance
-            vault_token_balance: uint256 = staticcall self.vault_erc20.balanceOf(self)
-            
-            # If we don't have enough vault tokens, acquire them by:
-            # 1. Either using the core vault's ERC20s from our balance
-            # 2. Or by depositing NFTs into the core vault to get ERC20s
-            if vault_token_balance < vault_tokens_needed:
-                # First look for NFTs that we can deposit into the core vault
-                # We should have at least some core NFTs in our inventory
-                available_deposit_nfts: DynArray[uint256, 100] = self._find_nfts_to_deposit(len(core_vault_token_ids))
-                
-                # If we found enough NFTs to deposit, use them to get vault tokens
-                if len(available_deposit_nfts) > 0:
-                    # Approve the core vault to take our NFTs
-                    core_nft: IERC721 = IERC721(core_vault_nft_address)
-                    remy_vault_address: address = self.remy_vault.address
-                    for deposit_token_id: uint256 in available_deposit_nfts:
-                        extcall core_nft.approve(remy_vault_address, deposit_token_id)
-                    
-                    # Deposit the NFTs to get vault tokens
-                    extcall self.remy_vault.batchDeposit(available_deposit_nfts, self)
-                    
-                    # Update our inventory count and tracking
-                    for deposit_token_id: uint256 in available_deposit_nfts:
-                        self.nft_inventory[core_vault_nft_address] -= 1
-                        # Remove token from tracking
-                        self.nft_token_ids[core_vault_nft_address][deposit_token_id] = False
-                else:
-                    # If we still don't have enough tokens and no NFTs to deposit, fail
-                    assert False, "Insufficient vault tokens to process withdrawal"
-            
-            # Now withdraw from the core vault directly to the user
-            # First approve the core vault to take our vault tokens
-            remy_vault_address: address = self.remy_vault.address
-            extcall self.vault_erc20.approve(remy_vault_address, vault_tokens_needed)
-            
-            # Then withdraw the NFTs directly to the user
-            extcall self.remy_vault.batchWithdraw(core_vault_token_ids, msg.sender)
-        else:
-            # For other supported NFTs, we'd need another mechanism
-            # This section would handle other NFT withdrawals if applicable
-            assert False, "Withdrawal from core vault for non-core NFTs not implemented"
+        # We need to have enough vault tokens to withdraw from the core vault
+        vault_tokens_needed = len(core_vault_token_ids) * UNIT
+        
+        # Check if we have enough vault tokens in our balance
+        asset_address: address = erc4626.asset
+        asset: IERC20 = IERC20(asset_address)
+        vault_token_balance: uint256 = staticcall asset.balanceOf(self)
+        
+        # If we don't have enough vault tokens, fail the transaction
+        assert vault_token_balance >= vault_tokens_needed + fee_tokens_to_claim, "Insufficient vault tokens"
+        
+        # Now withdraw from the core vault directly to the user
+        # First approve the core vault to take our vault tokens
+        remy_vault_address: address = self.remy_vault.address
+        assert extcall asset.approve(remy_vault_address, vault_tokens_needed)
+        
+        # Then withdraw the NFTs directly to the user
+        extcall self.remy_vault.batchWithdraw(core_vault_token_ids, receiver)
+        
+        # After withdrawal, check if our liquidity is getting low
+        liquidity_check: (uint256, uint256, uint256) = self._check_liquidity()
+        current_liquidity_bps: uint256 = liquidity_check[0]
+        needed_tokens: uint256 = liquidity_check[1]
+        available_tokens: uint256 = liquidity_check[2]
+        
+        # If below threshold, emit an alert
+        if current_liquidity_bps < self.LIQUIDITY_THRESHOLD_BPS and needed_tokens > available_tokens:
+            log LiquidityAlert(current_liquidity_bps, needed_tokens, available_tokens)
     
-    log InventoryWithdraw(msg.sender, nft_contract, token_ids, shares_amount)
-    return shares_amount
+    # Transfer any fee tokens to the user
+    if fee_tokens_to_claim > 0:
+        asset_address: address = erc4626.asset
+        asset: IERC20 = IERC20(asset_address)
+        assert extcall asset.transfer(receiver, fee_tokens_to_claim)
+        log FeesDistributed(receiver, fee_tokens_to_claim)
+    
+    log InventoryWithdraw(msg.sender, token_ids, shares_amount, fee_tokens_to_claim)
+    return (shares_amount, fee_tokens_to_claim)
 
-@view
-@internal
-def _is_token_in_metavault_inventory(token_id: uint256) -> bool:
+@nonreentrant
+@external
+def redeem_for_tokens(shares_amount: uint256, receiver: address = msg.sender) -> uint256:
     """
-    @dev Check if a specific token ID is owned by this metavault
-    @param token_id The token ID to check
-    @return True if the token is in this metavault's inventory
+    @dev Redeem shares for the underlying tokens
+    @param shares_amount Amount of shares to redeem
+    @param receiver Address that will receive the tokens
+    @return Amount of tokens received
     """
-    core_vault_nft_address: address = staticcall self.remy_vault.erc721()
-    return self.nft_token_ids[core_vault_nft_address][token_id]
-
-@internal
-def _find_nfts_to_deposit(count_needed: uint256) -> DynArray[uint256, 100]:
-    """
-    @dev Find NFTs in our inventory that we can deposit to the core vault to get ERC20 tokens
-    @param count_needed Number of NFTs needed
-    @return Array of NFT token IDs that can be deposited
-    """
-    result: DynArray[uint256, 100] = []
+    assert not self.paused, "Contract is paused"
+    assert shares_amount > 0, "Zero shares amount"
     
-    # If we don't need any NFTs, return empty array
-    if count_needed == 0:
-        return result
+    # Calculate tokens amount using our conversion function (round down for safety)
+    tokens_amount: uint256 = self._convertToAssets(shares_amount, False)
     
-    # Get the core vault's NFT address
-    core_vault_nft_address: address = staticcall self.remy_vault.erc721()
+    # Ensure we have enough tokens (either from accumulated fees or direct holdings)
+    asset_address: address = erc4626.asset
+    asset: IERC20 = IERC20(asset_address)
+    vault_token_balance: uint256 = staticcall asset.balanceOf(self)
+    assert vault_token_balance >= tokens_amount, "Insufficient liquidity"
     
-    # Make sure we have NFTs in our inventory of the core vault's NFT type
-    if self.nft_inventory[core_vault_nft_address] == 0:
-        return result
+    # Burn the shares using standard erc4626 redeem
+    erc4626._withdraw(msg.sender, self, msg.sender, 0, shares_amount)
     
-    # Note: In a real implementation, we would need a way to iterate through 
-    # token IDs we own. Since Vyper doesn't support iteration over mappings,
-    # we would need to maintain a separate list of token IDs or use an enumerable
-    # ERC721 implementation.
+    # Transfer the tokens
+    assert extcall asset.transfer(receiver, tokens_amount)
     
-    # For now, we'll implement a simple version where the admin can register
-    # available token IDs for withdrawal
+    # Update accumulated fees if necessary
+    if tokens_amount <= self.accumulated_fees:
+        self.accumulated_fees -= tokens_amount
+    else:
+        # Part of tokens came from accumulated fees, part from direct holdings
+        self.accumulated_fees = 0
     
-    # This is a placeholder for the actual implementation which would depend on
-    # how the contract tracks owned tokens
-    
-    return result
+    return tokens_amount
 
 ################################################################################
 # PURCHASE FUNCTION
@@ -324,35 +449,110 @@ def _find_nfts_to_deposit(count_needed: uint256) -> DynArray[uint256, 100]:
 
 @nonreentrant
 @external
-def purchase_nfts(nft_contract: address, token_ids: DynArray[uint256, 100]) -> uint256:
+def purchase_nfts(token_ids: DynArray[uint256, 100]) -> uint256:
     """
     @dev Purchase NFTs from the metavault inventory using core vault ERC20 tokens
-    @param nft_contract The address of the NFT contract
     @param token_ids Array of NFT token IDs to purchase
     @return Amount of vault tokens paid
     """
-    assert self.supported_nfts[nft_contract], "NFT contract not supported"
-    assert self.nft_inventory[nft_contract] >= len(token_ids), "Not enough inventory"
+    assert not self.paused, "Contract is paused"
+    assert len(token_ids) > 0, "Empty token array"
+    assert self.inventory_count >= len(token_ids), "Not enough inventory"
     
-    # Calculate price with 10% markup
+    # Verify all tokens are owned by the metavault
+    nft: IERC721 = IERC721(self.nft_collection)
+    for token_id: uint256 in token_ids:
+        # Verify token is in our inventory
+        assert self.token_inventory[token_id], "Token not in inventory"
+    
+    # Calculate price with markup
     base_price: uint256 = UNIT * len(token_ids)
-    vault_tokens_required: uint256 = base_price * MARKUP_BPS // BPS_DENOMINATOR
+    vault_tokens_required: uint256 = base_price * self.MARKUP_BPS // BPS_DENOMINATOR
+    
+    # Calculate fee amount (markup portion)
+    fee_amount: uint256 = vault_tokens_required - base_price
     
     # Transfer vault tokens from buyer to this contract
-    extcall self.vault_erc20.transferFrom(msg.sender, self, vault_tokens_required)
+    asset_address: address = erc4626.asset
+    asset: IERC20 = IERC20(asset_address)
+    assert extcall asset.transferFrom(msg.sender, self, vault_tokens_required)
     
     # Transfer NFTs to buyer
-    nft: IERC721 = IERC721(nft_contract)
     for token_id: uint256 in token_ids:
-        extcall nft.safeTransferFrom(self, msg.sender, token_id)
+        extcall nft.safeTransferFrom(self, msg.sender, token_id, b"")
         # Remove token ID from tracking
-        self.nft_token_ids[nft_contract][token_id] = False
+        self.token_inventory[token_id] = False
     
     # Update inventory count
-    self.nft_inventory[nft_contract] -= len(token_ids)
+    self.inventory_count -= len(token_ids)
     
-    log InventoryPurchase(msg.sender, nft_contract, token_ids, vault_tokens_required)
+    # Add fee to accumulated fees for shareholders
+    if fee_amount > 0:
+        self.accumulated_fees += fee_amount
+        
+        # Record fee event for reporting
+        self.fee_events.append(FeeEvent({timestamp: block.timestamp, amount: fee_amount}))
+        
+        # The share price will automatically adjust with the next call to totalAssets()
+    
+    # Check liquidity after purchase (since inventory has changed)
+    liquidity_check: (uint256, uint256, uint256) = self._check_liquidity()
+    current_liquidity_bps: uint256 = liquidity_check[0]
+    needed_tokens: uint256 = liquidity_check[1]
+    available_tokens: uint256 = liquidity_check[2]
+    
+    # If below threshold, emit an alert
+    if current_liquidity_bps < self.LIQUIDITY_THRESHOLD_BPS and needed_tokens > available_tokens:
+        log LiquidityAlert(current_liquidity_bps, needed_tokens, available_tokens)
+    
+    log InventoryPurchase(msg.sender, token_ids, vault_tokens_required)
     return vault_tokens_required
+
+################################################################################
+# LIQUIDITY MANAGEMENT
+################################################################################
+
+@view
+@internal
+def _check_liquidity() -> (uint256, uint256, uint256):
+    """
+    @dev Check if the contract has enough liquidity to handle withdrawals
+    @return Tuple of (current_liquidity_bps, needed_tokens, available_tokens)
+    """
+    # If no inventory, no need for liquidity
+    if self.inventory_count == 0:
+        return (BPS_DENOMINATOR, 0, 0)
+        
+    # Calculate total inventory value in vault tokens
+    inventory_value: uint256 = self.inventory_count * UNIT
+    
+    # Calculate needed tokens based on threshold
+    needed_tokens: uint256 = inventory_value * self.LIQUIDITY_THRESHOLD_BPS // BPS_DENOMINATOR
+    
+    # Get available tokens (excluding accumulated fees that belong to shareholders)
+    asset_address: address = erc4626.asset
+    asset: IERC20 = IERC20(asset_address)
+    vault_token_balance: uint256 = staticcall asset.balanceOf(self)
+    available_tokens: uint256 = 0
+    
+    if vault_token_balance > self.accumulated_fees:
+        available_tokens = vault_token_balance - self.accumulated_fees
+    
+    # Calculate current liquidity ratio
+    current_liquidity_bps: uint256 = 0
+    if inventory_value > 0:
+        current_liquidity_bps = available_tokens * BPS_DENOMINATOR // inventory_value
+        
+    return (current_liquidity_bps, needed_tokens, available_tokens)
+
+@view
+@external
+def check_liquidity() -> (uint256, uint256, uint256):
+    """
+    @dev External version of _check_liquidity for monitoring
+    @return Tuple of (current_liquidity_bps, needed_tokens, available_tokens)
+    """
+    return self._check_liquidity()
 
 ################################################################################
 # QUOTE FUNCTIONS
@@ -360,64 +560,156 @@ def purchase_nfts(nft_contract: address, token_ids: DynArray[uint256, 100]) -> u
 
 @view
 @external
-def quote_purchase(nft_contract: address, count: uint256) -> uint256:
+def quote_purchase(count: uint256) -> uint256:
     """
     @dev Get the price quote for purchasing NFTs with markup
-    @param nft_contract The address of the NFT contract (unused but kept for consistency)
     @param count Number of NFTs to purchase
     @return Amount of vault tokens required
     """
     base_price: uint256 = UNIT * count
-    return base_price * MARKUP_BPS // BPS_DENOMINATOR
+    return base_price * self.MARKUP_BPS // BPS_DENOMINATOR
 
 @view
 @external
-def get_available_inventory(nft_contract: address) -> uint256:
+def get_available_inventory() -> uint256:
     """
-    @dev Get the current inventory count for a particular NFT contract
-    @param nft_contract The address of the NFT contract
+    @dev Get the current inventory count
     @return Number of NFTs available in inventory
     """
-    return self.nft_inventory[nft_contract]
+    return self.inventory_count
 
 @view
 @external
-def is_supported_contract(nft_contract: address) -> bool:
+def is_token_in_inventory(token_id: uint256) -> bool:
     """
-    @dev Check if an NFT contract is supported by this metavault
-    @param nft_contract The address of the NFT contract
-    @return True if the contract is supported
+    @dev Check if a specific token ID is in inventory
+    @param token_id The token ID to check
+    @return True if the token is in inventory
     """
-    return self.supported_nfts[nft_contract]
+    return self.token_inventory[token_id]
+
+@view
+@external
+def get_pending_fees_per_share() -> uint256:
+    """
+    @dev Calculate the pending fees per share
+    @return The amount of vault tokens per share unit
+    """
+    total_supply: uint256 = self._total_supply()
+    if total_supply == 0:
+        return 0
+    return self.accumulated_fees * UNIT // total_supply
+
+@view
+@external
+def calculate_user_fees(shares_amount: uint256) -> uint256:
+    """
+    @dev Calculate the pending fees for a specific user based on their shares
+    @param shares_amount Amount of shares owned by the user
+    @return Amount of vault tokens the user would receive for their shares
+    """
+    total_supply: uint256 = self._total_supply()
+    if total_supply == 0 or shares_amount == 0:
+        return 0
+    return shares_amount * self.accumulated_fees // total_supply
+
+@view
+@internal
+def _calculate_user_fee_share(user: address) -> uint256:
+    """
+    @dev Calculate a user's share of accumulated fees (internal)
+    @param user Address of the user
+    @return Amount of fee tokens the user is entitled to
+    """
+    user_shares: uint256 = self._balance_of(user)
+    total_supply: uint256 = self._total_supply()
+    
+    if total_supply == 0 or user_shares == 0:
+        return 0
+        
+    return user_shares * self.accumulated_fees // total_supply
+
+@view
+@external
+def get_user_fee_share(user: address) -> uint256:
+    """
+    @dev Calculate a user's share of accumulated fees
+    @param user Address of the user
+    @return Amount of fee tokens the user is entitled to
+    """
+    return self._calculate_user_fee_share(user)
+
+################################################################################
+# FEE CLAIM FUNCTION
+################################################################################
+
+@nonreentrant
+@external
+def claim_fees() -> uint256:
+    """
+    @dev Claim accumulated fees without withdrawing NFTs
+    @return Amount of fee tokens claimed
+    """
+    assert not self.paused, "Contract is paused"
+    
+    # Get user's share balance
+    user_shares: uint256 = self._balance_of(msg.sender)
+    assert user_shares > 0, "No shares owned"
+    
+    # Calculate proportional fee share
+    fee_tokens_to_claim: uint256 = self._calculate_user_fee_share(msg.sender)
+    assert fee_tokens_to_claim > 0, "No fees to claim"
+    
+    # Update accumulated fees
+    self.accumulated_fees -= fee_tokens_to_claim
+    
+    # Transfer fee tokens to user
+    asset_address: address = erc4626.asset
+    asset: IERC20 = IERC20(asset_address)
+    assert extcall asset.transfer(msg.sender, fee_tokens_to_claim)
+    log FeesDistributed(msg.sender, fee_tokens_to_claim)
+    
+    return fee_tokens_to_claim
 
 ################################################################################
 # CONSTRUCTOR
 ################################################################################
 
 @deploy
-def __init__(_remy_vault: address, _shares_token: address):
+def __init__(_remy_vault: address, name: String[25], symbol: String[5]):
     """
-    @dev Initialize the Inventory Metavault
+    @dev Initialize the Inventory Metavault as an ERC4626 compliant vault
     @param _remy_vault Address of the core RemyVault contract
-    @param _shares_token Address of the ERC20 token for metavault shares
+    @param name The name of the vault shares token
+    @param symbol The symbol of the vault shares token
     """
+    # Validate inputs
+    assert _remy_vault != empty(address), "Invalid RemyVault address"
+
     # Initialize core contract references
     self.remy_vault = IRemyVault(_remy_vault)
-    vault_erc20_address: address = staticcall self.remy_vault.erc20()
-    self.vault_erc20 = IERC20(vault_erc20_address)
-    self.shares_token = IERC20(_shares_token)
     
-    # Initialize ownable
-    ownable.__init__()
-
-################################################################################
-# ERC721 RECEIVER IMPLEMENTATION
-################################################################################
-
-@external
-def onERC721Received(operator: address, from_address: address, token_id: uint256, data: Bytes[1024]) -> bytes4:
-    """
-    @dev Implement ERC721Receiver interface to allow direct transfers
-    @return bytes4 The function selector
-    """
-    return 0x150b7a02 # bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"))
+    # Get the underlying asset (RemyVault's ERC20 token)
+    vault_erc20_address: address = staticcall self.remy_vault.erc20()
+    
+    # Initialize ERC4626 with proper parameters
+    # For EIP-712 domain, use the same name as the token for simplicity
+    name_eip712: String[50] = name
+    version_eip712: String[20] = "1.0"
+    decimals_offset: uint8 = 0
+    erc4626.__init__(name, symbol, IERC20(vault_erc20_address), decimals_offset, name_eip712, version_eip712)
+    
+    # Set the NFT collection to be the same as the core vault's NFT collection
+    self.nft_collection = staticcall self.remy_vault.erc721()
+    
+    # Initialize markup percentage (10% markup = 110%)
+    self.MARKUP_BPS = 1100
+    
+    # Initialize remaining state variables
+    self.paused = False
+    self.inventory_count = 0
+    self.accumulated_fees = 0
+    self.LIQUIDITY_THRESHOLD_BPS = 300
+    self.dynamic_pricing_enabled = False
+    self.MAX_INVENTORY_SCALE = 100
+    self.MIN_MARKUP_BPS = 1050
