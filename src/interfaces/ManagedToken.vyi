@@ -1,7 +1,0 @@
-@external
-def mint(to: address, amount: uint256):
-    ...
-
-@external
-def burn(amount: uint256):
-    ...

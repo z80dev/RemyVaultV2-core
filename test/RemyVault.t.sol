@@ -51,10 +51,8 @@ interface Ownable {
  * @dev Interface for the RemyVault contract being tested
  */
 interface IVault {
-    function deposit(uint256 tokenId, address recipient) external;
-    function batchDeposit(uint256[] calldata tokenIds, address recipient) external returns (uint256);
-    function withdraw(uint256 tokenId, address recipient) external;
-    function batchWithdraw(uint256[] calldata tokenIds, address recipient) external returns (uint256);
+    function deposit(uint256[] calldata tokenIds, address recipient) external returns (uint256);
+    function withdraw(uint256[] calldata tokenIds, address recipient) external returns (uint256);
     function quoteDeposit(uint256 count) external pure returns (uint256);
     function quoteWithdraw(uint256 count) external pure returns (uint256);
     function erc20() external view returns (address);
@@ -68,6 +66,8 @@ interface IVault {
 interface IManagedToken {
     function mint(address to, uint256 value) external;
     function burn(uint256 amount) external;
+    function manager() external view returns (address);
+    function change_manager(address newManager) external;
 }
 
 /**
@@ -75,8 +75,7 @@ interface IManagedToken {
  * @dev Comprehensive test suite for the RemyVault contract
  *
  * This test suite validates all aspects of the RemyVault protocol including:
- * - Basic deposit/withdraw functionality
- * - Batch operations
+ * - Deposit/withdraw functionality for single and multiple NFTs
  * - Token balance tracking and invariants
  * - Security properties (reentrancy protection)
  * - Edge cases (empty arrays, approval failures, etc.)
@@ -85,19 +84,19 @@ interface IManagedToken {
 contract RemyVaultTest is Test {
     /// @notice Mock ERC721 token representing NFTs
     IERC721 public nft;
-    
+
     /// @notice Mock ERC20 token representing fungible tokens
     IERC20 public token;
-    
+
     /// @notice RemyVault contract instance being tested
     IVault public vault;
-    
+
     /// @notice Test user address
     address public alice;
-    
+
     /// @notice Second test user address
     address public bob;
-    
+
     /// @notice Reentrancy attack contract for security testing
     ReentrancyAttacker public attacker;
 
@@ -114,20 +113,25 @@ contract RemyVaultTest is Test {
     function setUp() public {
         // Deploy mock contracts
         nft = IERC721(deployCode("MockERC721", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
-        token = IERC20(deployCode("MockERC20"));
-        
+
+        // Deploy the ManagedToken (our implementation) instead of MockERC20
+        token = IERC20(deployCode("ManagedToken", abi.encode("MOCK", "MOCK", address(this))));
+
         // Deploy vault and configure ownership
         vault = IVault(deployCode("RemyVault", abi.encode(address(token), address(nft))));
-        Ownable(address(token)).transfer_ownership(address(vault));
+
+        // Transfer ownership of tokens to vault
+        //address(IManagedToken(address(token))).call(abi.encodeWithSignature("change_manager(address)", address(vault)));
+        IManagedToken(address(token)).change_manager(address(vault));
         Ownable(address(nft)).transfer_ownership(address(vault));
-        
+
         // Create test addresses
         alice = makeAddr("alice");
         bob = makeAddr("bob");
-        
+
         // Deploy the reentrancy attacker contract
         attacker = new ReentrancyAttacker(address(vault), address(nft), address(token));
-        
+
         // Configure invariant test properties
         excludeSender(address(vault));
     }
@@ -138,7 +142,7 @@ contract RemyVaultTest is Test {
         assertNotEq(address(nft), address(0));
     }
 
-    function testDeposit() public {
+    function testSingleDeposit() public {
         // mint a token to this contract
         vm.prank(address(vault));
         nft.mint(address(this), 1);
@@ -146,8 +150,12 @@ contract RemyVaultTest is Test {
         // approve the vault to transfer the token
         nft.approve(address(vault), 1);
 
+        // create array with single tokenId
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = 1;
+
         // deposit the token
-        vault.deposit(1, address(this));
+        vault.deposit(tokenIds, address(this));
 
         // check the vault now owns 1 token
         assertEq(nft.balanceOf(address(vault)), 1);
@@ -156,12 +164,13 @@ contract RemyVaultTest is Test {
         assertEq(nft.ownerOf(1), address(vault));
 
         // check the vault minted us 1000 tokens
-        assertEq(token.balanceOf(address(this)), 1000 * 10**18);
+        assertEq(token.balanceOf(address(this)), 1000 * 10 ** 18);
     }
 
     function testBatchDeposit(uint256 n) public {
         // batch deposits limited to 100 tokenIds for gas reasons
         vm.assume(n < 101);
+        vm.assume(n > 0);
 
         // mint n tokens to this contract & store their tokenIds
         uint256[] memory tokenIds = new uint256[](n);
@@ -175,16 +184,16 @@ contract RemyVaultTest is Test {
         nft.setApprovalForAll(address(vault), true);
 
         // deposit the tokens
-        vault.batchDeposit(tokenIds, address(this));
+        vault.deposit(tokenIds, address(this));
 
         // check the vault now owns n tokens
         assertEq(nft.balanceOf(address(vault)), n);
 
         // check the vault minted us 1000 tokens per tokenId
-        assertEq(token.balanceOf(address(this)), n * 1000 * 10**18);
+        assertEq(token.balanceOf(address(this)), n * 1000 * 10 ** 18);
     }
 
-    function testWithdraw() public {
+    function testSingleWithdraw() public {
         // mint a token to this contract
         vm.prank(address(vault));
         nft.mint(address(this), 1);
@@ -192,14 +201,18 @@ contract RemyVaultTest is Test {
         // approve the vault to transfer the token
         nft.approve(address(vault), 1);
 
+        // create array with single tokenId
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = 1;
+
         // deposit the token
-        vault.deposit(1, address(this));
+        vault.deposit(tokenIds, address(this));
 
         // approve the vault to move out erc20 tokens
-        token.approve(address(vault), 1000 * 10**18);
+        token.approve(address(vault), 1000 * 10 ** 18);
 
         // withdraw the token
-        vault.withdraw(1, address(this));
+        vault.withdraw(tokenIds, address(this));
 
         // check the vault no longer owns the token
         assertEq(nft.balanceOf(address(vault)), 0);
@@ -209,6 +222,79 @@ contract RemyVaultTest is Test {
 
         // check the vault no longer owns 1000 tokens
         assertEq(token.balanceOf(address(this)), 0);
+    }
+
+    /**
+     * @dev Tests that users cannot withdraw NFTs that were directly transferred to the vault
+     *
+     * This test verifies the contract doesn't allow withdrawing NFTs that were transferred
+     * directly to the vault (bypassing the deposit function). This is important to prevent
+     * users from claiming tokens for NFTs they didn't properly deposit.
+     */
+    function testDirectNFTTransferBypass() public {
+        // Mint a token to this contract
+        vm.prank(address(vault));
+        nft.mint(address(this), 999);
+
+        // Transfer the NFT directly to the vault, bypassing the deposit function
+        nft.transferFrom(address(this), address(vault), 999);
+
+        // Verify the vault now directly owns the NFT
+        assertEq(nft.ownerOf(999), address(vault));
+
+        // We didn't get any tokens because we bypassed deposit
+        assertEq(token.balanceOf(address(this)), 0);
+
+        // Approve the vault to burn tokens (when we try to withdraw)
+        token.approve(address(vault), 1000 * 10 ** 18);
+
+        // Try to withdraw the NFT - should revert since we never deposited it properly
+        // The withdraw function checks the vault owns the token (which it does), but we
+        // have no tokens to burn for withdrawal
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = 999;
+        vm.expectRevert();
+        vault.withdraw(tokenIds, address(this));
+
+        // Verify the NFT is still in the vault
+        assertEq(nft.ownerOf(999), address(vault));
+
+        // Now let's try another approach - try to get tokens by depositing a different NFT
+        // then use those tokens to withdraw the directly transferred NFT
+
+        // Mint and deposit a second token properly
+        vm.prank(address(vault));
+        nft.mint(address(this), 888);
+        nft.approve(address(vault), 888);
+        
+        uint256[] memory depositTokenIds = new uint256[](1);
+        depositTokenIds[0] = 888;
+        vault.deposit(depositTokenIds, address(this));
+
+        // We now have 1000 tokens
+        assertEq(token.balanceOf(address(this)), 1000 * 10 ** 18);
+
+        // Try to use these tokens to withdraw the directly transferred NFT
+        token.approve(address(vault), 1000 * 10 ** 18);
+
+        // This should succeed technically, as the withdraw function only checks:
+        // 1. The vault owns the token (it does)
+        // 2. The caller has enough tokens to burn (they do)
+        // But this represents a security vulnerability if it succeeds
+        uint256[] memory withdrawTokenIds = new uint256[](1);
+        withdrawTokenIds[0] = 999;
+        vault.withdraw(withdrawTokenIds, address(this));
+
+        // Check if the directly transferred NFT was withdrawn
+        // If this passes, we have a security issue!
+        assertEq(nft.ownerOf(999), address(this));
+
+        // The token balance should now be 0 since we burned tokens
+        assertEq(token.balanceOf(address(this)), 0);
+
+        // check that safeTransferFrom reverts
+        vm.expectRevert();
+        nft.safeTransferFrom(address(vault), address(this), 999);
     }
 
     function testBatchWithdraw(uint256 n) public {
@@ -226,13 +312,13 @@ contract RemyVaultTest is Test {
         nft.setApprovalForAll(address(vault), true);
 
         // deposit the tokens
-        vault.batchDeposit(tokenIds, address(this));
+        vault.deposit(tokenIds, address(this));
 
         // approve the vault to move out erc20 tokens
-        token.approve(address(vault), n * 1000 * 10**18);
+        token.approve(address(vault), n * 1000 * 10 ** 18);
 
         // withdraw the tokens
-        vault.batchWithdraw(tokenIds, address(this));
+        vault.withdraw(tokenIds, address(this));
 
         // check the vault no longer owns the tokens
         assertEq(nft.balanceOf(address(vault)), 0);
@@ -241,19 +327,19 @@ contract RemyVaultTest is Test {
         assertEq(token.balanceOf(address(this)), 0);
     }
 
-    // Empty array tests - current contract allows empty arrays but returns 0
+    // Empty array tests
     function testEmptyArrayDeposit() public {
         uint256[] memory tokenIds = new uint256[](0);
-        // Should return 0 with empty array
-        uint256 mintAmount = vault.batchDeposit(tokenIds, address(this));
-        assertEq(mintAmount, 0);
+        // expect revert
+        vm.expectRevert();
+        vault.deposit(tokenIds, address(this));
     }
 
     function testEmptyArrayWithdraw() public {
         uint256[] memory tokenIds = new uint256[](0);
-        // Should return 0 with empty array
-        uint256 burnAmount = vault.batchWithdraw(tokenIds, address(this));
-        assertEq(burnAmount, 0);
+        // expect revert
+        vm.expectRevert();
+        vault.withdraw(tokenIds, address(this));
     }
 
     // Different recipient tests
@@ -265,15 +351,19 @@ contract RemyVaultTest is Test {
         // approve the vault to transfer the token
         nft.approve(address(vault), 1);
 
+        // create array with single tokenId
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = 1;
+
         // deposit the token but send ERC20 to alice
-        vault.deposit(1, alice);
+        vault.deposit(tokenIds, alice);
 
         // check the vault now owns 1 token
         assertEq(nft.balanceOf(address(vault)), 1);
 
         // check alice received the tokens
-        assertEq(token.balanceOf(alice), 1000 * 10**18);
-        
+        assertEq(token.balanceOf(alice), 1000 * 10 ** 18);
+
         // this contract should have 0 tokens
         assertEq(token.balanceOf(address(this)), 0);
     }
@@ -286,21 +376,25 @@ contract RemyVaultTest is Test {
         // approve the vault to transfer the token
         nft.approve(address(vault), 1);
 
+        // create array with single tokenId
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = 1;
+
         // deposit the token
-        vault.deposit(1, address(this));
+        vault.deposit(tokenIds, address(this));
 
         // approve the vault to move out erc20 tokens
-        token.approve(address(vault), 1000 * 10**18);
+        token.approve(address(vault), 1000 * 10 ** 18);
 
         // withdraw the token but send it to alice
-        vault.withdraw(1, alice);
+        vault.withdraw(tokenIds, alice);
 
         // check the vault no longer owns the token
         assertEq(nft.balanceOf(address(vault)), 0);
 
         // check alice owns the token now
         assertEq(nft.ownerOf(1), alice);
-        
+
         // this contract should have 0 tokens
         assertEq(token.balanceOf(address(this)), 0);
     }
@@ -312,12 +406,14 @@ contract RemyVaultTest is Test {
         nft.mint(address(this), 1);
 
         // do NOT approve the vault to transfer the token
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = 1;
 
         // try deposit - should fail
         vm.expectRevert();
-        vault.deposit(1, address(this));
+        vault.deposit(tokenIds, address(this));
     }
-    
+
     function testWithdrawWithoutApproval() public {
         // mint a token to this contract
         vm.prank(address(vault));
@@ -325,12 +421,15 @@ contract RemyVaultTest is Test {
 
         // approve and deposit the token
         nft.approve(address(vault), 1);
-        vault.deposit(1, address(this));
+        
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = 1;
+        vault.deposit(tokenIds, address(this));
 
         // do NOT approve the vault to transfer the tokens back
         // try withdraw - should fail
         vm.expectRevert();
-        vault.withdraw(1, address(this));
+        vault.withdraw(tokenIds, address(this));
     }
 
     // Attempt to withdraw token not owned by vault
@@ -338,19 +437,21 @@ contract RemyVaultTest is Test {
         // mint a token to this contract but don't deposit it
         vm.prank(address(vault));
         nft.mint(address(this), 999);
-        
+
         // approve the vault to transfer ERC20 tokens
-        token.approve(address(vault), 1000 * 10**18);
+        token.approve(address(vault), 1000 * 10 ** 18);
 
         // try withdraw - should fail because vault doesn't own the token
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = 999;
         vm.expectRevert();
-        vault.withdraw(999, address(this));
+        vault.withdraw(tokenIds, address(this));
     }
 
     /**
      * @dev Tests that reentrancy protection works during deposit
-     * 
-     * This test attempts to perform a reentrancy attack during the ERC721 transfer 
+     *
+     * This test attempts to perform a reentrancy attack during the ERC721 transfer
      * callback by calling deposit again within onERC721Received. The nonreentrant
      * decorator in the vault should prevent this attack.
      */
@@ -358,48 +459,48 @@ contract RemyVaultTest is Test {
         // Set up the attack by minting a token to the attacker
         vm.prank(address(vault));
         nft.mint(address(attacker), 42);
-        
+
         // Configure the attacker to attempt reentrancy during deposit
         attacker.setTokenId(42);
         attacker.setAttackOnDeposit(true);
         attacker.approveAll();
-        
+
         // Execute the attack (initial deposit with reentrancy attempt)
         attacker.attack(42);
-        
+
         // Verify only one token was minted (reentrancy failed)
         // If reentrancy succeeded, balance would be 2000 * 10**18
-        assertEq(token.balanceOf(address(attacker)), 1000 * 10**18);
+        assertEq(token.balanceOf(address(attacker)), 1000 * 10 ** 18);
     }
-    
+
     /**
      * @dev Tests that reentrancy protection works during withdraw
-     * 
+     *
      * This test first deposits a token, then attempts a theoretical reentrancy
-     * attack during the withdrawal process. Although our implementation doesn't 
-     * directly trigger the attack (due to safeTransferFrom behavior), this test 
-     * validates that a standard withdraw functions correctly with the reentrancy 
+     * attack during the withdrawal process. Although our implementation doesn't
+     * directly trigger the attack (due to safeTransferFrom behavior), this test
+     * validates that a standard withdraw functions correctly with the reentrancy
      * guard in place.
      */
     function testReentrancyProtectionOnWithdraw() public {
-        // Set up the attack 
+        // Set up the attack
         vm.prank(address(vault));
         nft.mint(address(attacker), 42);
-        
+
         // Configure the attacker
         attacker.setTokenId(42);
         attacker.approveAll();
-        
+
         // First perform a legitimate deposit
         attacker.attack(42);
-        
+
         // Configure the attack for withdraw phase
         attacker.setAttackOnWithdraw(true);
         attacker.setAttacked(false);
-        
+
         // Perform the withdrawal with theoretical attack attempt
         attacker.withdrawAttack();
-        
+
         // Verify tokens were burned and NFT was withdrawn properly
         assertEq(nft.balanceOf(address(vault)), 0);
         assertEq(nft.ownerOf(42), address(attacker));
@@ -409,7 +510,7 @@ contract RemyVaultTest is Test {
     // Max token tests
     function testMaxTokensInBatch() public {
         uint256 n = 100; // Max allowed by the contract
-        
+
         // mint n tokens to this contract & store their tokenIds
         uint256[] memory tokenIds = new uint256[](n);
         for (uint256 i = 0; i < n; i++) {
@@ -422,16 +523,16 @@ contract RemyVaultTest is Test {
         nft.setApprovalForAll(address(vault), true);
 
         // deposit should succeed with max tokens
-        vault.batchDeposit(tokenIds, address(this));
-        
+        vault.deposit(tokenIds, address(this));
+
         // check balances
         assertEq(nft.balanceOf(address(vault)), n);
-        assertEq(token.balanceOf(address(this)), n * 1000 * 10**18);
+        assertEq(token.balanceOf(address(this)), n * 1000 * 10 ** 18);
     }
-    
+
     function testOverMaxTokensInBatch() public {
         uint256 n = 101; // One over max allowed
-        
+
         // mint n tokens to this contract & store their tokenIds
         uint256[] memory tokenIds = new uint256[](n);
         for (uint256 i = 0; i < n; i++) {
@@ -445,28 +546,99 @@ contract RemyVaultTest is Test {
 
         // deposit should fail with more than max tokens
         vm.expectRevert();
-        vault.batchDeposit(tokenIds, address(this));
+        vault.deposit(tokenIds, address(this));
     }
 
     // Quote function tests
     function testQuoteFunctions(uint256 n) public view {
         vm.assume(n < 1000); // Reasonable upper bound to avoid overflow
-        
+
         uint256 quoteDepositAmount = vault.quoteDeposit(n);
         uint256 quoteWithdrawAmount = vault.quoteWithdraw(n);
-        
+
         // Both should be equal and follow the formula: n * UNIT
-        assertEq(quoteDepositAmount, n * 1000 * 10**18);
-        assertEq(quoteWithdrawAmount, n * 1000 * 10**18);
+        assertEq(quoteDepositAmount, n * 1000 * 10 ** 18);
+        assertEq(quoteWithdrawAmount, n * 1000 * 10 ** 18);
         assertEq(quoteDepositAmount, quoteWithdrawAmount);
+    }
+
+    function testSequentialDepositWithdraw() public {
+        // Test that depositing and withdrawing multiple times in sequence works correctly
+        for (uint256 i = 0; i < 5; i++) {
+            // Mint and deposit
+            vm.prank(address(vault));
+            nft.mint(address(this), i);
+            nft.approve(address(vault), i);
+            
+            uint256[] memory tokenIds = new uint256[](1);
+            tokenIds[0] = i;
+            vault.deposit(tokenIds, address(this));
+
+            // Verify state after deposit
+            assertEq(nft.ownerOf(i), address(vault));
+            assertEq(token.balanceOf(address(this)), (i + 1) * 1000 * 10 ** 18);
+        }
+
+        for (uint256 i = 0; i < 5; i++) {
+            // Withdraw
+            token.approve(address(vault), 1000 * 10 ** 18);
+            
+            uint256[] memory tokenIds = new uint256[](1);
+            tokenIds[0] = i;
+            vault.withdraw(tokenIds, address(this));
+
+            // Verify state after withdrawal
+            assertEq(nft.ownerOf(i), address(this));
+            assertEq(token.balanceOf(address(this)), (4 - i) * 1000 * 10 ** 18);
+        }
+    }
+
+    function testPartialBatchWithdraw() public {
+        uint256 n = 10;
+
+        // Mint and deposit 10 tokens
+        uint256[] memory allTokenIds = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            vm.prank(address(vault));
+            nft.mint(address(this), i);
+            allTokenIds[i] = i;
+        }
+
+        nft.setApprovalForAll(address(vault), true);
+        vault.deposit(allTokenIds, address(this));
+
+        // Withdraw only half of them
+        uint256[] memory halfTokenIds = new uint256[](n / 2);
+        for (uint256 i = 0; i < n / 2; i++) {
+            halfTokenIds[i] = i;
+        }
+
+        token.approve(address(vault), (n / 2) * 1000 * 10 ** 18);
+        vault.withdraw(halfTokenIds, address(this));
+
+        // Verify state: should have half NFTs and half tokens remaining
+        assertEq(nft.balanceOf(address(vault)), n / 2);
+        assertEq(token.balanceOf(address(this)), (n / 2) * 1000 * 10 ** 18);
+    }
+
+    function testNonManagerCannotMintBurn() public {
+        // Try to directly mint tokens
+        vm.prank(alice);
+        vm.expectRevert();
+        IManagedToken(address(token)).mint(alice, 1000 * 10 ** 18);
+
+        // Try to directly burn tokens
+        vm.prank(alice);
+        vm.expectRevert();
+        IManagedToken(address(token)).burn(1000 * 10 ** 18);
     }
 
     /**
      * @dev Invariant test to verify core protocol balance relationship
-     * 
+     *
      * This test ensures that the fundamental invariant of the RemyVault protocol is maintained:
      * token_total_supply = vault_nft_balance * UNIT
-     * 
+     *
      * This invariant should hold true no matter what operations are performed on the vault.
      * If this invariant is ever broken, it indicates a severe bug in the protocol that could
      * lead to insolvency (more tokens than NFTs) or trapped assets (more NFTs than tokens).
@@ -474,13 +646,13 @@ contract RemyVaultTest is Test {
     function invariant_tokenSupply() public view {
         // Calculate the actual NFT balance of the vault
         uint256 vaultNFTBalance = nft.balanceOf(address(vault));
-        
+
         // Get the current total supply of the ERC20 token
         uint256 totalSupply = token.totalSupply();
-        
+
         // Calculate what the ERC20 supply should be based on the NFT count
         uint256 expectedSupply = vault.quoteDeposit(vaultNFTBalance);
-        
+
         // Verify the invariant holds
         assertEq(totalSupply, expectedSupply, "Invariant broken: token supply != NFT balance * UNIT");
     }

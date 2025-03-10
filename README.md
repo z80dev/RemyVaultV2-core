@@ -1,6 +1,6 @@
 # RemyVault: NFT Fractionalization Protocol
 
-RemyVault is a minimalist, gas-efficient NFT fractionalization protocol written in Vyper 0.4.0. It enables users to deposit ERC-721 NFTs and receive fungible ERC-20 tokens representing fractional ownership.
+RemyVault is a minimalist, gas-efficient NFT fractionalization protocol written in Vyper 0.4.0. The core vault enables users to deposit ERC-721 NFTs and receive fungible ERC-20 tokens representing fractional ownership of those NFTs.
 
 ## Overview
 

@@ -6,7 +6,7 @@
 
 from ethereum.ercs import IERC20
 from ethereum.ercs import IERC721
-from interfaces import ManagedToken as IManagedToken
+from interfaces import IManagedVaultToken
 
 ################################################################################
 # STATE VARIABLES
@@ -40,25 +40,17 @@ def __init__(_token_address: address, erc721_address: address):
     self.erc20 = IERC20(_token_address)
 
 ################################################################################
-# DEPOSIT FUNCTIONS
+# DEPOSIT FUNCTION
 ################################################################################
 
 @nonreentrant
 @external
-def deposit(tokenId: uint256, recipient: address = msg.sender):
+def deposit(tokenIds: DynArray[uint256, 100], recipient: address = msg.sender) -> uint256:
     """
-    Deposits an ERC721 token and mints the corresponding amount of ERC20 tokens.
+    Deposits one or more ERC721 tokens and mints the corresponding amount of ERC20 tokens.
+    Can be used for single or batch deposits.
     """
-    extcall self.erc721.transferFrom(msg.sender, self, tokenId)
-    self.mint_erc20(recipient, 1)
-    log Deposit(recipient, [tokenId], UNIT)
-
-@nonreentrant
-@external
-def batchDeposit(tokenIds: DynArray[uint256, 100], recipient: address) -> uint256:
-    """
-    Deposits multiple ERC721 tokens and mints the corresponding amount of ERC20 tokens.
-    """
+    assert len(tokenIds) > 0, "Must deposit at least one token"
     for tokenId: uint256 in tokenIds:
         extcall self.erc721.transferFrom(msg.sender, self, tokenId)
     mint_amount: uint256 = self.mint_erc20(recipient, len(tokenIds))
@@ -66,29 +58,32 @@ def batchDeposit(tokenIds: DynArray[uint256, 100], recipient: address) -> uint25
     return mint_amount
 
 ################################################################################
-# WITHDRAW FUNCTIONS
+# WITHDRAW FUNCTION
 ################################################################################
 
 @nonreentrant
 @external
-def withdraw(tokenId: uint256, recipient: address = msg.sender):
+def withdraw(tokenIds: DynArray[uint256, 100], recipient: address = msg.sender) -> uint256:
     """
-    Withdraws an ERC721 token and burns the corresponding amount of ERC20 tokens.
+    Withdraws one or more ERC721 tokens and burns the corresponding amount of ERC20 tokens.
+    Can be used for single or batch withdrawals.
     """
-    self.burn_erc20(msg.sender, 1)
-    extcall self.erc721.safeTransferFrom(self, recipient, tokenId)
-    log Withdraw(recipient, [tokenId], UNIT)
+    assert len(tokenIds) > 0, "Must withdraw at least one token"
 
-@nonreentrant
-@external
-def batchWithdraw(tokenIds: DynArray[uint256, 100], recipient: address) -> uint256:
-    """
-    Withdraws multiple ERC721 tokens and burns the corresponding amount of ERC20 tokens.
-    """
+    # Calculate token amount
     total_amount: uint256 = UNIT * len(tokenIds)
+    
+    # Verify vault owns all tokens before proceeding
+    for tokenId: uint256 in tokenIds:
+        assert staticcall self.erc721.ownerOf(tokenId) == self, "Vault does not own one of the tokens"
+    
+    # Burn tokens first
     self.burn_erc20(msg.sender, len(tokenIds))
+    
+    # Then transfer the NFTs
     for tokenId: uint256 in tokenIds:
         extcall self.erc721.safeTransferFrom(self, recipient, tokenId)
+    
     log Withdraw(recipient, tokenIds, total_amount)
     return total_amount
 
@@ -99,13 +94,14 @@ def batchWithdraw(tokenIds: DynArray[uint256, 100], recipient: address) -> uint2
 @internal
 def mint_erc20(recipient: address, num_tokens: uint256) -> uint256:
     erc20_amt: uint256 = num_tokens * UNIT
-    extcall IManagedToken(self.erc20.address).mint(recipient, erc20_amt)
+    extcall IManagedVaultToken(self.erc20.address).mint(recipient, erc20_amt)
     return erc20_amt
 
 @internal
 def burn_erc20(holder: address, num_tokens: uint256):
-    extcall self.erc20.transferFrom(holder, self, num_tokens * UNIT)
-    extcall IManagedToken(self.erc20.address).burn(num_tokens * UNIT)
+    erc20_amt: uint256 = num_tokens * UNIT
+    extcall self.erc20.transferFrom(holder, self, erc20_amt)
+    extcall IManagedVaultToken(self.erc20.address).burn(self, erc20_amt)
 
 ################################################################################
 # EXTERNAL QUOTE FUNCTIONS

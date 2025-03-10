@@ -17,11 +17,7 @@ interface IERC4626 is IERC20 {
      * @dev Emitted when assets are withdrawn from the vault.
      */
     event Withdraw(
-        address indexed sender,
-        address indexed receiver,
-        address indexed owner,
-        uint256 assets,
-        uint256 shares
+        address indexed sender, address indexed receiver, address indexed owner, uint256 assets, uint256 shares
     );
 
     /**
@@ -178,11 +174,7 @@ interface IERC4626 is IERC20 {
      * Note that some implementations will require pre-requesting to the vault before a withdrawal may be performed.
      * Those methods should be performed separately.
      */
-    function withdraw(
-        uint256 assets,
-        address receiver,
-        address owner
-    ) external returns (uint256 shares);
+    function withdraw(uint256 assets, address receiver, address owner) external returns (uint256 shares);
 
     /**
      * @dev Returns the maximum amount of shares that can be redeemed from the vault in a redeem call, for the `owner`.
@@ -218,9 +210,5 @@ interface IERC4626 is IERC20 {
      * NOTE: some implementations will require pre-requesting to the vault before a withdrawal may be performed.
      * Those methods should be performed separately.
      */
-    function redeem(
-        uint256 shares,
-        address receiver,
-        address owner
-    ) external returns (uint256 assets);
+    function redeem(uint256 shares, address receiver, address owner) external returns (uint256 assets);
 }

@@ -13,8 +13,6 @@ interface IRemyVault {
     function quoteWithdraw(uint256 count) external pure returns (uint256);
 
     // State-changing functions
-    function deposit(uint256 tokenId, address recipient) external;
-    function batchDeposit(uint256[] calldata tokenIds, address recipient) external returns (uint256);
-    function withdraw(uint256 tokenId, address recipient) external;
-    function batchWithdraw(uint256[] calldata tokenIds, address recipient) external returns (uint256);
+    function deposit(uint256[] calldata tokenIds, address recipient) external returns (uint256);
+    function withdraw(uint256[] calldata tokenIds, address recipient) external returns (uint256);
 }

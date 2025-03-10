@@ -30,10 +30,7 @@ contract MockPoolManager {
         return 0;
     }
 
-    function swap(PoolKey memory, IPoolManager.SwapParams memory, bytes calldata)
-        external
-        returns (BalanceDelta)
-    {
+    function swap(PoolKey memory, IPoolManager.SwapParams memory, bytes calldata) external returns (BalanceDelta) {
         return BalanceDelta.wrap(0);
     }
 
@@ -44,20 +41,24 @@ contract MockPoolManager {
         return (BalanceDelta.wrap(0), BalanceDelta.wrap(0));
     }
 
-    function donate(PoolKey memory key, uint256, uint256, bytes calldata)
-        external
-        returns (BalanceDelta)
-    {
+    function donate(PoolKey memory key, uint256, uint256, bytes calldata) external returns (BalanceDelta) {
         return BalanceDelta.wrap(0);
     }
 
-    function unlock(bytes calldata) external returns (bytes memory) { 
-        return ""; 
+    function unlock(bytes calldata) external returns (bytes memory) {
+        return "";
     }
 
     function take(Currency, address, uint256) external {}
-    function settle() external payable returns (uint256) { return 0; }
-    function settleFor(address) external payable returns (uint256) { return 0; }
+
+    function settle() external payable returns (uint256) {
+        return 0;
+    }
+
+    function settleFor(address) external payable returns (uint256) {
+        return 0;
+    }
+
     function sync(Currency) external {}
 }
 
@@ -71,7 +72,7 @@ contract RemyVaultHookTest is Test {
 
     // Test constants
     uint256 constant BUY_FEE = 250; // 2.5%
-    uint256 constant NFT_UNIT = 1000 * 10**18; // Amount of tokens per NFT
+    uint256 constant NFT_UNIT = 1000 * 10 ** 18; // Amount of tokens per NFT
 
     // Mock contracts
     MockPoolManager mockPoolManager;
@@ -115,32 +116,15 @@ contract RemyVaultHookTest is Test {
         mockOtherToken = makeAddr("otherToken");
 
         // Mock RemyVault interface calls
-        vm.mockCall(
-            mockRemyVault,
-            abi.encodeWithSelector(IRemyVault.erc20.selector),
-            abi.encode(mockVaultToken)
-        );
+        vm.mockCall(mockRemyVault, abi.encodeWithSelector(IRemyVault.erc20.selector), abi.encode(mockVaultToken));
 
-        vm.mockCall(
-            mockRemyVault,
-            abi.encodeWithSelector(IRemyVault.erc721.selector),
-            abi.encode(mockNFTCollection)
-        );
+        vm.mockCall(mockRemyVault, abi.encodeWithSelector(IRemyVault.erc721.selector), abi.encode(mockNFTCollection));
 
-        vm.mockCall(
-            mockRemyVault,
-            abi.encodeWithSelector(IRemyVault.quoteDeposit.selector, 1),
-            abi.encode(NFT_UNIT)
-        );
+        vm.mockCall(mockRemyVault, abi.encodeWithSelector(IRemyVault.quoteDeposit.selector, 1), abi.encode(NFT_UNIT));
 
         // For simplicity, we'll deploy the hook without address validation
         vm.startPrank(owner);
-        hook = new RemyVaultHook(
-            IPoolManager(address(mockPoolManager)),
-            mockRemyVault,
-            feeRecipient,
-            BUY_FEE
-        );
+        hook = new RemyVaultHook(IPoolManager(address(mockPoolManager)), mockRemyVault, feeRecipient, BUY_FEE);
         vm.stopPrank();
 
         // Setup pool key for testing
@@ -348,16 +332,12 @@ contract RemyVaultHookTest is Test {
         // Mock token balance
         uint256 balance = 1000;
         vm.mockCall(
-            mockVaultToken,
-            abi.encodeWithSelector(IERC20Minimal.balanceOf.selector, address(hook)),
-            abi.encode(balance)
+            mockVaultToken, abi.encodeWithSelector(IERC20Minimal.balanceOf.selector, address(hook)), abi.encode(balance)
         );
 
         // Mock transfer
         vm.mockCall(
-            mockVaultToken,
-            abi.encodeWithSelector(IERC20Minimal.transfer.selector, owner, balance),
-            abi.encode(true)
+            mockVaultToken, abi.encodeWithSelector(IERC20Minimal.transfer.selector, owner, balance), abi.encode(true)
         );
 
         // Collect tokens
@@ -424,19 +404,18 @@ contract RemyVaultHookTest is Test {
 
         // Setup swap params to buy NFT (token → vault token)
         IPoolManager.SwapParams memory swapParams = IPoolManager.SwapParams({
-            zeroForOne: false,  // Buying vault token (currency1 → currency0)
-            amountSpecified: -100 * 10**18,  // Exact input of 100 tokens
-            sqrtPriceLimitX96: 0  // No price limit
+            zeroForOne: false, // Buying vault token (currency1 → currency0)
+            amountSpecified: -100 * 10 ** 18, // Exact input of 100 tokens
+            sqrtPriceLimitX96: 0 // No price limit
         });
 
         // Create balance delta for the swap (positive amount0 means hook receives tokens)
         // This would normally come from the pool manager during the swap
         // Make sure the hook receives enough tokens to cover an NFT (which is NFT_UNIT)
-        int128 amount0Delta = int128(int256(NFT_UNIT));  // Hook receives exactly enough tokens for an NFT
-        int128 amount1Delta = -100 * 10**18;  // User receives 100 tokens
-        BalanceDelta swapDelta = BalanceDelta.wrap(int256(
-                                                       (uint256(uint128(amount0Delta)) << 128) | uint128(amount1Delta)
-        ));
+        int128 amount0Delta = int128(int256(NFT_UNIT)); // Hook receives exactly enough tokens for an NFT
+        int128 amount1Delta = -100 * 10 ** 18; // User receives 100 tokens
+        BalanceDelta swapDelta =
+            BalanceDelta.wrap(int256((uint256(uint128(amount0Delta)) << 128) | uint128(amount1Delta)));
 
         // Mock NFT transfer to user during swap
         vm.mockCall(
@@ -455,16 +434,10 @@ contract RemyVaultHookTest is Test {
 
         // Encode hookData with 'true' to indicate NFT purchase is desired
         bytes memory hookData = abi.encode(true);
-        
+
         // Call the hook directly as if pool manager called it
         vm.prank(address(mockPoolManager));
-        (bytes4 selector,) = hook.afterSwap(
-            user,
-            poolKey,
-            swapParams,
-            swapDelta,
-            hookData
-        );
+        (bytes4 selector,) = hook.afterSwap(user, poolKey, swapParams, swapDelta, hookData);
 
         // Check the return value
         assertEq(selector, IHooks(address(0)).afterSwap.selector);
@@ -509,27 +482,19 @@ contract RemyVaultHookTest is Test {
             abi.encodeWithSelector(IERC721.transferFrom.selector, address(hook), user, 1),
             abi.encode()
         );
-        
+
         // Mock successful ETH transfers in the hook
-        vm.mockCall(
-            feeRecipient,
-            abi.encodeWithSignature("call()"),
-            abi.encode(true)
-        );
-        
-        vm.mockCall(
-            user,
-            abi.encodeWithSignature("call()"),
-            abi.encode(true)
-        );
+        vm.mockCall(feeRecipient, abi.encodeWithSignature("call()"), abi.encode(true));
+
+        vm.mockCall(user, abi.encodeWithSignature("call()"), abi.encode(true));
 
         // Expect events in correct order matching the implementation
         vm.expectEmit(true, true, true, true);
         emit FeesCollected(feeRecipient, ethFee);
-        
+
         vm.expectEmit(true, true, true, true);
         emit NFTBought(user, 1, tokenPrice);
-        
+
         vm.expectEmit(true, true, true, true);
         emit InventoryChanged(tokenIds, false);
 
@@ -551,11 +516,7 @@ contract RemyVaultHookTest is Test {
         tokenIds[0] = 1;
 
         // Mock NFT ownership check
-        vm.mockCall(
-            mockNFTCollection,
-            abi.encodeWithSelector(IERC721.ownerOf.selector, 1),
-            abi.encode(user)
-        );
+        vm.mockCall(mockNFTCollection, abi.encodeWithSelector(IERC721.ownerOf.selector, 1), abi.encode(user));
 
         // Mock NFT transfer from user to hook
         vm.mockCall(
@@ -574,15 +535,13 @@ contract RemyVaultHookTest is Test {
         // Mock RemyVault deposit
         vm.mockCall(
             mockRemyVault,
-            abi.encodeWithSelector(IRemyVault.batchDeposit.selector, tokenIds, address(hook)),
+            abi.encodeWithSelector(IRemyVault.deposit.selector, tokenIds, address(hook)),
             abi.encode(NFT_UNIT)
         );
 
         // Mock token transfer to user
         vm.mockCall(
-            mockVaultToken,
-            abi.encodeWithSelector(IERC20Minimal.transfer.selector, user, NFT_UNIT),
-            abi.encode(true)
+            mockVaultToken, abi.encodeWithSelector(IERC20Minimal.transfer.selector, user, NFT_UNIT), abi.encode(true)
         );
 
         // Expect events
@@ -600,7 +559,7 @@ contract RemyVaultHookTest is Test {
         assertEq(hook.inventorySize(), 1);
         assertTrue(hook.isInInventory(1));
     }
-    
+
     /**
      * @notice Test NFT selling via swap
      */
@@ -609,35 +568,30 @@ contract RemyVaultHookTest is Test {
         tokenIds[0] = 1;
 
         // Mock NFT ownership check
-        vm.mockCall(
-            mockNFTCollection,
-            abi.encodeWithSelector(IERC721.ownerOf.selector, 1),
-            abi.encode(user)
-        );
-        
+        vm.mockCall(mockNFTCollection, abi.encodeWithSelector(IERC721.ownerOf.selector, 1), abi.encode(user));
+
         // Setup swap params for sell NFT (vault token → other token)
         IPoolManager.SwapParams memory swapParams = IPoolManager.SwapParams({
-            zeroForOne: true,  // Selling vault token (currency0 → currency1)
-            amountSpecified: -int256(NFT_UNIT),  // Exact input of NFT_UNIT tokens
-            sqrtPriceLimitX96: 0  // No price limit
+            zeroForOne: true, // Selling vault token (currency0 → currency1)
+            amountSpecified: -int256(NFT_UNIT), // Exact input of NFT_UNIT tokens
+            sqrtPriceLimitX96: 0 // No price limit
         });
 
         // Create balance delta for the swap
         // Amount0 is negative (hook gives vault tokens to user)
         // Amount1 is positive (hook receives other tokens)
         int128 amount0Delta = -int128(int256(NFT_UNIT));
-        int128 amount1Delta = int128(int256(100 * 10**18));
-        BalanceDelta swapDelta = BalanceDelta.wrap(int256(
-                                                     (uint256(uint128(amount0Delta)) << 128) | uint128(amount1Delta)
-        ));
-        
+        int128 amount1Delta = int128(int256(100 * 10 ** 18));
+        BalanceDelta swapDelta =
+            BalanceDelta.wrap(int256((uint256(uint128(amount0Delta)) << 128) | uint128(amount1Delta)));
+
         // Mock NFT transfer from user to hook during swap
         vm.mockCall(
             mockNFTCollection,
             abi.encodeWithSelector(IERC721.transferFrom.selector, user, address(hook), 1),
             abi.encode()
         );
-        
+
         // Mock approval to RemyVault
         vm.mockCall(
             mockNFTCollection,
@@ -648,7 +602,7 @@ contract RemyVaultHookTest is Test {
         // Mock RemyVault deposit
         vm.mockCall(
             mockRemyVault,
-            abi.encodeWithSelector(IRemyVault.batchDeposit.selector, tokenIds, address(hook)),
+            abi.encodeWithSelector(IRemyVault.deposit.selector, tokenIds, address(hook)),
             abi.encode(NFT_UNIT)
         );
 
@@ -664,13 +618,7 @@ contract RemyVaultHookTest is Test {
 
         // Call the hook directly as if pool manager called it
         vm.prank(address(mockPoolManager));
-        (bytes4 selector,) = hook.afterSwap(
-            user,
-            poolKey,
-            swapParams,
-            swapDelta,
-            hookData
-        );
+        (bytes4 selector,) = hook.afterSwap(user, poolKey, swapParams, swapDelta, hookData);
 
         // Check the return value
         assertEq(selector, IHooks(address(0)).afterSwap.selector);
@@ -706,7 +654,7 @@ contract RemyVaultHookTest is Test {
         // Mock RemyVault withdraw
         vm.mockCall(
             mockRemyVault,
-            abi.encodeWithSelector(IRemyVault.batchWithdraw.selector, tokenIds, address(hook)),
+            abi.encodeWithSelector(IRemyVault.withdraw.selector, tokenIds, address(hook)),
             abi.encode(tokensNeeded)
         );
 
@@ -773,7 +721,7 @@ contract RemyVaultHookTest is Test {
         testErrorInsufficientTokens();
         testErrorInsufficientFee();
     }
-    
+
     function testErrorNoInventory() public {
         // Test buying when inventory is empty
         uint256[] memory tokenIds = new uint256[](1);
@@ -781,22 +729,22 @@ contract RemyVaultHookTest is Test {
 
         // Verify the NFT is not in inventory
         assertFalse(hook.isInInventory(1));
-        
+
         // Set up user for the transaction
         vm.startPrank(user);
         vm.deal(user, 1 ether);
-        
+
         // Direct buy should fail with no inventory
         vm.expectRevert(RemyVaultHook.NoInventory.selector);
         hook.buyNFTs{value: 0.1 ether}(tokenIds);
-        
+
         vm.stopPrank();
     }
-    
+
     function testErrorNotOwner() public {
         uint256[] memory tokenIds = new uint256[](1);
         tokenIds[0] = 1;
-        
+
         // Test selling NFT not owned by seller
         vm.mockCall(
             mockNFTCollection,
@@ -808,11 +756,11 @@ contract RemyVaultHookTest is Test {
         vm.prank(user);
         hook.sellNFTs(tokenIds);
     }
-    
+
     function testErrorInsufficientTokens() public {
         uint256[] memory tokenIds = new uint256[](1);
         tokenIds[0] = 1;
-        
+
         // Test redeeming with insufficient balance
         vm.mockCall(
             mockVaultToken,
@@ -824,11 +772,11 @@ contract RemyVaultHookTest is Test {
         vm.prank(owner);
         hook.redeemNFTsFromVault(tokenIds);
     }
-    
+
     function testErrorInsufficientFee() public {
         uint256[] memory tokenIds = new uint256[](1);
         tokenIds[0] = 1;
-        
+
         // Test buy with insufficient ETH fee
         // First add NFT to inventory
         vm.mockCall(
@@ -843,7 +791,7 @@ contract RemyVaultHookTest is Test {
         // Calculate required fee
         uint256 tokenPrice = NFT_UNIT;
         uint256 ethFee = (tokenPrice * BUY_FEE) / hook.FEE_DENOMINATOR();
-        
+
         // Mock token transfer from user to hook
         vm.mockCall(
             mockVaultToken,
@@ -854,11 +802,11 @@ contract RemyVaultHookTest is Test {
         // Set up user for the transaction
         vm.startPrank(user);
         vm.deal(user, ethFee - 1); // Give user less than the required fee
-        
+
         // Send insufficient ETH
         vm.expectRevert(RemyVaultHook.InsufficientBalance.selector);
         hook.buyNFTs{value: ethFee - 1}(tokenIds);
-        
+
         vm.stopPrank();
     }
 
@@ -867,32 +815,22 @@ contract RemyVaultHookTest is Test {
      */
     function testBuySwapWithNoInventory() public {
         // Setup swap params to buy NFT (token → vault token)
-        IPoolManager.SwapParams memory swapParams = IPoolManager.SwapParams({
-            zeroForOne: false,
-            amountSpecified: -100 * 10**18,
-            sqrtPriceLimitX96: 0
-        });
+        IPoolManager.SwapParams memory swapParams =
+            IPoolManager.SwapParams({zeroForOne: false, amountSpecified: -100 * 10 ** 18, sqrtPriceLimitX96: 0});
 
         // Create balance delta
-        int128 amount0Delta = 90 * 10**18;
-        int128 amount1Delta = -100 * 10**18;
-        BalanceDelta swapDelta = BalanceDelta.wrap(int256(
-                                                       (uint256(uint128(amount0Delta)) << 128) | uint128(amount1Delta)
-        ));
+        int128 amount0Delta = 90 * 10 ** 18;
+        int128 amount1Delta = -100 * 10 ** 18;
+        BalanceDelta swapDelta =
+            BalanceDelta.wrap(int256((uint256(uint128(amount0Delta)) << 128) | uint128(amount1Delta)));
 
         // Encode hookData with 'true' to indicate NFT purchase is desired
         bytes memory hookData = abi.encode(true);
-        
+
         // Should revert with NoInventory since inventory is empty
         vm.prank(address(mockPoolManager));
         vm.expectRevert(RemyVaultHook.NoInventory.selector);
-        hook.afterSwap(
-            user,
-            poolKey,
-            swapParams,
-            swapDelta,
-            hookData
-        );
+        hook.afterSwap(user, poolKey, swapParams, swapDelta, hookData);
     }
 
     /**
@@ -901,46 +839,39 @@ contract RemyVaultHookTest is Test {
     function testBuyVaultTokensWithoutNFT() public {
         // Setup swap params to buy vault tokens (token → vault token)
         IPoolManager.SwapParams memory swapParams = IPoolManager.SwapParams({
-            zeroForOne: false,  // Buying vault token (currency1 → currency0)
-            amountSpecified: -100 * 10**18,  // Exact input of 100 tokens
-            sqrtPriceLimitX96: 0  // No price limit
+            zeroForOne: false, // Buying vault token (currency1 → currency0)
+            amountSpecified: -100 * 10 ** 18, // Exact input of 100 tokens
+            sqrtPriceLimitX96: 0 // No price limit
         });
 
         // Create balance delta for the swap
-        int128 amount0Delta = int128(int256(50 * 10**18));  // Hook receives tokens
-        int128 amount1Delta = -100 * 10**18;  // User sends tokens
-        BalanceDelta swapDelta = BalanceDelta.wrap(int256(
-                                                       (uint256(uint128(amount0Delta)) << 128) | uint128(amount1Delta)
-        ));
+        int128 amount0Delta = int128(int256(50 * 10 ** 18)); // Hook receives tokens
+        int128 amount1Delta = -100 * 10 ** 18; // User sends tokens
+        BalanceDelta swapDelta =
+            BalanceDelta.wrap(int256((uint256(uint128(amount0Delta)) << 128) | uint128(amount1Delta)));
 
         // Call the hook directly as if pool manager called it - with empty hook data (no NFT purchase)
         vm.prank(address(mockPoolManager));
-        (bytes4 selector,) = hook.afterSwap(
-            user,
-            poolKey,
-            swapParams,
-            swapDelta,
-            bytes("")
-        );
+        (bytes4 selector,) = hook.afterSwap(user, poolKey, swapParams, swapDelta, bytes(""));
 
         // Check the return value
         assertEq(selector, IHooks(address(0)).afterSwap.selector);
-        
+
         // Direct token purchase should work as well
         vm.deal(user, 1 ether);
         vm.prank(user);
-        
+
         // Mock token transfer from user to hook
         vm.mockCall(
             mockVaultToken,
-            abi.encodeWithSelector(IERC20Minimal.transferFrom.selector, user, address(hook), 1000 * 10**18),
+            abi.encodeWithSelector(IERC20Minimal.transferFrom.selector, user, address(hook), 1000 * 10 ** 18),
             abi.encode(true)
         );
-        
+
         // No ETH fee should be charged (0 value)
-        hook.buyVaultTokens(1000 * 10**18, new uint256[](0));
+        hook.buyVaultTokens(1000 * 10 ** 18, new uint256[](0));
     }
-    
+
     function testHookPermissions() public {
         Hooks.Permissions memory permissions = hook.getHookPermissions();
 

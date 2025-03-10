@@ -4,7 +4,7 @@ pragma solidity >=0.8.7 <0.9.0;
 /**
  * @title ReentrancyAttacker
  * @dev A contract designed to test reentrancy protection in RemyVault contracts
- * 
+ *
  * This contract attempts to exploit potential reentrancy vulnerabilities by invoking
  * additional vault functions during callback hooks (like onERC721Received). It can be
  * configured to attack during deposit or withdraw operations.
@@ -21,8 +21,8 @@ pragma solidity >=0.8.7 <0.9.0;
  * - A proper reentrancy guard should prevent any attack scenarios implemented here
  */
 interface IVault {
-    function deposit(uint256 tokenId, address recipient) external;
-    function withdraw(uint256 tokenId, address recipient) external;
+    function deposit(uint256[] calldata tokenIds, address recipient) external returns (uint256);
+    function withdraw(uint256[] calldata tokenIds, address recipient) external returns (uint256);
 }
 
 interface IERC721 {
@@ -37,25 +37,25 @@ interface IERC20 {
 contract ReentrancyAttacker {
     /// @notice The vault contract being tested for reentrancy protection
     IVault public vault;
-    
+
     /// @notice The NFT contract used for deposits
     IERC721 public nft;
-    
+
     /// @notice The ERC20 token received for deposits
     IERC20 public token;
-    
+
     /// @notice Flag to enable attack during deposit callbacks
     bool public attackOnDeposit;
-    
+
     /// @notice Flag to enable attack during withdraw callbacks
     bool public attackOnWithdraw;
-    
+
     /// @notice Flag to track if an attack has been attempted (prevents infinite loops)
     bool public attacked;
-    
+
     /// @notice The token ID being used in the attack
     uint256 public tokenId;
-    
+
     /// @notice The owner of this attack contract
     address public owner;
 
@@ -128,17 +128,21 @@ contract ReentrancyAttacker {
     /**
      * @dev Initiate a deposit attack
      * @param _tokenId The token ID to deposit
-     * 
+     *
      * This function approves and deposits an NFT. If attackOnDeposit is set,
      * the attack will be attempted in the onERC721Received callback.
      */
     function attack(uint256 _tokenId) external {
         tokenId = _tokenId;
         nft.approve(address(vault), tokenId);
-        
+
+        // Create token IDs array with a single token
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = tokenId;
+
         // Initial legitimate deposit
-        vault.deposit(tokenId, address(this));
-        
+        vault.deposit(tokenIds, address(this));
+
         // If we reached here, either no attack was attempted or it failed silently
     }
 
@@ -148,59 +152,67 @@ contract ReentrancyAttacker {
      */
     function attackWithdraw(uint256 _tokenId) external {
         tokenId = _tokenId;
-        token.approve(address(vault), 1000 * 10**18);
-        vault.withdraw(_tokenId, address(this));
+        token.approve(address(vault), 1000 * 10 ** 18);
+        
+        // Create token IDs array with a single token
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = tokenId;
+        
+        vault.withdraw(tokenIds, address(this));
     }
 
     /**
      * @dev ERC721 receiver callback - the point of reentrancy attack during deposit
-     * 
+     *
      * When an NFT is transferred to this contract, this function is called.
      * If attackOnDeposit is enabled, it will attempt to call the vault's deposit function again,
      * which should be prevented by proper reentrancy protection.
      */
-    function onERC721Received(
-        address, 
-        address, 
-        uint256, 
-        bytes memory
-    ) external returns (bytes4) {
+    function onERC721Received(address, address, uint256, bytes memory) external returns (bytes4) {
         if (attackOnDeposit && !attacked) {
             attacked = true;
-            
+
+            // Create token IDs array with a single token
+            uint256[] memory tokenIds = new uint256[](1);
+            tokenIds[0] = tokenId;
+
             // Try to call deposit again during the first deposit's callback
             // This should fail if reentrancy protection is working
             bool success = false;
-            try vault.deposit(tokenId, address(this)) {
+            try vault.deposit(tokenIds, address(this)) {
                 success = true;
             } catch {
                 // Expected to fail due to reentrancy protection
             }
-            
+
             emit AttackAttempted("deposit", tokenId, success);
         }
-        
+
         // Must return this value for ERC721 compatibility
         return this.onERC721Received.selector;
     }
 
     /**
      * @dev Perform withdraw followed by a reentrancy attack if configured
-     * 
+     *
      * This function doesn't directly demonstrate reentrancy during withdraw
      * because the vault uses safeTransferFrom which doesn't have a pre-withdrawal hook.
      * It serves as a helper to perform withdrawals for testing.
      */
     function withdrawAttack() external {
-        token.approve(address(vault), 1000 * 10**18);
-        
+        token.approve(address(vault), 1000 * 10 ** 18);
+
+        // Create token IDs array with a single token
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = tokenId;
+
         // Normal withdrawal
-        vault.withdraw(tokenId, address(this));
-        
+        vault.withdraw(tokenIds, address(this));
+
         // In production, a reentrancy attack would try to occur during the NFT transfer callback,
         // but we're just testing the normal path since reentrancy should be blocked
     }
-    
+
     /**
      * @dev Allow the owner to rescue any stuck tokens
      * @param tokenAddress Address of the token to rescue
