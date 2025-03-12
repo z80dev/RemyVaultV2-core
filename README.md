@@ -30,6 +30,24 @@ This separation of concerns allows the core fractionalization mechanism to remai
 
 ## Core Vault
 
+``` mermaid
+flowchart LR
+    User([User])
+    RemyVault[(RemyVault)]
+    
+    User -- "1. Deposit ERC-721 NFT #123" --> RemyVault
+    RemyVault -- "2. Mint & return 1000 REMY tokens" --> User
+    
+    %% Styling
+    classDef user fill:#f9f9f9,stroke:#333,stroke-width:2px
+    classDef vault fill:#d0f0c0,stroke:#006400,stroke-width:2px
+    
+    class User user
+    class RemyVault vault
+```
+
+`
+
 RemyVault Core implements a simple mechanism for NFT fractionalization:
 
 ### Purpose
