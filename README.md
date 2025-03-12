@@ -95,11 +95,57 @@ This architecture enables numerous possible metavault strategies:
    - Write covered calls on NFTs
    - Implement complex derivatives strategies
 
+6. **DerivativeVaults**
+   - Issue new NFTs backed by REMY tokens
+   - Create derivative collections with custom properties
+   - Maintain refundability to original backing asset
+   
 Each metavault can:
 - Implement its own tokenomics
 - Define unique value capture mechanisms
 - Create specific incentive structures
 - Integrate with other DeFi protocols
+
+#### DerivativeVaults
+
+##### Key Mechanics
+- Users deposit REMY tokens and receive derivative NFTs
+- Custom exchange rates (e.g., 1 derivative NFT = 200 REMY)
+- Small refund fee to prevent trait farming
+- Fee distribution to derivative collection depositors
+
+##### Applications
+- Create "fractional" derivatives (e.g., 5 derivatives per original NFT)
+- Create "bundled" derivatives (e.g., 1 derivative representing 5 original NFTs)
+- Implement custom traits or generative aspects
+- Add utility features to derivative collections
+
+##### Composability
+- Derivative collections can use their own InventoryMetavaults
+- Derivatives can be used in other DeFi protocols
+- Multiple derivative collections can be created from the same base collection
+- Derivatives can be programmatically linked to original collection traits
+
+##### Example: BundledCollectionVault
+1. Issues 1 "Bundle NFT" for every 5000 REMY (5 original NFTs worth)
+2. Each Bundle NFT has unique traits derived from a basket of the original collection
+3. Bundles can be "unbundled" back to REMY for a small fee
+4. Fees are distributed to Bundle NFT holders who stake in the BundleInventoryMetavault
+5. Creates a higher price-point entry into the ecosystem
+
+##### Example: MicroNFTVault
+1. Issues 5 "Micro NFTs" for every 1000 REMY (1 original NFT worth)
+2. Each Micro NFT has derived traits but at a lower price point
+3. Can be redeemed for 200 REMY each (minus small fee)
+4. Enables lower-cost participation in the collection
+5. Creates more granular market exposure
+
+This pattern demonstrates the recursive composability of the RemyVault architecture - 
+not only can new metavaults be built on top of the core vault, but metavaults can 
+also be built on top of other metavaults, creating a rich ecosystem of interconnected 
+NFT financial products.
+
+
 
 ## System Benefits
 
