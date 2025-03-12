@@ -35,8 +35,8 @@ flowchart LR
     User([User])
     RemyVault[(RemyVault)]
     
-    User -- "1. Deposit ERC-721 NFT #123" --> RemyVault
-    RemyVault -- "2. Mint & return 1000 REMY tokens" --> User
+    User -- 1\. Deposit ERC721 NFT #123 --> RemyVault
+    RemyVault -- 2\. Mint & return 1000 REMY tokens --> User
     
     %% Styling
     classDef user fill:#f9f9f9,stroke:#333,stroke-width:2px
