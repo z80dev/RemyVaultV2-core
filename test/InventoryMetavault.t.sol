@@ -175,7 +175,7 @@ contract InventoryMetavaultTest is Test {
 
         // Alice deposits the NFT
         uint256[] memory tokenIds = toArray(1);
-        uint256 sharesMinted = metavault.deposit_nfts(tokenIds, alice);
+        uint256 sharesMinted = metavault.deposit(tokenIds, alice);
         vm.stopPrank();
 
         // Verify NFT is now in the metavault's inventory
@@ -211,7 +211,7 @@ contract InventoryMetavaultTest is Test {
             tokenIds[i] = i + 1;
         }
 
-        uint256 sharesMinted = metavault.deposit_nfts(tokenIds, alice);
+        uint256 sharesMinted = metavault.deposit(tokenIds, alice);
         vm.stopPrank();
 
         // Verify NFTs are in inventory
@@ -233,12 +233,12 @@ contract InventoryMetavaultTest is Test {
 
         vm.startPrank(alice);
         nft.setApprovalForAll(address(metavault), true);
-        metavault.deposit_nfts(toArray(1), alice);
+        metavault.deposit(toArray(1), alice);
 
         // Alice redeems her shares
         // approve the staking vault to transfer shares
         stakingVault.approve(address(metavault), UNIT);
-        uint256 assetsRedeemed = metavault.redeem_for_assets(UNIT, alice);
+        uint256 assetsRedeemed = metavault.redeem(UNIT, alice);
         vm.stopPrank();
 
         // Verify assets were redeemed correctly
@@ -258,7 +258,7 @@ contract InventoryMetavaultTest is Test {
 
         vm.startPrank(alice);
         nft.setApprovalForAll(address(metavault), true);
-        metavault.deposit_nfts(toArray(1), alice);
+        metavault.deposit(toArray(1), alice);
         vm.stopPrank();
 
         // Bob gets REMY tokens and purchases the NFT
@@ -268,7 +268,7 @@ contract InventoryMetavaultTest is Test {
 
         vm.startPrank(bob);
         vaultToken.approve(address(metavault), purchasePrice);
-        uint256 totalPaid = metavault.purchase_nfts(toArray(1));
+        uint256 totalPaid = metavault.purchase(toArray(1));
         vm.stopPrank();
 
         // Verify purchase was successful
@@ -308,7 +308,7 @@ contract InventoryMetavaultTest is Test {
         for (uint256 i = 0; i < 3; i++) {
             depositIds[i] = i + 1;
         }
-        metavault.deposit_nfts(depositIds, alice);
+        metavault.deposit(depositIds, alice);
         vm.stopPrank();
 
         // Bob purchases two of the NFTs
@@ -320,7 +320,7 @@ contract InventoryMetavaultTest is Test {
 
         vm.startPrank(bob);
         vaultToken.approve(address(metavault), purchasePrice);
-        uint256 totalPaid = metavault.purchase_nfts(purchaseIds);
+        uint256 totalPaid = metavault.purchase(purchaseIds);
         vm.stopPrank();
 
         // Verify purchase results
@@ -362,7 +362,7 @@ contract InventoryMetavaultTest is Test {
 
         vm.startPrank(alice);
         nft.setApprovalForAll(address(metavault), true);
-        metavault.deposit_nfts(toArray(1), alice);
+        metavault.deposit(toArray(1), alice);
         vm.stopPrank();
 
         // Test initial conversion (should be 1:1 initially)
@@ -381,7 +381,7 @@ contract InventoryMetavaultTest is Test {
 
         vm.startPrank(bob);
         vaultToken.approve(address(metavault), purchasePrice);
-        metavault.purchase_nfts(toArray(1));
+        metavault.purchase(toArray(1));
         vm.stopPrank();
 
         // Get the current conversion rate after the purchase
@@ -445,7 +445,7 @@ contract InventoryMetavaultTest is Test {
         for (uint256 i = 0; i < 5; i++) {
             aliceIds[i] = i + 1;
         }
-        metavault.deposit_nfts(aliceIds, alice);
+        metavault.deposit(aliceIds, alice);
         vm.stopPrank();
 
         // Record Alice's initial share value
@@ -460,7 +460,7 @@ contract InventoryMetavaultTest is Test {
         
         vm.startPrank(bob);
         vaultToken.approve(address(metavault), purchasePrice);
-        metavault.purchase_nfts(toArray(1));
+        metavault.purchase(toArray(1));
         vm.stopPrank();
         
         // Check Alice's share value after first purchase
@@ -478,7 +478,7 @@ contract InventoryMetavaultTest is Test {
         
         vm.startPrank(charlie);
         vaultToken.approve(address(metavault), purchasePrice);
-        metavault.purchase_nfts(toArray(2));
+        metavault.purchase(toArray(2));
         vm.stopPrank();
         
         // Check Alice's share value after second purchase
@@ -494,7 +494,7 @@ contract InventoryMetavaultTest is Test {
         
         vm.startPrank(bob);
         vaultToken.approve(address(metavault), purchasePrice);
-        metavault.purchase_nfts(toArray(3));
+        metavault.purchase(toArray(3));
         vm.stopPrank();
         
         // Check Alice's share value after third purchase
@@ -543,7 +543,7 @@ contract InventoryMetavaultTest is Test {
         // Test depositing non-existent NFT
         vm.startPrank(alice);
         vm.expectRevert();
-        metavault.deposit_nfts(toArray(999), alice);
+        metavault.deposit(toArray(999), alice);
         vm.stopPrank();
 
         // Test withdrawing NFT not in inventory
@@ -553,10 +553,10 @@ contract InventoryMetavaultTest is Test {
 
         vm.startPrank(alice);
         nft.setApprovalForAll(address(metavault), true);
-        metavault.deposit_nfts(toArray(1), alice);
+        metavault.deposit(toArray(1), alice);
 
         vm.expectRevert();
-        metavault.withdraw_nfts(toArray(2), alice);
+        metavault.withdraw(toArray(2), alice);
         vm.stopPrank();
 
         // Test purchasing NFT not in inventory
@@ -567,7 +567,7 @@ contract InventoryMetavaultTest is Test {
         vaultToken.approve(address(metavault), 10000 * 10**18);
 
         vm.expectRevert();
-        metavault.purchase_nfts(toArray(999));
+        metavault.purchase(toArray(999));
         vm.stopPrank();
 
         // Test redeeming more shares than owned
@@ -575,7 +575,7 @@ contract InventoryMetavaultTest is Test {
         uint256 aliceShares = stakingVault.balanceOf(alice);
 
         vm.expectRevert();
-        metavault.redeem_for_assets(aliceShares + 1, alice);
+        metavault.redeem(aliceShares + 1, alice);
         vm.stopPrank();
     }
 

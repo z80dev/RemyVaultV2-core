@@ -11,6 +11,23 @@ RemyVault is designed as a modular, extensible system for NFT financialization. 
 
 This separation of concerns allows the core fractionalization mechanism to remain simple and secure, while enabling complex functionality to be built on top.
 
+## Key Advantages
+
+### For NFT Holders
+- **Instant Liquidity**: Convert illiquid NFTs into tradable tokens
+- **Yield Generation**: Earn premiums from NFT sales in InventoryMetavault
+- **Partial Exposure**: Maintain exposure to NFT collections without 100% allocation
+
+### For Traders
+- **Reduced Barriers**: Trade fractional NFT positions with smaller capital requirements
+- **Enhanced Liquidity**: Access deeper liquidity for popular NFT collections
+- **Arbitrage Opportunities**: Exploit price differences between whole NFTs and fractions
+
+### For Protocols
+- **Composable Building Block**: Integrate fractionalized NFTs into existing DeFi products
+- **New Market Mechanics**: Enable new types of NFT-related financial instruments
+- **Standardized Value Units**: Use REMY tokens as consistent units of account
+
 ## Core Vault
 
 RemyVault Core implements a simple mechanism for NFT fractionalization:
@@ -45,35 +62,18 @@ interface IRemyVault {
 }
 ```
 
-## Metavault Layer
+## Metavault Ecosystem
 
-Metavaults are specialized contracts that build upon the core vault's functionality to implement specific strategies or features. They treat the core vault's exchange rate (1000 REMY = 1 NFT) as a standardized unit of value.
+Metavaults extend the core functionality through specialized strategies:
 
-### Example: InventoryMetavault
+### Implemented Metavaults
+#### InventoryMetavault
+- **Strategy**: Sell NFTs at premium pricing with profit distribution
+- **Premium Rate**: 10% markup on NFT floor price (configurable)
+- **Profit Mechanism**: Premiums distributed to all depositors via ERC4626 shares
+- **ERC4626 Compliance**: Full implementation of the tokenized vault standard
 
-Our first implementation (InventoryMetavault.vy) demonstrates the power of this architecture. An InventoryMetavault can hold desirable NFT inventory (rare traits, etc.) and sell them at a premium to current floor price.
-
-#### Strategy
-- Maintains its own inventory of NFTs
-- Sells NFTs at a 10% premium above floor price
-- Distributes profits to all depositors
-
-#### Mechanics
-1. Users deposit NFTs and receive shares in an ERC4626 vault
-2. When someone buys an NFT from inventory:
-   - They pay 1100 REMY (1000 REMY floor price + 100 REMY premium)
-   - 1000 REMY is retained as backing, replacing the NFT that was purchased.
-   - 100 REMY premium is distributed to all depositors via the ERC4626 vault
-
-#### Benefits
-- Depositors earn yield from NFT sales
-- Buyers get immediate liquidity
-- The vault maintains a liquid inventory of NFTs
-- Premium pricing is clearly defined relative to floor
-
-### Power of the Metavault Pattern
-
-This architecture enables numerous possible metavault strategies:
+### Planned Metavaults
 
 1. **Lending Vaults**
    - Use fractionalized NFTs as collateral
@@ -145,8 +145,6 @@ not only can new metavaults be built on top of the core vault, but metavaults ca
 also be built on top of other metavaults, creating a rich ecosystem of interconnected 
 NFT financial products.
 
-
-
 ## System Benefits
 
 This architectural approach provides several key advantages:
@@ -170,7 +168,65 @@ This architectural approach provides several key advantages:
    - Core logic remains simple and auditable
    - Complex strategies don't compromise base layer
    - Clear separation of concerns
+   
+## Uniswap V4 Integration
 
+RemyVault includes a custom Uniswap V4 hook that enables native NFT trading directly through Uniswap liquidity pools:
+
+- **Direct NFT Trading**: Trade NFTs through token swaps with standard AMM logic
+- **Buy/Sell Functionality**: Buy NFTs using any token supported by Uniswap
+- **Inventory Management**: Automatic listing and management of NFTs in pools
+- **Fee Collection**: Configurable fees for buying operations
+- **Gas Efficiency**: Optimized trading paths for reduced gas costs
+
+This integration creates completely new NFT trading mechanisms not possible in traditional marketplaces:
+- Automated price discovery 
+- Concentrated liquidity for NFT collections
+- Arbitrage opportunities between fractional tokens and NFTs
+
+## Technical Implementation
+
+### Core Technology Stack
+- **Language**: Vyper 0.4.0 for gas-efficient and secure smart contracts
+- **Architecture**: Modular design with clear separation of concerns
+- **Standards**: ERC20, ERC721, ERC4626 compliant implementations
+- **Testing Framework**: Comprehensive Foundry test suite with 100% coverage
+
+### Security Features
+- Nonreentrant guards protecting against reentrancy attacks
+- Access control for privileged operations
+- Protocol-controlled token minting/burning with strict validation
+- Proper checks-effects-interactions pattern implementation
+- Invariant-based testing to verify fundamental protocol properties
+
+## Smart Contract Documentation
+
+### Core Contracts
+
+#### RemyVault.vy
+The base layer fractionalization mechanism.
+
+**Key Functions:**
+- `deposit(tokenIds: DynArray[uint256, 100], recipient: address) -> uint256`: Deposit NFTs and receive REMY tokens
+- `withdraw(tokenIds: DynArray[uint256, 100], recipient: address) -> uint256`: Redeem REMY tokens for NFTs
+- `quoteDeposit(count: uint256) -> uint256`: Calculate tokens received for depositing NFTs
+- `quoteWithdraw(count: uint256) -> uint256`: Calculate tokens required to withdraw NFTs
+
+#### InventoryMetavault.vy
+Premium NFT sales strategy with profit distribution.
+
+**Key Functions:**
+- `deposit(token_ids: DynArray[uint256, 100], receiver: address) -> uint256`: Deposit NFTs and receive stMV shares
+- `withdraw(token_ids: DynArray[uint256, 100], receiver: address) -> uint256`: Deposit stMV shares and receive NFTs
+- `purchase(token_ids: DynArray[uint256, 100]) -> uint256`: Buy NFTs at premium pricing
+- `redeem(shares_amount: uint256, receiver: address) -> uint256`: Redeem shares for assets
+
+#### RemyVaultHook.sol
+Uniswap V4 integration for NFT trading.
+
+**Key Functions:**
+- `sellNFTs(tokenIds: uint256[])`: Sell NFTs to receive vault tokens
+- `buyNFTs(tokenIds: uint256[])`: Buy NFTs using vault tokens plus ETH fee
 
 ## Installation and Testing
 

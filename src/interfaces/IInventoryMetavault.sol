@@ -29,15 +29,15 @@ interface IInventoryMetavault {
     function owner() external view returns (address);
 
     // Core deposit functions
-    function deposit_nfts(uint256[] calldata token_ids, address receiver) external returns (uint256);
+    function deposit(uint256[] calldata token_ids, address receiver) external returns (uint256);
     function deposit_remy_tokens(uint256 amount, address receiver) external returns (uint256);
 
     // Core withdrawal functions
-    function withdraw_nfts(uint256[] calldata token_ids, address receiver) external returns (uint256);
-    function redeem_for_assets(uint256 shares_amount, address receiver) external returns (uint256);
+    function withdraw(uint256[] calldata token_ids, address receiver) external returns (uint256);
+    function redeem(uint256 shares_amount, address receiver) external returns (uint256);
 
     // Purchase functions
-    function purchase_nfts(uint256[] calldata token_ids) external returns (uint256);
+    function purchase(uint256[] calldata token_ids) external returns (uint256);
 
     // View functions
     function totalAssets() external view returns (uint256);

@@ -91,7 +91,7 @@ def __init__(
 
 @external
 @nonreentrant
-def deposit_nfts(token_ids: DynArray[uint256, 100], receiver: address) -> uint256:
+def deposit(token_ids: DynArray[uint256, 100], receiver: address) -> uint256:
     """
     @dev Deposit NFTs into the metavault and receive stMV shares
     @param token_ids NFT token IDs to deposit
@@ -163,7 +163,7 @@ def _send_nfts(token_ids: DynArray[uint256, 100], receiver: address):
 
 @external
 @nonreentrant
-def withdraw_nfts(token_ids: DynArray[uint256, 100], receiver: address) -> uint256:
+def withdraw(token_ids: DynArray[uint256, 100], receiver: address) -> uint256:
     """
     @dev Withdraw specific NFTs by redeeming shares
     @param token_ids NFT token IDs to withdraw
@@ -204,7 +204,7 @@ def withdraw_nfts(token_ids: DynArray[uint256, 100], receiver: address) -> uint2
 
 @external
 @nonreentrant
-def redeem_for_assets(shares_amount: uint256, receiver: address) -> uint256:
+def redeem(shares_amount: uint256, receiver: address) -> uint256:
     """
     @dev Redeem stMV shares for a combination of NFTs and REMY tokens
     @param shares_amount Amount of shares to redeem
@@ -278,7 +278,7 @@ def redeem_for_assets(shares_amount: uint256, receiver: address) -> uint256:
 
 @external
 @nonreentrant
-def purchase_nfts(token_ids: DynArray[uint256, 100]) -> uint256:
+def purchase(token_ids: DynArray[uint256, 100]) -> uint256:
     """
     @dev Purchase NFTs from the metavault at premium price
     @param token_ids NFT token IDs to purchase
