@@ -201,9 +201,7 @@ This integration creates completely new NFT trading mechanisms not possible in t
 
 ## Smart Contract Documentation
 
-### Core Contracts
-
-#### RemyVault.vy
+### RemyVault.vy
 The base layer fractionalization mechanism.
 
 **Key Functions:**
@@ -212,7 +210,7 @@ The base layer fractionalization mechanism.
 - `quoteDeposit(count: uint256) -> uint256`: Calculate tokens received for depositing NFTs
 - `quoteWithdraw(count: uint256) -> uint256`: Calculate tokens required to withdraw NFTs
 
-#### InventoryMetavault.vy
+### InventoryMetavault.vy
 Premium NFT sales strategy with profit distribution.
 
 **Key Functions:**
@@ -221,7 +219,7 @@ Premium NFT sales strategy with profit distribution.
 - `purchase(token_ids: DynArray[uint256, 100]) -> uint256`: Buy NFTs at premium pricing
 - `redeem(shares_amount: uint256, receiver: address) -> uint256`: Redeem shares for assets
 
-#### RemyVaultHook.sol
+### RemyVaultHook.sol
 Uniswap V4 integration for NFT trading.
 
 **Key Functions:**
