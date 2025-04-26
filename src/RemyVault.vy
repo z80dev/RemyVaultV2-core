@@ -73,10 +73,6 @@ def withdraw(tokenIds: DynArray[uint256, 100], recipient: address = msg.sender) 
     # Calculate token amount
     total_amount: uint256 = UNIT * len(tokenIds)
     
-    # Verify vault owns all tokens before proceeding
-    for tokenId: uint256 in tokenIds:
-        assert staticcall self.erc721.ownerOf(tokenId) == self, "Vault does not own one of the tokens"
-    
     # Burn tokens first
     self.burn_erc20(msg.sender, len(tokenIds))
     
