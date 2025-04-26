@@ -2,7 +2,6 @@
 """
 @title ManagedToken (mvREMY) - Internal ERC20 token representing NFT value
 @license GNU Affero General Public License v3.0 only
-@author Claude AI
 """
 
 # Import the ERC20 interface
