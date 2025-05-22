@@ -1,6 +1,6 @@
 [profile.default]
-libs = ["node_modules", "lib", "lib/snekmate/src"]
-skip = ["**/lib/snekmate/**"]
+libs = ["node_modules", "lib", ".venv/lib/python3.12/site-packages"]
+skip = ["**/site-packages/snekmate/**"]
 show_metrics = true
 via_ir = true
 optimizer = true

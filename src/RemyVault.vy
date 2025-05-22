@@ -54,7 +54,7 @@ def deposit(tokenIds: DynArray[uint256, 100], recipient: address = msg.sender) -
     for tokenId: uint256 in tokenIds:
         extcall self.erc721.transferFrom(msg.sender, self, tokenId)
     mint_amount: uint256 = self.mint_erc20(recipient, len(tokenIds))
-    log Deposit(recipient, tokenIds, mint_amount)
+    log Deposit(recipient=recipient, token_ids=tokenIds, erc20_amt=mint_amount)
     return mint_amount
 
 ################################################################################
@@ -80,7 +80,7 @@ def withdraw(tokenIds: DynArray[uint256, 100], recipient: address = msg.sender) 
     for tokenId: uint256 in tokenIds:
         extcall self.erc721.safeTransferFrom(self, recipient, tokenId)
     
-    log Withdraw(recipient, tokenIds, total_amount)
+    log Withdraw(recipient=recipient, token_ids=tokenIds, erc20_amt=total_amount)
     return total_amount
 
 ################################################################################

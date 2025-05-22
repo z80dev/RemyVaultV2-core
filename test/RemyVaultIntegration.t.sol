@@ -74,7 +74,7 @@ contract RemyVaultHookTest is Test {
         } catch Error(string memory reason) {
             console.log("Deployment failed with reason:", reason);
             revert(reason);
-        } catch (bytes memory lowLevelData) {
+        } catch (bytes memory) {
             console.log("Deployment failed with low level error");
             revert("Low level error");
         }
@@ -84,7 +84,7 @@ contract RemyVaultHookTest is Test {
     /**
      * @notice Test basic constructor and initialization
      */
-    function testInitialization() public {
+    function testInitialization() public view {
         assertEq(address(hook.remyVault()), mockRemyVault);
         assertEq(address(hook.vaultToken()), mockVaultToken);
         assertEq(address(hook.nftCollection()), mockNFTCollection);

@@ -83,7 +83,7 @@ def transfer(_to: address, _value: uint256) -> bool:
     self.balanceOf[msg.sender] -= _value
     self.balanceOf[_to] += _value
     
-    log Transfer(msg.sender, _to, _value)
+    log Transfer(_from=msg.sender, _to=_to, _value=_value)
     return True
 
 @external
@@ -104,7 +104,7 @@ def transferFrom(_from: address, _to: address, _value: uint256) -> bool:
     self.balanceOf[_to] += _value
     self.allowance[_from][msg.sender] -= _value
     
-    log Transfer(_from, _to, _value)
+    log Transfer(_from=_from, _to=_to, _value=_value)
     return True
 
 @external
@@ -118,7 +118,7 @@ def approve(_spender: address, _value: uint256) -> bool:
     assert _spender != empty(address), "ERC20: approve to zero address"
     
     self.allowance[msg.sender][_spender] = _value
-    log Approval(msg.sender, _spender, _value)
+    log Approval(_owner=msg.sender, _spender=_spender, _value=_value)
     return True
 
 ################################################################################
@@ -138,7 +138,7 @@ def mint(to: address, amount: uint256):
     self.totalSupply += amount
     self.balanceOf[to] += amount
     
-    log Transfer(empty(address), to, amount)
+    log Transfer(_from=empty(address), _to=to, _value=amount)
 
 @external
 def burn(from_: address, amount: uint256):
@@ -153,7 +153,7 @@ def burn(from_: address, amount: uint256):
     self.balanceOf[from_] -= amount
     self.totalSupply -= amount
     
-    log Transfer(from_, empty(address), amount)
+    log Transfer(_from=from_, _to=empty(address), _value=amount)
 
 @external
 def change_manager(new_manager: address):
@@ -167,4 +167,4 @@ def change_manager(new_manager: address):
     old_manager: address = self.manager
     self.manager = new_manager
     
-    log ManagerChanged(old_manager, new_manager)
+    log ManagerChanged(old_manager=old_manager, new_manager=new_manager)

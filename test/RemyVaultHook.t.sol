@@ -30,22 +30,23 @@ contract MockPoolManager {
         return 0;
     }
 
-    function swap(PoolKey memory, IPoolManager.SwapParams memory, bytes calldata) external returns (BalanceDelta) {
+    function swap(PoolKey memory, IPoolManager.SwapParams memory, bytes calldata) external pure returns (BalanceDelta) {
         return BalanceDelta.wrap(0);
     }
 
-    function modifyLiquidity(PoolKey memory key, IPoolManager.ModifyLiquidityParams memory, bytes calldata)
+    function modifyLiquidity(PoolKey memory, IPoolManager.ModifyLiquidityParams memory, bytes calldata)
         external
+        pure
         returns (BalanceDelta, BalanceDelta)
     {
         return (BalanceDelta.wrap(0), BalanceDelta.wrap(0));
     }
 
-    function donate(PoolKey memory key, uint256, uint256, bytes calldata) external returns (BalanceDelta) {
+    function donate(PoolKey memory, uint256, uint256, bytes calldata) external pure returns (BalanceDelta) {
         return BalanceDelta.wrap(0);
     }
 
-    function unlock(bytes calldata) external returns (bytes memory) {
+    function unlock(bytes calldata) external pure returns (bytes memory) {
         return "";
     }
 
@@ -149,7 +150,7 @@ contract RemyVaultHookTest is Test {
     /**
      * @notice Test basic constructor and initialization
      */
-    function testInitialization() public {
+    function testInitialization() public view {
         assertEq(address(hook.remyVault()), mockRemyVault);
         assertEq(address(hook.vaultToken()), mockVaultToken);
         assertEq(address(hook.nftCollection()), mockNFTCollection);
@@ -872,7 +873,7 @@ contract RemyVaultHookTest is Test {
         hook.buyVaultTokens(1000 * 10 ** 18, new uint256[](0));
     }
 
-    function testHookPermissions() public {
+    function testHookPermissions() public view {
         Hooks.Permissions memory permissions = hook.getHookPermissions();
 
         // Verify required permissions are enabled

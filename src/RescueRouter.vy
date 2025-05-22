@@ -165,7 +165,7 @@ def swap_erc20_for_weth(amountIn: uint256) -> uint256:
     )
     extcall token.approve(self.v3router_address, amountIn)
     return_val: uint256 = extcall router.exactInputSingle(params)
-    log ERC20SwappedForWETH(msg.sender, amountIn, return_val)
+    log ERC20SwappedForWETH(swapper=msg.sender, amountIn=amountIn, amountOut=return_val)
     return return_val
 
 event ERC20SwappedForWETH:
@@ -197,7 +197,7 @@ def swap_weth_for_erc20(amountOut: uint256) -> uint256:
     )
     extcall ERC20(self.weth).approve(self.v3router_address, msg.value)
     return_val: uint256 = extcall router.exactOutputSingle(params)
-    log WETHSwappedForERC20(msg.sender, msg.value, return_val)
+    log WETHSwappedForERC20(swapper=msg.sender, amountIn=msg.value, amountOut=return_val)
     return return_val
 
 @payable
@@ -372,7 +372,7 @@ def swap(tokenIds_in: DynArray[uint256, 100], tokenIds_out: DynArray[uint256, 10
     total_tokens_required: uint256 = staticcall vault.quote_redeem(len(tokenIds_out), True)
     if mint_fee > 0:
         total_tokens_required += mint_fee
-        log MintFeeCharged(msg.sender, recipient, mint_fee)
+        log MintFeeCharged(swapper=msg.sender, recipient=recipient, fee=mint_fee)
 
     if amt_minted < total_tokens_required:
         total_tokens_to_buy = total_tokens_required - amt_minted
@@ -392,7 +392,7 @@ def swap(tokenIds_in: DynArray[uint256, 100], tokenIds_out: DynArray[uint256, 10
             diff: uint256 = weth_balance_after - weth_balance_before
             extcall WETH9(self.weth).withdraw(diff)
             send(msg.sender, diff)
-            log WethRefunded(msg.sender, diff)
+            log WethRefunded(swapper=msg.sender, proceeds=diff)
     extcall token.approve(self.vault_address, staticcall token.balanceOf(self))
     amt_redeemed: uint256 = extcall vault.redeem_batch(tokenIds_out, recipient, True)
     amt_leftover: uint256 = 0
@@ -405,9 +405,9 @@ def swap(tokenIds_in: DynArray[uint256, 100], tokenIds_out: DynArray[uint256, 10
         swap_amt: uint256 = self.swap_erc20_for_weth(amt_leftover)
         extcall WETH9(self.weth).withdraw(swap_amt)
         send(msg.sender, swap_amt)
-        log SaleProceeds(msg.sender, swap_amt)
+        log SaleProceeds(swapper=msg.sender, proceeds=swap_amt)
 
-    log NFTsSwappedForNFTs(recipient, len(tokenIds_in), len(tokenIds_out), mint_fee, amt_leftover)
+    log NFTsSwappedForNFTs(swapper=recipient, nfts_in_count=len(tokenIds_in), nfts_out_count=len(tokenIds_out), fee=mint_fee, proceeds=amt_leftover)
     extcall vault.set_active(False)
 
 @external

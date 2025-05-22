@@ -147,11 +147,11 @@ contract RemyVaultHook is BaseHook {
 
     /**
      * @notice Validates pool initialization parameters
-     * @param sender The initializer of the pool
+     * @dev The sender parameter is not used in this implementation
      * @param key The pool key
      * @return The function selector if validation passes
      */
-    function _beforeInitialize(address sender, PoolKey calldata key, uint160) internal override returns (bytes4) {
+    function _beforeInitialize(address, PoolKey calldata key, uint160) internal override returns (bytes4) {
         // Validate that one of the tokens is our vault token
         bool isValidPool =
             (key.currency0 == Currency.wrap(address(vaultToken)) || key.currency1 == Currency.wrap(address(vaultToken)));
@@ -167,15 +167,16 @@ contract RemyVaultHook is BaseHook {
     /**
      * @notice Hook called before a swap occurs
      * @dev Handles NFT buying/selling logic
-     * @param sender The account initiating the swap
+     * @dev The sender parameter is not used in this implementation
      * @param key The pool key
      * @param params The swap parameters
      * @return selector The function selector
      * @return swapDelta Token delta to apply for the swap
      * @return lpFeeOverride Fee override (not used in this hook)
      */
-    function _beforeSwap(address sender, PoolKey calldata key, IPoolManager.SwapParams calldata params, bytes calldata)
+    function _beforeSwap(address, PoolKey calldata key, IPoolManager.SwapParams calldata params, bytes calldata)
         internal
+        view
         override
         returns (bytes4 selector, BeforeSwapDelta swapDelta, uint24 lpFeeOverride)
     {
@@ -198,7 +199,7 @@ contract RemyVaultHook is BaseHook {
         // If the sender is swapping token for vault token, they're buying NFT
         isBuyingNFT = (tokenOut == Currency.wrap(address(vaultToken)));
 
-        bool isExactInput = params.amountSpecified < 0;
+        // bool isExactInput = params.amountSpecified < 0;  // Currently unused
 
         // We'll handle swaps in the afterSwap hook
 
@@ -209,7 +210,7 @@ contract RemyVaultHook is BaseHook {
     /**
      * @notice Hook called after a swap occurs
      * @dev Executes NFT buying/selling logic
-     * @param sender The account initiating the swap
+     * @dev The sender parameter is not used in this implementation
      * @param key The pool key
      * @param params The swap parameters
      * @param delta Balance delta from the swap
@@ -259,8 +260,7 @@ contract RemyVaultHook is BaseHook {
      * @notice Implements the buying logic with optional NFT purchase
      * @param buyer The buyer's address
      * @param delta Balance delta from the swap
-     * @param amountSpecified The amount specified for the swap
-     * @param isExactInput Whether this is an exact input swap
+     * @dev The amountSpecified and isExactInput parameters are not used in this implementation
      * @param hookData Optional data to control behavior (can include NFT purchase flag)
      * @return selector The function selector
      * @return deltaAdjustment Optional adjustment to the balance delta
@@ -268,8 +268,8 @@ contract RemyVaultHook is BaseHook {
     function _handleBuyNFT(
         address buyer,
         BalanceDelta delta,
-        uint256 amountSpecified,
-        bool isExactInput,
+        uint256,
+        bool,
         bytes calldata hookData
     ) internal returns (bytes4 selector, int128 deltaAdjustment) {
         // Calculate the amount of tokens we received (positive delta for the hook)
@@ -347,8 +347,7 @@ contract RemyVaultHook is BaseHook {
      * @notice Implements the NFT selling logic
      * @param seller The seller's address
      * @param delta Balance delta from the swap
-     * @param amountSpecified The amount specified for the swap
-     * @param isExactInput Whether this is an exact input swap
+     * @dev The amountSpecified and isExactInput parameters are not used in this implementation
      * @param hookData Additional data containing NFT token IDs to sell
      * @return selector The function selector
      * @return deltaAdjustment Optional adjustment to the balance delta
@@ -356,8 +355,8 @@ contract RemyVaultHook is BaseHook {
     function _handleSellNFT(
         address seller,
         BalanceDelta delta,
-        uint256 amountSpecified,
-        bool isExactInput,
+        uint256,
+        bool,
         bytes calldata hookData
     ) internal returns (bytes4 selector, int128 deltaAdjustment) {
         // For selling NFT, we need to take the user's NFTs and deposit them to mint vault tokens

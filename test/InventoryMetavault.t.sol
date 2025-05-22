@@ -127,7 +127,7 @@ contract InventoryMetavaultTest is Test {
     /**
      * @dev Test basic setup of the metavault
      */
-    function testSetup() public {
+    function testSetup() public view {
         // Print debug information
         console.log("metavault.remy_vault():", metavault.remy_vault());
         console.log("expected remy_vault:", address(coreVault));
@@ -341,7 +341,7 @@ contract InventoryMetavaultTest is Test {
     /**
      * @dev Test quoting a purchase price
      */
-    function testQuotePurchase() public {
+    function testQuotePurchase() public view {
         // Verify that quoting works with correct markup
         uint256 price = metavault.quote_purchase(1);
         assertEq(price, UNIT * (10000 + MARKUP_BPS) / 10000);
@@ -595,10 +595,10 @@ contract InventoryMetavaultTest is Test {
     }
 
     function onERC721Received(
-        address operator,
-        address from,
-        uint256 tokenId,
-        bytes calldata data
+        address,
+        address,
+        uint256,
+        bytes calldata
     ) external pure returns (bytes4) {
         return 0x150b7a02;
     }

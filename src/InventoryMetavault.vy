@@ -118,7 +118,7 @@ def deposit(token_ids: DynArray[uint256, 100], receiver: address) -> uint256:
     shares_amount: uint256 = extcall staking_vault.deposit(internal_value, receiver)
 
     # Emit event
-    log InventoryDeposit(receiver, token_ids, shares_amount)
+    log InventoryDeposit(user=receiver, token_ids=token_ids, shares_minted=shares_amount)
     
     return shares_amount
 
@@ -139,7 +139,7 @@ def _take_nfts(token_ids: DynArray[uint256, 100], owner: address):
         if not self.is_in_inventory[token_id]:
             self.inventory.append(token_id)
             self.is_in_inventory[token_id] = True
-            log TokenRegistered(token_id)
+            log TokenRegistered(token_id=token_id)
 
     self.inventory_count += len(token_ids)
 
@@ -198,7 +198,7 @@ def withdraw(token_ids: DynArray[uint256, 100], receiver: address) -> uint256:
     self._send_nfts(token_ids, receiver)
 
     # Emit event
-    log InventoryWithdraw(msg.sender, token_ids, shares_to_burn)
+    log InventoryWithdraw(user=msg.sender, token_ids=token_ids, shares_burned=shares_to_burn)
     
     return shares_to_burn
 
@@ -306,7 +306,7 @@ def purchase(token_ids: DynArray[uint256, 100]) -> uint256:
     self._send_nfts(token_ids, msg.sender)
     
     # Emit event
-    log InventoryPurchase(msg.sender, token_ids, total_price)
+    log InventoryPurchase(buyer=msg.sender, token_ids=token_ids, vault_tokens_paid=total_price)
 
     # mint 100 mvREMY tokens to the erc4626 contract
     mv_token: IManagedToken = IManagedToken(self.internal_token)
