@@ -1,6 +1,6 @@
 # pragma version ~=0.4.0
 """
-@title ManagedToken (mvREMY) - Internal ERC20 token representing NFT value
+@title ManagedToken - Internal ERC20 token used by vaults for representing NFT value
 @license GNU Affero General Public License v3.0 only
 """
 
