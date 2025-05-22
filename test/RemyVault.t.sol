@@ -66,8 +66,8 @@ interface IVault {
 interface IManagedToken {
     function mint(address to, uint256 value) external;
     function burn(uint256 amount) external;
-    function manager() external view returns (address);
-    function change_manager(address newManager) external;
+    function owner() external view returns (address);
+    function transfer_ownership(address newOwner) external;
 }
 
 /**
@@ -121,8 +121,7 @@ contract RemyVaultTest is Test {
         vault = IVault(deployCode("RemyVault", abi.encode(address(token), address(nft))));
 
         // Transfer ownership of tokens to vault
-        //address(IManagedToken(address(token))).call(abi.encodeWithSignature("change_manager(address)", address(vault)));
-        IManagedToken(address(token)).change_manager(address(vault));
+        IManagedToken(address(token)).transfer_ownership(address(vault));
         Ownable(address(nft)).transfer_ownership(address(vault));
 
         // Create test addresses

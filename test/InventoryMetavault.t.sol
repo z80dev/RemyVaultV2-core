@@ -17,8 +17,8 @@ interface IMockERC20 is IERC20 {
 interface IManagedToken is IERC20 {
     function mint(address to, uint256 amount) external;
     function burn(address from, uint256 amount) external;
-    function manager() external view returns (address);
-    function change_manager(address new_manager) external;
+    function owner() external view returns (address);
+    function transfer_ownership(address new_owner) external;
 }
 
 interface IMockERC721 {
@@ -102,7 +102,7 @@ contract InventoryMetavaultTest is Test {
         Ownable(address(nft)).transfer_ownership(address(coreVault));
 
         // Deploy mvREMY token (managed token)
-        mvREMY = IManagedToken(deployCode("src/ManagedToken.vy", abi.encode("Managed Vault REMY", "mvREMY", owner)));
+        mvREMY = IManagedToken(deployCode("src/ManagedToken.vy", abi.encode("Managed Vault REMY", "mvRMY", owner)));
 
         // Deploy StakingVault
         stakingVault = IERC4626(
@@ -121,7 +121,7 @@ contract InventoryMetavaultTest is Test {
 
         // Transfer management of mvREMY to the metavault
         vm.prank(owner);
-        mvREMY.change_manager(address(metavault));
+        mvREMY.transfer_ownership(address(metavault));
     }
 
     /**
@@ -143,7 +143,7 @@ contract InventoryMetavaultTest is Test {
         assertEq(metavault.nft_collection(), address(nft));
 
         // Verify mvREMY token management
-        assertEq(mvREMY.manager(), address(metavault));
+        assertEq(mvREMY.owner(), address(metavault));
 
         // Verify initial inventory is empty
         assertEq(metavault.get_available_inventory(), 0);
