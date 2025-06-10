@@ -39,7 +39,11 @@ contract LaunchTest is BaseTest {
 
     uint256[] public tokenIds;
 
+    string BASE_RPC = vm.envString("BASE_RPC_URL");
+
     function setUp() public {
+        vm.createSelectFork(BASE_RPC);
+
         // Get interfaces from rescue router
         vaultV1 = IRemyVaultV1(rescueRouter.vault_address());
         weth = IERC20(rescueRouter.weth());
@@ -151,6 +155,103 @@ contract LaunchTest is BaseTest {
         assertGt(finalRemyV2, initialRemyV2, "User should have gained REMY v2");
         assertEq(remyV1AfterUnstake, finalRemyV2, "User should have exact amount migrated");
         
+    }
+
+    function testVaultOwnershipRecoveryFromRescueRouter() public {
+        address rescueRouterOwner = rescueRouter.owner();
+        
+        // Step 1: Verify initial state - rescue router owns the vault
+        assertEq(vaultV1.owner(), address(rescueRouter), "RescueRouter should own vault initially");
+        
+        // Step 2: Router owner reclaims vault ownership
+        vm.prank(rescueRouterOwner);
+        rescueRouter.transfer_vault_ownership(rescueRouterOwner);
+        
+        // Step 3: Verify ownership transferred
+        assertEq(vaultV1.owner(), rescueRouterOwner, "Owner should now control vault");
+    }
+
+    function testVaultOwnershipRecoveryFromRescueRouterV2() public {
+        address rescueRouterOwner = rescueRouter.owner();
+        
+        // First transfer vault to RescueRouterV2
+        vm.startPrank(rescueRouterOwner);
+        rescueRouter.transfer_vault_ownership(rescueRouterOwner);
+        vaultV1.transfer_owner(address(rescueRouterV2));
+        vm.stopPrank();
+        
+        assertEq(vaultV1.owner(), address(rescueRouterV2), "RescueRouterV2 should own vault");
+        
+        // Now recover from RescueRouterV2
+        vm.prank(rescueRouterOwner);
+        rescueRouterV2.transfer_vault_ownership(rescueRouterOwner);
+        
+        assertEq(vaultV1.owner(), rescueRouterOwner, "Owner should control vault again");
+    }
+
+    function testOwnershipChainTransfer() public {
+        address rescueRouterOwner = rescueRouter.owner();
+        address newOwner = address(0x123);
+        
+        // Transfer: RescueRouter -> Owner -> RescueRouterV2 -> NewOwner
+        vm.startPrank(rescueRouterOwner);
+        
+        // Get vault from RescueRouter
+        rescueRouter.transfer_vault_ownership(rescueRouterOwner);
+        assertEq(vaultV1.owner(), rescueRouterOwner, "Step 1 failed");
+        
+        // Give to RescueRouterV2
+        vaultV1.transfer_owner(address(rescueRouterV2));
+        assertEq(vaultV1.owner(), address(rescueRouterV2), "Step 2 failed");
+        
+        // Transfer to new owner
+        rescueRouterV2.transfer_vault_ownership(newOwner);
+        vm.stopPrank();
+        
+        assertEq(vaultV1.owner(), newOwner, "Final owner incorrect");
+    }
+
+    function testFeeExemptionPersistsAcrossOwnershipChanges() public {
+        address rescueRouterOwner = rescueRouter.owner();
+        address testAddress = address(0x456);
+        
+        // Get vault ownership and set fee exemption
+        vm.startPrank(rescueRouterOwner);
+        rescueRouter.transfer_vault_ownership(rescueRouterOwner);
+        vaultV1.set_fee_exempt(testAddress, true);
+        
+        // Transfer to RescueRouterV2 and back
+        vaultV1.transfer_owner(address(rescueRouterV2));
+        rescueRouterV2.transfer_vault_ownership(rescueRouterOwner);
+        vm.stopPrank();
+        
+        // Verify fee exemption still exists
+        assertTrue(vaultV1.fee_exempt(testAddress), "Fee exemption should persist");
+    }
+
+    function testCannotTransferVaultOwnershipAsNonOwner() public {
+        // Try to transfer vault ownership as non-owner
+        vm.prank(address(0x999));
+        vm.expectRevert();
+        rescueRouter.transfer_vault_ownership(address(0x999));
+        
+        // Verify vault still owned by rescue router
+        assertEq(vaultV1.owner(), address(rescueRouter), "Ownership should not change");
+    }
+
+    function testRouterOwnershipTransfer() public {
+        address rescueRouterOwner = rescueRouter.owner();
+        address newRouterOwner = address(0x789);
+        
+        // Transfer router ownership
+        vm.prank(rescueRouterOwner);
+        rescueRouterV2.transfer_owner(newRouterOwner);
+        
+        assertEq(rescueRouterV2.owner(), newRouterOwner, "Router ownership not transferred");
+        
+        // New owner should be able to control vault
+        vm.prank(newRouterOwner);
+        rescueRouterV2.transfer_vault_ownership(newRouterOwner);
     }
 
 }
