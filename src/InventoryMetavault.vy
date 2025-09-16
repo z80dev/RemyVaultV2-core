@@ -1,4 +1,4 @@
-# pragma version ^0.4.0
+# pragma version ^0.4.3
 """
 @title InventoryMetavault - NFT Staking and Premium Sales Vault
 @dev Manages NFT inventory and orchestrates deposits, withdrawals, and NFT sales

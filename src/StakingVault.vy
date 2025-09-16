@@ -1,4 +1,4 @@
-# pragma version ~=0.4.0
+# pragma version ^0.4.3
 """
 @title StakingVault - ERC4626 compliant vault for staking mvREMY tokens
 @license GNU Affero General Public License v3.0 only

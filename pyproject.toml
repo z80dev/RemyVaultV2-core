@@ -11,5 +11,5 @@ dependencies = [
     "ape-vyper>=0.8.8",
     "eth-ape>=0.8.24",
     "snekmate>=0.1.1",
-    "vyper>=0.4.1",
+    "vyper>=0.4.3",
 ]

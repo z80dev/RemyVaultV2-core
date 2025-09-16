@@ -1,4 +1,4 @@
-# pragma version ^0.4.1
+# pragma version ^0.4.3
 
 from ethereum.ercs import IERC20
 

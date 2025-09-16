@@ -1,4 +1,4 @@
-# pragma version ^0.4.0
+# pragma version ^0.4.3
 
 from snekmate.auth import ownable as ow
 initializes: ow

@@ -1,6 +1,6 @@
 # RemyVault: NFT Fractionalization Protocol
 
-RemyVault is a minimalist, gas-efficient NFT fractionalization protocol written in Vyper 0.4.0. The core vault enables users to deposit ERC-721 NFTs and receive fungible ERC-20 tokens representing fractional ownership of those NFTs.
+RemyVault is a minimalist, gas-efficient NFT fractionalization protocol written in Vyper 0.4.3. The core vault enables users to deposit ERC-721 NFTs and receive fungible ERC-20 tokens representing fractional ownership of those NFTs.
 
 ## Overview
 
@@ -187,7 +187,7 @@ This integration creates completely new NFT trading mechanisms not possible in t
 ## Technical Implementation
 
 ### Core Technology Stack
-- **Language**: Vyper 0.4.0 for gas-efficient and secure smart contracts
+- **Language**: Vyper 0.4.3 for gas-efficient and secure smart contracts
 - **Architecture**: Modular design with clear separation of concerns
 - **Standards**: ERC20, ERC721, ERC4626 compliant implementations
 - **Testing Framework**: Comprehensive Foundry test suite with 100% coverage
@@ -202,29 +202,31 @@ This integration creates completely new NFT trading mechanisms not possible in t
 ## Smart Contract Documentation
 
 ### RemyVault.vy
-The base layer fractionalization mechanism.
+Minimal vault that mints 1000 REMY per deposited ERC-721 and burns on withdrawal. It keeps custody of the collection set in the constructor and interacts with an `IManagedVaultToken` for minting/burning. Non-reentrancy on `deposit`/`withdraw` and pure quoting helpers (`quoteDeposit`, `quoteWithdraw`) enforce the 1:1 backing invariant.
 
-**Key Functions:**
-- `deposit(tokenIds: DynArray[uint256, 100], recipient: address) -> uint256`: Deposit NFTs and receive REMY tokens
-- `withdraw(tokenIds: DynArray[uint256, 100], recipient: address) -> uint256`: Redeem REMY tokens for NFTs
-- `quoteDeposit(count: uint256) -> uint256`: Calculate tokens received for depositing NFTs
-- `quoteWithdraw(count: uint256) -> uint256`: Calculate tokens required to withdraw NFTs
+### ManagedToken.vy
+Ownable ERC-20 built on Snekmate primitives that represents fractional vault value (e.g., mvREMY). Only the vault or metavault owner can call `mint`/`burn`, while standard ERC-20 functionality and ownership transfer utilities are inherited for downstream governance.
+
+### StakingVault.vy
+ERC4626 wrapper around the managed token that issues yield-bearing shares (stMV). Implemented via Snekmate’s `erc4626` module, it exposes the standard deposit/mint/withdraw/redeem surface plus permit/EIP-5267 metadata for signature-based flows.
 
 ### InventoryMetavault.vy
-Premium NFT sales strategy with profit distribution.
+Strategy layer that takes custody of NFTs from RemyVault depositors, mints mvREMY internally, and deposits into the staking vault on behalf of users. Handles withdrawals, partial redemptions, and premium sales via `purchase` with a configurable 10% markup, while tracking on-chain inventory.
 
-**Key Functions:**
-- `deposit(token_ids: DynArray[uint256, 100], receiver: address) -> uint256`: Deposit NFTs and receive stMV shares
-- `withdraw(token_ids: DynArray[uint256, 100], receiver: address) -> uint256`: Deposit stMV shares and receive NFTs
-- `purchase(token_ids: DynArray[uint256, 100]) -> uint256`: Buy NFTs at premium pricing
-- `redeem(shares_amount: uint256, receiver: address) -> uint256`: Redeem shares for assets
+### RescueRouter.vy
+Legacy utility router that sequences mint/redeem operations, ERC-4626 deposits, and Uniswap V3 swaps for users. It can stake inventory, unstake, and mediate NFT↔︎ETH trades while managing approvals, wrapped ETH handling, and fee payments for the original vault deployment.
+
+### RescueRouterV2.vy
+Updated router used by v2 flows. Adds direct token-for-NFT swaps (`swap_tokens_for_nfts`), richer quoting helpers, internal mint fee accounting, and improved ETH refund logic while retaining staking, unstaking, and Uniswap V3 bridging routines.
+
+### Migrator.vy
+Bridges users from RemyVault v1 to v2. It pulls REMY v1, redeems available NFTs through `RescueRouterV2`, deposits them into the new vault to mint REMY v2, and forwards any leftover balance 1:1. Emits detailed migration events and enforces balance invariants.
 
 ### RemyVaultHook.sol
-Uniswap V4 integration for NFT trading.
+Uniswap V4 hook extending `BaseHook` to let liquidity pools swap NFTs against REMY directly. Manages hook permissions, validates pools, tracks NFT inventory, and exposes manual controls (`sellNFTs`, `buyNFTs`, `addNFTsToInventory`, `collectETHFees`, etc.) so operators can seed or drain inventory and adjust fees.
 
-**Key Functions:**
-- `sellNFTs(tokenIds: uint256[])`: Sell NFTs to receive vault tokens
-- `buyNFTs(tokenIds: uint256[])`: Buy NFTs using vault tokens plus ETH fee
+### Test Helpers
+`src/mock/` contains lightweight ERC-20 and ERC-721 mocks for Foundry tests, and `src/interfaces/` ships the minimal ABI surfaces (ERC standards plus project-specific interfaces) consumed across the ecosystem.
 
 ## Installation and Testing
 

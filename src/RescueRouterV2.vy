@@ -1,4 +1,4 @@
-# pragma version ^0.4.0
+# pragma version ^0.4.3
 # Contract that handles compound actions on behalf of users
 # Covers the following use cases:
 # - Liquidity Management
