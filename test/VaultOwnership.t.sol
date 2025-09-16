@@ -3,36 +3,33 @@
 pragma solidity >=0.8.7 <0.9.0;
 
 import {BaseTest} from "./BaseTest.t.sol";
-import {IRemyVault} from "../src/interfaces/IRemyVault.sol";
-import {IERC20} from "../src/interfaces/IERC20.sol";
-import {IERC721} from "../src/interfaces/IERC721.sol";
-import {IERC4626} from "../src/interfaces/IERC4626.sol";
-import {IManagedToken} from "../src/interfaces/IManagedToken.sol";
-import {IERC721Enumerable} from "../src/interfaces/IERC721Enumerable.sol";
 import {IRemyVaultV1} from "../src/interfaces/IRemyVaultV1.sol";
-import {IMigrator} from "../src/interfaces/IMigrator.sol";
 import {IRescueRouter} from "../src/interfaces/IRescueRouter.sol";
+import {AddressBook, CoreAddresses} from "./helpers/AddressBook.sol";
 
-contract VaultOwnershipTest is BaseTest {
+contract VaultOwnershipTest is BaseTest, AddressBook {
 
-    IRescueRouter public constant rescueRouter = IRescueRouter(0x0fc6284bC4c2DAF3719fd64F3767f73B32edD79d);
-    address owner = 0x70f4b83795Af9236dA8211CDa3b031E503C00970;
+    CoreAddresses internal core;
+    IRescueRouter public rescueRouter;
+    address internal routerOwner;
     
     // Typed interfaces from rescue router
     IRemyVaultV1 public vaultV1;
-    IERC721 public nft;
     
     // RescueRouterV2 deployment
     IRescueRouter public rescueRouterV2;
 
     function setUp() public {
+        core = loadCoreAddresses();
+
+        rescueRouter = IRescueRouter(core.rescueRouter);
+        routerOwner = rescueRouter.owner();
+
         // Get interfaces from rescue router
         vaultV1 = IRemyVaultV1(rescueRouter.vault_address());
-        nft = IERC721(rescueRouter.erc721_address());
         
         // Deploy RescueRouterV2
-        address rescueRouterOwner = rescueRouter.owner();
-        vm.prank(rescueRouterOwner);
+        vm.prank(routerOwner);
         rescueRouterV2 = IRescueRouter(deployCode("RescueRouterV2", abi.encode(address(rescueRouter))));
     }
 
@@ -42,51 +39,45 @@ contract VaultOwnershipTest is BaseTest {
     }
 
     function testOwnerCanReclaimVaultFromRescueRouter() public {
-        address rescueRouterOwner = rescueRouter.owner();
-        
         // Owner reclaims vault ownership
-        vm.prank(rescueRouterOwner);
-        rescueRouter.transfer_vault_ownership(rescueRouterOwner);
-        
+        vm.prank(routerOwner);
+        rescueRouter.transfer_vault_ownership(routerOwner);
+
         // Verify ownership transferred
-        assertEq(vaultV1.owner(), rescueRouterOwner, "Owner should now control vault");
+        assertEq(vaultV1.owner(), routerOwner, "Owner should now control vault");
     }
 
     function testOwnerCanReclaimVaultFromRescueRouterV2() public {
-        address rescueRouterOwner = rescueRouter.owner();
-        
         // First transfer vault to owner, then to RescueRouterV2
-        vm.startPrank(rescueRouterOwner);
-        rescueRouter.transfer_vault_ownership(rescueRouterOwner);
+        vm.startPrank(routerOwner);
+        rescueRouter.transfer_vault_ownership(routerOwner);
         vaultV1.transfer_owner(address(rescueRouterV2));
         vm.stopPrank();
         
         assertEq(vaultV1.owner(), address(rescueRouterV2), "RescueRouterV2 should own vault");
         
         // Now recover from RescueRouterV2
-        vm.prank(rescueRouterOwner);
-        rescueRouterV2.transfer_vault_ownership(rescueRouterOwner);
+        vm.prank(routerOwner);
+        rescueRouterV2.transfer_vault_ownership(routerOwner);
         
-        assertEq(vaultV1.owner(), rescueRouterOwner, "Owner should control vault again");
+        assertEq(vaultV1.owner(), routerOwner, "Owner should control vault again");
     }
 
     function testMultipleRouterTransfers() public {
-        address rescueRouterOwner = rescueRouter.owner();
-        
         // Transfer: RescueRouter -> Owner -> RescueRouterV2 -> Owner -> RescueRouter
-        vm.startPrank(rescueRouterOwner);
+        vm.startPrank(routerOwner);
         
         // Get from RescueRouter
-        rescueRouter.transfer_vault_ownership(rescueRouterOwner);
-        assertEq(vaultV1.owner(), rescueRouterOwner);
+        rescueRouter.transfer_vault_ownership(routerOwner);
+        assertEq(vaultV1.owner(), routerOwner);
         
         // Give to RescueRouterV2
         vaultV1.transfer_owner(address(rescueRouterV2));
         assertEq(vaultV1.owner(), address(rescueRouterV2));
         
         // Get back from RescueRouterV2
-        rescueRouterV2.transfer_vault_ownership(rescueRouterOwner);
-        assertEq(vaultV1.owner(), rescueRouterOwner);
+        rescueRouterV2.transfer_vault_ownership(routerOwner);
+        assertEq(vaultV1.owner(), routerOwner);
         
         // Give back to original RescueRouter
         vaultV1.transfer_owner(address(rescueRouter));
@@ -108,18 +99,17 @@ contract VaultOwnershipTest is BaseTest {
     }
 
     function testFeeExemptionAcrossOwnershipTransfers() public {
-        address rescueRouterOwner = rescueRouter.owner();
         address testAddress = address(0x456);
         
         // Get vault ownership and set fee exemption
-        vm.startPrank(rescueRouterOwner);
-        rescueRouter.transfer_vault_ownership(rescueRouterOwner);
+        vm.startPrank(routerOwner);
+        rescueRouter.transfer_vault_ownership(routerOwner);
         vaultV1.set_fee_exempt(testAddress, true);
         assertTrue(vaultV1.fee_exempt(testAddress), "Fee exemption should be set");
         
         // Transfer through multiple routers
         vaultV1.transfer_owner(address(rescueRouterV2));
-        rescueRouterV2.transfer_vault_ownership(rescueRouterOwner);
+        rescueRouterV2.transfer_vault_ownership(routerOwner);
         
         // Verify fee exemption persists
         assertTrue(vaultV1.fee_exempt(testAddress), "Fee exemption should persist after transfers");
@@ -132,12 +122,11 @@ contract VaultOwnershipTest is BaseTest {
     }
 
     function testRouterOwnershipTransferAffectsVaultControl() public {
-        address rescueRouterOwner = rescueRouter.owner();
         address newOwner = address(0x789);
         
         // First get vault to RescueRouterV2
-        vm.startPrank(rescueRouterOwner);
-        rescueRouter.transfer_vault_ownership(rescueRouterOwner);
+        vm.startPrank(routerOwner);
+        rescueRouter.transfer_vault_ownership(routerOwner);
         vaultV1.transfer_owner(address(rescueRouterV2));
         
         // Transfer router ownership
@@ -145,9 +134,9 @@ contract VaultOwnershipTest is BaseTest {
         vm.stopPrank();
         
         // Old owner can't control vault anymore
-        vm.prank(rescueRouterOwner);
+        vm.prank(routerOwner);
         vm.expectRevert();
-        rescueRouterV2.transfer_vault_ownership(rescueRouterOwner);
+        rescueRouterV2.transfer_vault_ownership(routerOwner);
         
         // New owner can control vault
         vm.prank(newOwner);
@@ -156,57 +145,51 @@ contract VaultOwnershipTest is BaseTest {
     }
 
     function testEmergencyRecoveryScenario() public {
-        address rescueRouterOwner = rescueRouter.owner();
-        
         // Simulate compromised scenario - vault given to unknown router
-        vm.startPrank(rescueRouterOwner);
-        rescueRouter.transfer_vault_ownership(rescueRouterOwner);
+        vm.startPrank(routerOwner);
+        rescueRouter.transfer_vault_ownership(routerOwner);
         
         // Before giving to compromised router, ensure we can always recover
         // In real scenario, we would need the compromised router to have transfer_vault_ownership function
         // This test shows we maintain control as long as we control the vault directly
-        assertEq(vaultV1.owner(), rescueRouterOwner, "Owner has direct control");
+        assertEq(vaultV1.owner(), routerOwner, "Owner has direct control");
         
         vm.stopPrank();
     }
 
     function testVaultOwnershipWithThirdPartyRouter() public {
-        address rescueRouterOwner = rescueRouter.owner();
-        
         // Deploy a third router that mimics RescueRouterV2
-        vm.prank(rescueRouterOwner);
+        vm.prank(routerOwner);
         IRescueRouter thirdRouter = IRescueRouter(deployCode("RescueRouterV2", abi.encode(address(rescueRouter))));
         
         // Transfer vault ownership through multiple routers
-        vm.startPrank(rescueRouterOwner);
+        vm.startPrank(routerOwner);
         
         // Get from original router
-        rescueRouter.transfer_vault_ownership(rescueRouterOwner);
+        rescueRouter.transfer_vault_ownership(routerOwner);
         
         // Give to third router
         vaultV1.transfer_owner(address(thirdRouter));
         assertEq(vaultV1.owner(), address(thirdRouter));
         
         // Recover from third router
-        thirdRouter.transfer_vault_ownership(rescueRouterOwner);
-        assertEq(vaultV1.owner(), rescueRouterOwner);
+        thirdRouter.transfer_vault_ownership(routerOwner);
+        assertEq(vaultV1.owner(), routerOwner);
         
         vm.stopPrank();
     }
 
     function testOwnershipRecoveryPath() public {
-        address rescueRouterOwner = rescueRouter.owner();
-        
         // This test documents the recovery path for vault ownership
         // Step 1: Router owner can always reclaim vault from any router they control
-        vm.prank(rescueRouterOwner);
-        rescueRouter.transfer_vault_ownership(rescueRouterOwner);
+        vm.prank(routerOwner);
+        rescueRouter.transfer_vault_ownership(routerOwner);
         
         // Step 2: Once owner has direct control, they can transfer to any address
-        vm.prank(rescueRouterOwner);
-        vaultV1.transfer_owner(rescueRouterOwner); // Could be any trusted address
+        vm.prank(routerOwner);
+        vaultV1.transfer_owner(routerOwner); // Could be any trusted address
         
         // Key insight: As long as we control the router contracts, we can always recover vault ownership
-        assertEq(vaultV1.owner(), rescueRouterOwner, "Recovery successful");
+        assertEq(vaultV1.owner(), routerOwner, "Recovery successful");
     }
 }

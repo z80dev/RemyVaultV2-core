@@ -12,11 +12,13 @@ import {IERC721Enumerable} from "../src/interfaces/IERC721Enumerable.sol";
 import {IRemyVaultV1} from "../src/interfaces/IRemyVaultV1.sol";
 import {IMigrator} from "../src/interfaces/IMigrator.sol";
 import {IRescueRouter} from "../src/interfaces/IRescueRouter.sol";
+import {AddressBook, CoreAddresses} from "./helpers/AddressBook.sol";
 
-contract LaunchTest is BaseTest {
+contract LaunchTest is BaseTest, AddressBook {
 
-    IRescueRouter public constant rescueRouter = IRescueRouter(0x0fc6284bC4c2DAF3719fd64F3767f73B32edD79d);
-    address owner = 0x70f4b83795Af9236dA8211CDa3b031E503C00970;
+    CoreAddresses internal core;
+    IRescueRouter public rescueRouter;
+    address internal routerOwner;
     
     // Typed interfaces from rescue router
     IRemyVaultV1 public vaultV1;
@@ -38,8 +40,6 @@ contract LaunchTest is BaseTest {
     IMigrator public migrator;
 
     uint256[] public tokenIds;
-
-    string BASE_RPC = vm.envString("BASE_RPC_URL");
 
     function _ensureVaultOwnedByRescueRouter() internal {
         address currentOwner = vaultV1.owner();
@@ -86,7 +86,9 @@ contract LaunchTest is BaseTest {
     }
 
     function setUp() public {
-        vm.createSelectFork(BASE_RPC);
+        core = loadCoreAddresses();
+        rescueRouter = IRescueRouter(core.rescueRouter);
+        routerOwner = rescueRouter.owner();
 
         // Get interfaces from rescue router
         vaultV1 = IRemyVaultV1(rescueRouter.vault_address());
@@ -108,8 +110,7 @@ contract LaunchTest is BaseTest {
         IManagedToken(address(remyV2Token)).transfer_ownership(address(remyVaultV2));
         
         // Deploy RescueRouterV2
-        address rescueRouterOwner = rescueRouter.owner();
-        vm.prank(rescueRouterOwner);
+        vm.prank(routerOwner);
         rescueRouterV2 = IRescueRouter(deployCode("RescueRouterV2", abi.encode(address(rescueRouter))));
         
         // Deploy Migrator with RescueRouterV2 and NFT address
@@ -129,14 +130,14 @@ contract LaunchTest is BaseTest {
         
         // Exempt migrator from fees on v1 vault using the actual process
         // Step 1: Rescue router owner claims back ownership of the vault
-        vm.startPrank(rescueRouterOwner);
-        
+        vm.startPrank(routerOwner);
+
         // Transfer vault ownership from rescue router to the owner
-        rescueRouter.transfer_vault_ownership(rescueRouterOwner);
-        
+        rescueRouter.transfer_vault_ownership(routerOwner);
+
         // Verify ownership was transferred
         address currentVaultOwner = vaultV1.owner();
-        require(currentVaultOwner == rescueRouterOwner, "Vault ownership transfer failed");
+        require(currentVaultOwner == routerOwner, "Vault ownership transfer failed");
         
         // Step 2: Set fee exemption for migrator AND RescueRouterV2
         vaultV1.set_fee_exempt(address(migrator), true);
