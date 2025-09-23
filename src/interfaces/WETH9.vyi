@@ -1,0 +1,14 @@
+@external
+@payable
+def deposit():
+    ...
+
+@external
+@nonpayable
+def withdraw(amount: uint256):
+    ...
+
+@view
+@external
+def balanceOf(account: address) -> uint256:
+    ...

@@ -30,7 +30,11 @@ contract MockPoolManager {
         return 0;
     }
 
-    function swap(PoolKey memory, IPoolManager.SwapParams memory, bytes calldata) external pure returns (BalanceDelta) {
+    function swap(PoolKey memory, IPoolManager.SwapParams memory, bytes calldata)
+        external
+        pure
+        returns (BalanceDelta)
+    {
         return BalanceDelta.wrap(0);
     }
 

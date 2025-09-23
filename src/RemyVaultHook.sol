@@ -265,13 +265,10 @@ contract RemyVaultHook is BaseHook {
      * @return selector The function selector
      * @return deltaAdjustment Optional adjustment to the balance delta
      */
-    function _handleBuyNFT(
-        address buyer,
-        BalanceDelta delta,
-        uint256,
-        bool,
-        bytes calldata hookData
-    ) internal returns (bytes4 selector, int128 deltaAdjustment) {
+    function _handleBuyNFT(address buyer, BalanceDelta delta, uint256, bool, bytes calldata hookData)
+        internal
+        returns (bytes4 selector, int128 deltaAdjustment)
+    {
         // Calculate the amount of tokens we received (positive delta for the hook)
         int256 tokensReceived = _getTokensReceived(delta);
 
@@ -352,13 +349,10 @@ contract RemyVaultHook is BaseHook {
      * @return selector The function selector
      * @return deltaAdjustment Optional adjustment to the balance delta
      */
-    function _handleSellNFT(
-        address seller,
-        BalanceDelta delta,
-        uint256,
-        bool,
-        bytes calldata hookData
-    ) internal returns (bytes4 selector, int128 deltaAdjustment) {
+    function _handleSellNFT(address seller, BalanceDelta delta, uint256, bool, bytes calldata hookData)
+        internal
+        returns (bytes4 selector, int128 deltaAdjustment)
+    {
         // For selling NFT, we need to take the user's NFTs and deposit them to mint vault tokens
 
         // Decode the token IDs from hookData

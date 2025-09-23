@@ -89,7 +89,8 @@ contract InventoryMetavaultTest is Test {
 
         // Deploy mock contracts
         nft = IMockERC721(deployCode("src/mock/MockERC721.vy", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
-        vaultToken = IMockERC20(deployCode("src/mock/MockERC20.vy", abi.encode("REMY", "REMY", 18, "REMY Token", "1.0")));
+        vaultToken =
+            IMockERC20(deployCode("src/mock/MockERC20.vy", abi.encode("REMY", "REMY", 18, "REMY Token", "1.0")));
 
         // Deploy core vault
         coreVault = IRemyVault(deployCode("src/RemyVault.vy", abi.encode(address(vaultToken), address(nft))));
@@ -159,7 +160,6 @@ contract InventoryMetavaultTest is Test {
         assertEq(stakingVault.totalAssets(), 0);
     }
 
-
     /**
      * @dev Test depositing NFTs into the metavault
      */
@@ -183,7 +183,7 @@ contract InventoryMetavaultTest is Test {
         assertEq(metavault.get_available_inventory(), 1);
 
         // Verify Alice received shares from the deposit
-        assertEq(sharesMinted, UNIT);  // Should be 1000 REMY worth
+        assertEq(sharesMinted, UNIT); // Should be 1000 REMY worth
         assertEq(stakingVault.balanceOf(alice), UNIT);
 
         // Verify internal accounting is correct
@@ -282,11 +282,11 @@ contract InventoryMetavaultTest is Test {
         // Verify Alice's shares still have value (now backed by REMY tokens)
         // And that their value has increased due to the premium
         assertEq(stakingVault.balanceOf(alice), UNIT);
-        
+
         // The premium is now properly distributed to shareholders
         uint256 premium = UNIT * MARKUP_BPS / BPS_DENOMINATOR; // 100 REMY
         uint256 expectedAssetValue = UNIT + premium; // 1100 REMY
-        
+
         uint256 actualAssetValue = metavault.convertToAssets(UNIT);
         assertApproxEqAbs(actualAssetValue, expectedAssetValue, 1); // Allow small rounding error
     }
@@ -387,7 +387,7 @@ contract InventoryMetavaultTest is Test {
         // Get the current conversion rate after the purchase
         uint256 assetValue = metavault.convertToAssets(UNIT);
         console.log("Asset value for 1 UNIT of shares:", assetValue);
-        
+
         // After purchase:
         // 1. The NFT is gone, replaced by 1000 REMY in the metavault
         // 2. 100 REMY worth of premium has been converted to mvREMY and staked
@@ -399,29 +399,29 @@ contract InventoryMetavaultTest is Test {
         uint256 totalMvREMY = mvREMY.totalSupply();
         uint256 stakingVaultBalance = mvREMY.balanceOf(address(stakingVault));
         uint256 totalShares = stakingVault.totalSupply();
-        
+
         console.log("Total mvREMY supply:", totalMvREMY);
         console.log("StakingVault mvREMY balance:", stakingVaultBalance);
         console.log("Total stMV shares:", totalShares);
-        
+
         // Debug conversion rates
         uint256 directConversion = stakingVault.convertToAssets(UNIT);
         console.log("Direct StakingVault convertToAssets(UNIT):", directConversion);
-        
+
         // Verify total mvREMY supply increased by the premium amount
         assertEq(mvREMY.totalSupply(), initialTotalSupply + premium);
-        
+
         // We expect that StakingVault's mvREMY balance should match the total supply
         assertEq(stakingVaultBalance, totalMvREMY);
-        
+
         // Check asset value has increased due to the premium being staked
         uint256 expectedValue = UNIT * (10000 + MARKUP_BPS) / 10000; // 1100 REMY
         assertApproxEqAbs(assetValue, expectedValue, 10); // Allow rounding errors
-        
+
         // Converting in the other direction
         // 1100 REMY should convert to approximately 1000 shares
         uint256 sharesForPurchasePrice = metavault.convertToShares(purchasePrice);
-        
+
         // Expected conversion: 1100 REMY corresponds to approximately 1000 shares
         // after accounting for the premium added to the StakingVault
         uint256 expectedShares = UNIT;
@@ -452,90 +452,90 @@ contract InventoryMetavaultTest is Test {
         uint256 initialShareValue = metavault.convertToAssets(UNIT);
         console.log("Initial value of 1 UNIT of shares:", initialShareValue);
         assertEq(initialShareValue, UNIT);
-        
+
         // Bob buys NFT #1 (10% premium)
         uint256 purchasePrice = UNIT * (10000 + MARKUP_BPS) / 10000;
         vm.prank(address(coreVault));
         vaultToken.mint(bob, purchasePrice);
-        
+
         vm.startPrank(bob);
         vaultToken.approve(address(metavault), purchasePrice);
         metavault.purchase(toArray(1));
         vm.stopPrank();
-        
+
         // Check Alice's share value after first purchase
         uint256 valueAfterFirstPurchase = metavault.convertToAssets(UNIT);
         console.log("Share value after first purchase:", valueAfterFirstPurchase);
-        
+
         // Value should have increased by approximately 2% (100 REMY premium distributed across 5000 shares)
         // Expected: ~1020 REMY per 1000 shares
         uint256 expectedFirstIncrease = initialShareValue + (UNIT * MARKUP_BPS / BPS_DENOMINATOR / 5);
         assertApproxEqAbs(valueAfterFirstPurchase, expectedFirstIncrease, 10);
-        
+
         // Charlie buys NFT #2 (10% premium)
         vm.prank(address(coreVault));
         vaultToken.mint(charlie, purchasePrice);
-        
+
         vm.startPrank(charlie);
         vaultToken.approve(address(metavault), purchasePrice);
         metavault.purchase(toArray(2));
         vm.stopPrank();
-        
+
         // Check Alice's share value after second purchase
         uint256 valueAfterSecondPurchase = metavault.convertToAssets(UNIT);
         console.log("Share value after second purchase:", valueAfterSecondPurchase);
-        
+
         // Value should have increased again
         assertGt(valueAfterSecondPurchase, valueAfterFirstPurchase);
-        
+
         // Bob buys NFT #3 (10% premium)
         vm.prank(address(coreVault));
         vaultToken.mint(bob, purchasePrice);
-        
+
         vm.startPrank(bob);
         vaultToken.approve(address(metavault), purchasePrice);
         metavault.purchase(toArray(3));
         vm.stopPrank();
-        
+
         // Check Alice's share value after third purchase
         uint256 valueAfterThirdPurchase = metavault.convertToAssets(UNIT);
         console.log("Share value after third purchase:", valueAfterThirdPurchase);
-        
+
         // Value should have increased again
         assertGt(valueAfterThirdPurchase, valueAfterSecondPurchase);
-        
+
         // Calculate total yield (in percentage terms)
         uint256 totalYieldBips = (valueAfterThirdPurchase - UNIT) * BPS_DENOMINATOR / UNIT;
         console.log("Total yield in basis points:", totalYieldBips);
-        
-        // After 3 NFT purchases with 10% premium each, we should have accumulated approximately 
+
+        // After 3 NFT purchases with 10% premium each, we should have accumulated approximately
         // 300 REMY in premiums distributed across remaining 2000 UNIT of shares
         // Expected yield: ~15% (1500 basis points)
         assertGt(totalYieldBips, 0);
-        
-        // Instead of actual withdrawal, let's calculate how many shares would be needed 
+
+        // Instead of actual withdrawal, let's calculate how many shares would be needed
         // for a specific amount of assets
         uint256 assetAmount = 2 * UNIT; // 2000 REMY
         uint256 sharesNeeded = metavault.convertToShares(assetAmount);
         console.log("Shares needed for 2000 REMY after yield accumulation:", sharesNeeded);
-        
+
         // At the beginning, 2000 REMY would require 2000 shares (1:1)
         // After yield accumulation, we should need fewer shares
         uint256 originalSharesNeeded = 2 * UNIT;
         console.log("Original shares needed for 2000 REMY:", originalSharesNeeded);
-        
+
         // Verify fewer shares are now needed to represent the same asset value
         assertLt(sharesNeeded, originalSharesNeeded);
-        
+
         // Calculate the efficiency gain (how many fewer shares needed)
         uint256 efficiencyGainBips = (originalSharesNeeded - sharesNeeded) * BPS_DENOMINATOR / originalSharesNeeded;
         console.log("Efficiency gain in basis points:", efficiencyGainBips);
-        
+
         // This should approximately match our yield calculation
         // Allow for some rounding differences in calculations
         assertApproxEqAbs(efficiencyGainBips, totalYieldBips, 50);
     }
-    
+
     /**
      * @dev Test failure cases
      */
@@ -561,10 +561,10 @@ contract InventoryMetavaultTest is Test {
 
         // Test purchasing NFT not in inventory
         vm.prank(address(coreVault));
-        vaultToken.mint(bob, 10000 * 10**18);
+        vaultToken.mint(bob, 10000 * 10 ** 18);
 
         vm.startPrank(bob);
-        vaultToken.approve(address(metavault), 10000 * 10**18);
+        vaultToken.approve(address(metavault), 10000 * 10 ** 18);
 
         vm.expectRevert();
         metavault.purchase(toArray(999));
@@ -594,12 +594,7 @@ contract InventoryMetavaultTest is Test {
         return arr;
     }
 
-    function onERC721Received(
-        address,
-        address,
-        uint256,
-        bytes calldata
-    ) external pure returns (bytes4) {
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
         return 0x150b7a02;
     }
 }

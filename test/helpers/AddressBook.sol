@@ -26,6 +26,8 @@ struct CoreAddresses {
     address swapRouter;
     address nonfungiblePositionManager;
     address remyswapRouter;
+    address user;
+    address newRemy;
 }
 
 abstract contract AddressBook is Test {
@@ -50,5 +52,7 @@ abstract contract AddressBook is Test {
         addresses_.swapRouter = json.readAddress(".swap_router");
         addresses_.nonfungiblePositionManager = json.readAddress(".nonfungible_position_manager");
         addresses_.remyswapRouter = json.readAddress(".remyswap_router");
+        addresses_.user = json.readAddress(".user");
+        addresses_.newRemy = json.readAddress(".newremy");
     }
 }

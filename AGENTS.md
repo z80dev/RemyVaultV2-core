@@ -19,3 +19,6 @@ Commits should use short imperative subjects, matching the existing `Add …` an
 
 ## Security & Configuration Tips
 Verify `vyper --version` reports ≥0.4.3 before compiling. Update `foundry.toml` remappings when adding libraries so imports stay deterministic. Keep deployment secrets in environment variables, and never relax nonreentrant guards or ownership modifiers without documenting the mitigation in `scripts/Deploy*.sol`.
+
+## Agent Notes
+- Always run Vyper-related builds/tests via `uv run ...` so the correct compiler is used.

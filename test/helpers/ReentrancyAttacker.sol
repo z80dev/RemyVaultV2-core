@@ -153,11 +153,11 @@ contract ReentrancyAttacker {
     function attackWithdraw(uint256 _tokenId) external {
         tokenId = _tokenId;
         token.approve(address(vault), 1000 * 10 ** 18);
-        
+
         // Create token IDs array with a single token
         uint256[] memory tokenIds = new uint256[](1);
         tokenIds[0] = tokenId;
-        
+
         vault.withdraw(tokenIds, address(this));
     }
 

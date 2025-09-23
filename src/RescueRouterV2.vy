@@ -74,6 +74,7 @@ v3router_address: public(address)
 erc4626_address: public(address)
 erc721_address: public(address)
 erc20_address: public(address)
+fee_privileged: public(address)
 
 interface OldRouter:
     def vault_address() -> address: view
@@ -297,7 +298,10 @@ def quote_swap_in_tokens(tokenIds_in: DynArray[uint256, 100], tokenIds_out: DynA
     num_sold: uint256 = len(tokenIds_in) - num_swaps
     if num_bought > 0:
         mint_fee = staticcall vault.quote_mint_fee(msg.sender, num_bought)
-    total_tokens_required = staticcall vault.quote_redeem(len(tokenIds_out), True)
+    force_fee: bool = True
+    if msg.sender == self.fee_privileged:
+        force_fee = False
+    total_tokens_required = staticcall vault.quote_redeem(len(tokenIds_out), force_fee)
     total_tokens_minted: uint256 = staticcall vault.quote_mint(len(tokenIds_in), False)
     if mint_fee > 0:
         total_tokens_required += mint_fee
@@ -375,7 +379,10 @@ def swap(tokenIds_in: DynArray[uint256, 100], tokenIds_out: DynArray[uint256, 10
     if num_sold > 0:
         mint_fee = staticcall vault.quote_mint_fee(recipient, num_sold)
 
-    total_tokens_required: uint256 = staticcall vault.quote_redeem(len(tokenIds_out), True)
+    force_fee: bool = True
+    if msg.sender == self.fee_privileged:
+        force_fee = False
+    total_tokens_required: uint256 = staticcall vault.quote_redeem(len(tokenIds_out), force_fee)
     if mint_fee > 0:
         total_tokens_required += mint_fee
         log MintFeeCharged(swapper=msg.sender, recipient=recipient, fee=mint_fee)
@@ -400,7 +407,7 @@ def swap(tokenIds_in: DynArray[uint256, 100], tokenIds_out: DynArray[uint256, 10
             send(msg.sender, diff)
             log WethRefunded(swapper=msg.sender, proceeds=diff)
     extcall token.approve(self.vault_address, staticcall token.balanceOf(self))
-    amt_redeemed: uint256 = extcall vault.redeem_batch(tokenIds_out, recipient, True)
+    amt_redeemed: uint256 = extcall vault.redeem_batch(tokenIds_out, recipient, force_fee)
     amt_leftover: uint256 = 0
     if amt_minted > amt_redeemed:
         amt_leftover = amt_minted - amt_redeemed
@@ -462,6 +469,11 @@ def transfer_owner(new_owner: address):
 def transfer_vault_ownership(new_owner: address):
     assert msg.sender == self.owner
     extcall RemyVault(self.vault_address).transfer_owner(new_owner)
+
+@external
+def set_fee_privileged(privileged: address):
+    assert msg.sender == self.owner
+    self.fee_privileged = privileged
 
 @payable
 @external

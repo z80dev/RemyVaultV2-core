@@ -13,6 +13,11 @@ import {IERC721} from "../src/interfaces/IERC721.sol";
 import {IERC721Enumerable} from "../src/interfaces/IERC721Enumerable.sol";
 import {IManagedToken} from "../src/interfaces/IManagedToken.sol";
 
+interface IMigratorRouter {
+    function convert_v1_tokens_to_v2(uint256 tokenAmount, address recipient) external returns (uint256);
+    function transfer_vault_ownership(address newOwner) external;
+}
+
 contract RemyVaultMigrationTest is BaseTest, AddressBook {
     uint256 internal constant TOKENS_PER_NFT = 1000 * 1e18;
 
@@ -28,6 +33,7 @@ contract RemyVaultMigrationTest is BaseTest, AddressBook {
     IERC20 public remyV2Token;
     IRescueRouter public rescueRouterV2;
     IMigrator public migrator;
+    IMigratorRouter public migratorRouter;
 
     address internal routerOwner;
     uint256 internal firstVaultTokenId;
@@ -67,14 +73,17 @@ contract RemyVaultMigrationTest is BaseTest, AddressBook {
             )
         );
 
+        migratorRouter =
+            IMigratorRouter(deployCode("MigratorRouter", abi.encode(address(rescueRouter), address(remyVaultV2))));
+
         // Prefund migrator with one unit of v2 tokens for leftover handling
         vm.startPrank(address(remyVaultV2));
         IManagedToken(address(remyV2Token)).mint(address(migrator), TOKENS_PER_NFT);
         vm.stopPrank();
 
-        // Ensure router + migrator are fee exempt and that RescueRouterV2 owns the vault
-        vm.startPrank(routerOwner);
-        rescueRouter.transfer_vault_ownership(routerOwner);
+        // Ensure router + migrator are fee exempt and transfer vault control to RescueRouterV2
+        address legacyVaultOwner = vaultV1.owner();
+        vm.startPrank(legacyVaultOwner);
         vaultV1.set_fee_exempt(address(migrator), true);
         vaultV1.set_fee_exempt(address(rescueRouterV2), true);
         vaultV1.transfer_owner(address(rescueRouterV2));
@@ -109,5 +118,33 @@ contract RemyVaultMigrationTest is BaseTest, AddressBook {
         // Migrator invariant is preserved (prefunded amount never changes)
         (uint256 v1Balance, uint256 v2Balance) = migrator.get_token_balances();
         assertEq(v1Balance + v2Balance, TOKENS_PER_NFT, "migrator token totals should remain constant");
+    }
+
+    function testConvertLegacyTokensToV2ViaRouter() public {
+        address user = makeAddr("legacyConverter");
+
+        // Prepare V1 inventory and token allowance for the user
+        vm.startPrank(core.erc4626);
+        remyV1Token.transfer(user, TOKENS_PER_NFT);
+        vm.stopPrank();
+
+        uint256 convertId = enumerableNft.tokenOfOwnerByIndex(address(vaultV1), 0);
+
+        vm.prank(routerOwner);
+        rescueRouterV2.transfer_vault_ownership(address(migratorRouter));
+
+        vm.startPrank(user);
+        remyV1Token.approve(address(migratorRouter), TOKENS_PER_NFT);
+        uint256 remainder = migratorRouter.convert_v1_tokens_to_v2(TOKENS_PER_NFT, user);
+        assertEq(remainder, 0, "migration router should use full token amount");
+        vm.stopPrank();
+
+        assertEq(remyV1Token.balanceOf(user), 0, "V1 tokens should be burned during conversion");
+        assertEq(remyV2Token.balanceOf(user), TOKENS_PER_NFT, "User should receive V2 tokens 1:1");
+        assertEq(nft.ownerOf(convertId), address(remyVaultV2), "NFT should restake into V2 vault");
+        assertEq(remyV2Token.balanceOf(address(migratorRouter)), 0, "Router should not retain V2 tokens");
+
+        migratorRouter.transfer_vault_ownership(address(rescueRouterV2));
+        assertEq(vaultV1.owner(), address(rescueRouterV2), "Vault ownership should revert to RescueRouterV2");
     }
 }

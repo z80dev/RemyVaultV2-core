@@ -265,7 +265,7 @@ contract RemyVaultTest is Test {
         vm.prank(address(vault));
         nft.mint(address(this), 888);
         nft.approve(address(vault), 888);
-        
+
         uint256[] memory depositTokenIds = new uint256[](1);
         depositTokenIds[0] = 888;
         vault.deposit(depositTokenIds, address(this));
@@ -420,7 +420,7 @@ contract RemyVaultTest is Test {
 
         // approve and deposit the token
         nft.approve(address(vault), 1);
-        
+
         uint256[] memory tokenIds = new uint256[](1);
         tokenIds[0] = 1;
         vault.deposit(tokenIds, address(this));
@@ -568,7 +568,7 @@ contract RemyVaultTest is Test {
             vm.prank(address(vault));
             nft.mint(address(this), i);
             nft.approve(address(vault), i);
-            
+
             uint256[] memory tokenIds = new uint256[](1);
             tokenIds[0] = i;
             vault.deposit(tokenIds, address(this));
@@ -581,7 +581,7 @@ contract RemyVaultTest is Test {
         for (uint256 i = 0; i < 5; i++) {
             // Withdraw
             token.approve(address(vault), 1000 * 10 ** 18);
-            
+
             uint256[] memory tokenIds = new uint256[](1);
             tokenIds[0] = i;
             vault.withdraw(tokenIds, address(this));

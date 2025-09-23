@@ -1,10 +1,11 @@
 [profile.default]
-libs = ["node_modules", "lib", ".venv/lib/python3.12/site-packages"]
-skip = ["**/site-packages/snekmate/**"]
+libs = ["node_modules", "lib", ".venv/lib/python3.13/site-packages"]
+skip = ["**/site-packages/snekmate/**", "src/modules/**"]
 show_metrics = true
 via_ir = true
 optimizer = true
 optimizer_runs = 200
+vyper_version = "0.4.3"
 
 # Add remappings
 remappings = [
