@@ -10,6 +10,7 @@ interface IRescueRouter {
     function erc4626_address() external view returns (address);
     function erc721_address() external view returns (address);
     function erc20_address() external view returns (address);
+    function legacy_vault_addresses() external view returns (address, address);
 
     function stake_inventory(address recipient, uint256[] calldata token_ids) external;
     function unstake_inventory(address recipient, uint256[] calldata token_ids) external;

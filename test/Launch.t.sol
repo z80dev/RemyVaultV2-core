@@ -97,10 +97,10 @@ contract LaunchTest is BaseTest, AddressBook {
         // Get interfaces from rescue router
         vaultV1 = IRemyVaultV1(rescueRouter.vault_address());
         weth = IERC20(rescueRouter.weth());
-        router = rescueRouter.router_address();
         v3router = rescueRouter.v3router_address();
-        remyV1Token = IERC20(rescueRouter.erc20_address());
-        nft = IERC721(rescueRouter.erc721_address());
+        (address nftAddr, address remyV1TokenAddr) = rescueRouter.legacy_vault_addresses();
+        remyV1Token = IERC20(remyV1TokenAddr);
+        nft = IERC721(nftAddr);
         vaultContract = IERC4626(rescueRouter.erc4626_address());
 
         // Deploy RemyVaultV2

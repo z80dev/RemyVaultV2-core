@@ -44,8 +44,9 @@ contract RemyVaultMigrationTest is BaseTest, AddressBook {
 
         rescueRouter = IRescueRouter(core.rescueRouter);
         vaultV1 = IRemyVaultV1(rescueRouter.vault_address());
-        remyV1Token = IERC20(rescueRouter.erc20_address());
-        nft = IERC721(core.nft);
+        (address nftAddr, address remyV1TokenAddr) = rescueRouter.legacy_vault_addresses();
+        remyV1Token = IERC20(remyV1TokenAddr);
+        nft = IERC721(nftAddr);
         enumerableNft = IERC721Enumerable(core.nft);
 
         routerOwner = rescueRouter.owner();
