@@ -14,7 +14,7 @@ from interfaces import IManagedVaultToken
 
 erc20: public(IERC20)
 erc721: public(IERC721)
-UNIT: constant(uint256) = 1000 * 10 ** 18
+UNIT: constant(uint256) = 1 * 10 ** 18
 
 ################################################################################
 # EVENTS

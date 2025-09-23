@@ -23,7 +23,8 @@ interface IMigratorRouter {
 }
 
 contract MigratorRouterTest is Test {
-    uint256 internal constant UNIT = 1000 * 1e18;
+    uint256 internal constant UNIT_V1 = 1000 * 1e18;
+    uint256 internal constant UNIT_V2 = 1e18;
 
     IMigratorRouter internal router;
     MockERC20DN404 internal tokenV1;
@@ -96,7 +97,7 @@ contract MigratorRouterTest is Test {
         assertEq(remainder, 0, "conversion should have zero remainder");
 
         assertEq(tokenV1.balanceOf(USER_B), 0, "V1 tokens not burned");
-        assertEq(tokenV2.balanceOf(USER_B), required, "V2 tokens not delivered");
+        assertEq(tokenV2.balanceOf(USER_B), ids.length * UNIT_V2, "V2 tokens not delivered");
         assertEq(tokenV2.balanceOf(address(router)), routerV2Before, "router balance should be unchanged");
 
         for (uint256 i = 0; i < expected.length; i++) {
@@ -109,7 +110,7 @@ contract MigratorRouterTest is Test {
         _seedVaultV1(ids);
 
         uint256 quote = router.quote_convert_v1_tokens_to_v2(ids.length);
-        assertEq(quote, ids.length * UNIT, "quote should equal v1 redeem cost");
+        assertEq(quote, ids.length * UNIT_V1, "quote should equal v1 redeem cost");
     }
 
     function testConvertV1TokensToV2UsesRouterBuffer() public {
@@ -121,8 +122,9 @@ contract MigratorRouterTest is Test {
         vaultV2.setMintMultiplier(0.8e18);
 
         uint256 required = router.quote_convert_v1_tokens_to_v2(ids.length);
-        uint256 mintedFromDeposit = (ids.length * UNIT * 0.8e18) / 1e18;
-        uint256 bufferNeeded = required - mintedFromDeposit;
+        uint256 mintedFromDeposit = (ids.length * UNIT_V2 * 0.8e18) / 1e18;
+        uint256 expectedV2Out = ids.length * UNIT_V2;
+        uint256 bufferNeeded = expectedV2Out - mintedFromDeposit;
 
         // Prefund router with the buffer it should spend during conversion
         tokenV2.mint(address(router), bufferNeeded);
@@ -140,7 +142,7 @@ contract MigratorRouterTest is Test {
 
         uint256 routerV2After = tokenV2.balanceOf(address(router));
 
-        assertEq(tokenV2.balanceOf(USER_A), required, "user should receive full V2 amount");
+        assertEq(tokenV2.balanceOf(USER_A), expectedV2Out, "user should receive full V2 amount");
         assertEq(routerV2Before - routerV2After, bufferNeeded, "router should spend buffer");
 
         for (uint256 i = 0; i < expected.length; i++) {
@@ -166,7 +168,7 @@ contract MigratorRouterTest is Test {
 
         assertEq(remainder, extra, "remainder should equal unused tokens");
         assertEq(tokenV1.balanceOf(USER_A), extra, "user should retain leftover tokens");
-        assertEq(tokenV2.balanceOf(USER_A), required, "converted amount should pay out V2 tokens");
+        assertEq(tokenV2.balanceOf(USER_A), ids.length * UNIT_V2, "converted amount should pay out V2 tokens");
 
         for (uint256 i = 0; i < expected.length; i++) {
             assertEq(nft.ownerOf(expected[i]), address(vaultV2), "NFT not deposited into Vault V2");

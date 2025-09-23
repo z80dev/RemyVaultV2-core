@@ -39,7 +39,8 @@ nft: public(address)
 
 # Constants
 TOKEN_UNIT: constant(uint256) = 10**18
-TOKENS_PER_NFT: constant(uint256) = 1000 * TOKEN_UNIT
+LEGACY_TOKENS_PER_NFT: constant(uint256) = 1000 * TOKEN_UNIT
+NEW_TOKENS_PER_NFT: constant(uint256) = TOKEN_UNIT
 
 event Migrated:
     user: indexed(address)
@@ -111,10 +112,10 @@ def migrate():
     extcall self.remyv1.transferFrom(msg.sender, self, balance)
 
     # Calculate how many full NFTs can be redeemed
-    max_nfts: uint256 = balance // TOKENS_PER_NFT
+    max_nfts: uint256 = balance // LEGACY_TOKENS_PER_NFT
     
     # Calculate leftover tokens that don't make a full NFT
-    leftover_tokens: uint256 = balance % TOKENS_PER_NFT
+    leftover_tokens: uint256 = balance % LEGACY_TOKENS_PER_NFT
     
     remy_v2_received: uint256 = 0
 
@@ -136,7 +137,7 @@ def migrate():
             token_ids.append(token_id)
 
         # Calculate tokens needed for NFT redemption
-        tokens_for_nfts: uint256 = max_nfts * TOKENS_PER_NFT
+        tokens_for_nfts: uint256 = max_nfts * LEGACY_TOKENS_PER_NFT
         
         # Approve rescue router to use our REMY v1 tokens (only for NFT redemption)
         extcall self.remyv1.approve(self.rescue_router, tokens_for_nfts)
@@ -154,14 +155,16 @@ def migrate():
     
     # Handle leftover tokens by swapping them 1:1
     if leftover_tokens > 0:
-        # Transfer equivalent v2 tokens to the user
-        extcall self.remyv2.transfer(msg.sender, leftover_tokens)
-        remy_v2_received += leftover_tokens
+        # Convert leftover v1 tokens into v2 units based on the new ratio
+        v2_from_leftover: uint256 = leftover_tokens * NEW_TOKENS_PER_NFT // LEGACY_TOKENS_PER_NFT
+        extcall self.remyv2.transfer(msg.sender, v2_from_leftover)
+        remy_v2_received += v2_from_leftover
     
-    # Verify invariant: v1 + v2 balance should equal initial v2 balance (1000 tokens)
+    # Verify invariant: total v2 value held by migrator equals prefunded amount
     v1_balance: uint256 = staticcall self.remyv1.balanceOf(self)
     v2_balance: uint256 = staticcall self.remyv2.balanceOf(self)
-    assert v1_balance + v2_balance == TOKENS_PER_NFT, "Invalid token balance after migration"
+    migrated_value_v2_units: uint256 = v1_balance * NEW_TOKENS_PER_NFT // LEGACY_TOKENS_PER_NFT
+    assert migrated_value_v2_units + v2_balance == NEW_TOKENS_PER_NFT, "Invalid token balance after migration"
     
     # Log the successful migration
     log Migrated(

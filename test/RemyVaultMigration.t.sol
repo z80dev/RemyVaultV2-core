@@ -19,7 +19,8 @@ interface IMigratorRouter {
 }
 
 contract RemyVaultMigrationTest is BaseTest, AddressBook {
-    uint256 internal constant TOKENS_PER_NFT = 1000 * 1e18;
+    uint256 internal constant LEGACY_TOKENS_PER_NFT = 1000 * 1e18;
+    uint256 internal constant NEW_TOKENS_PER_NFT = 1e18;
 
     CoreAddresses internal core;
 
@@ -78,7 +79,7 @@ contract RemyVaultMigrationTest is BaseTest, AddressBook {
 
         // Prefund migrator with one unit of v2 tokens for leftover handling
         vm.startPrank(address(remyVaultV2));
-        IManagedToken(address(remyV2Token)).mint(address(migrator), TOKENS_PER_NFT);
+        IManagedToken(address(remyV2Token)).mint(address(migrator), NEW_TOKENS_PER_NFT);
         vm.stopPrank();
 
         // Ensure router + migrator are fee exempt and transfer vault control to RescueRouterV2
@@ -100,24 +101,24 @@ contract RemyVaultMigrationTest is BaseTest, AddressBook {
 
         // Pull legacy tokens directly from the ERC4626 vault inventory for testing
         vm.startPrank(core.erc4626);
-        remyV1Token.transfer(user, TOKENS_PER_NFT);
+        remyV1Token.transfer(user, LEGACY_TOKENS_PER_NFT);
         vm.stopPrank();
 
         vm.startPrank(user);
-        remyV1Token.approve(address(migrator), TOKENS_PER_NFT);
+        remyV1Token.approve(address(migrator), LEGACY_TOKENS_PER_NFT);
         migrator.migrate();
         vm.stopPrank();
 
         // User should have zero legacy tokens and newly minted v2 tokens 1:1
         assertEq(remyV1Token.balanceOf(user), 0, "v1 tokens should be burned");
-        assertEq(remyV2Token.balanceOf(user), TOKENS_PER_NFT, "v2 tokens should mint 1:1");
+        assertEq(remyV2Token.balanceOf(user), NEW_TOKENS_PER_NFT, "v2 tokens should mint 1:1");
 
         // The NFT redeemed from v1 vault should now live inside v2 vault
         assertEq(nft.ownerOf(firstVaultTokenId), address(remyVaultV2), "NFT should migrate to v2 vault");
 
         // Migrator invariant is preserved (prefunded amount never changes)
         (uint256 v1Balance, uint256 v2Balance) = migrator.get_token_balances();
-        assertEq(v1Balance + v2Balance, TOKENS_PER_NFT, "migrator token totals should remain constant");
+        assertEq(v1Balance + v2Balance, NEW_TOKENS_PER_NFT, "migrator token totals should remain constant");
     }
 
     function testConvertLegacyTokensToV2ViaRouter() public {
@@ -125,7 +126,7 @@ contract RemyVaultMigrationTest is BaseTest, AddressBook {
 
         // Prepare V1 inventory and token allowance for the user
         vm.startPrank(core.erc4626);
-        remyV1Token.transfer(user, TOKENS_PER_NFT);
+        remyV1Token.transfer(user, LEGACY_TOKENS_PER_NFT);
         vm.stopPrank();
 
         uint256 convertId = enumerableNft.tokenOfOwnerByIndex(address(vaultV1), 0);
@@ -134,13 +135,13 @@ contract RemyVaultMigrationTest is BaseTest, AddressBook {
         rescueRouterV2.transfer_vault_ownership(address(migratorRouter));
 
         vm.startPrank(user);
-        remyV1Token.approve(address(migratorRouter), TOKENS_PER_NFT);
-        uint256 remainder = migratorRouter.convert_v1_tokens_to_v2(TOKENS_PER_NFT, user);
+        remyV1Token.approve(address(migratorRouter), LEGACY_TOKENS_PER_NFT);
+        uint256 remainder = migratorRouter.convert_v1_tokens_to_v2(LEGACY_TOKENS_PER_NFT, user);
         assertEq(remainder, 0, "migration router should use full token amount");
         vm.stopPrank();
 
         assertEq(remyV1Token.balanceOf(user), 0, "V1 tokens should be burned during conversion");
-        assertEq(remyV2Token.balanceOf(user), TOKENS_PER_NFT, "User should receive V2 tokens 1:1");
+        assertEq(remyV2Token.balanceOf(user), NEW_TOKENS_PER_NFT, "User should receive V2 tokens 1:1");
         assertEq(nft.ownerOf(convertId), address(remyVaultV2), "NFT should restake into V2 vault");
         assertEq(remyV2Token.balanceOf(address(migratorRouter)), 0, "Router should not retain V2 tokens");
 

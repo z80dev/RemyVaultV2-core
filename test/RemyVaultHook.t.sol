@@ -77,7 +77,7 @@ contract RemyVaultHookTest is Test {
 
     // Test constants
     uint256 constant BUY_FEE = 250; // 2.5%
-    uint256 constant NFT_UNIT = 1000 * 10 ** 18; // Amount of tokens per NFT
+    uint256 constant NFT_UNIT = 1e18; // Amount of tokens per NFT in V2
 
     // Mock contracts
     MockPoolManager mockPoolManager;
@@ -335,7 +335,7 @@ contract RemyVaultHookTest is Test {
      */
     function testCollectTokens() public {
         // Mock token balance
-        uint256 balance = 1000;
+        uint256 balance = NFT_UNIT;
         vm.mockCall(
             mockVaultToken, abi.encodeWithSelector(IERC20Minimal.balanceOf.selector, address(hook)), abi.encode(balance)
         );
@@ -869,12 +869,12 @@ contract RemyVaultHookTest is Test {
         // Mock token transfer from user to hook
         vm.mockCall(
             mockVaultToken,
-            abi.encodeWithSelector(IERC20Minimal.transferFrom.selector, user, address(hook), 1000 * 10 ** 18),
+            abi.encodeWithSelector(IERC20Minimal.transferFrom.selector, user, address(hook), NFT_UNIT),
             abi.encode(true)
         );
 
         // No ETH fee should be charged (0 value)
-        hook.buyVaultTokens(1000 * 10 ** 18, new uint256[](0));
+        hook.buyVaultTokens(NFT_UNIT, new uint256[](0));
     }
 
     function testHookPermissions() public view {

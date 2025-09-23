@@ -249,19 +249,21 @@ def convert_v1_tokens_to_v2(legacy_token_amount: uint256, recipient: address) ->
     extcall self.erc20_v1.approve(vault_owner.vault.address, tokens_required)
     extcall vault_owner.vault.redeem_batch(tokenIds, self, False)
 
+    tokens_out_target: uint256 = staticcall self.vault_v2.quoteWithdraw(num_nfts)
     minted_v2: uint256 = extcall self.vault_v2.deposit(tokenIds, self)
 
     total_balance_v2: uint256 = staticcall self.erc20_v2.balanceOf(self)
-    extcall self.erc20_v2.transfer(recipient, tokens_required)
+    assert total_balance_v2 >= tokens_out_target, "insufficient V2 liquidity"
+    extcall self.erc20_v2.transfer(recipient, tokens_out_target)
 
     buffer_used: uint256 = 0
-    if minted_v2 < tokens_required:
-        buffer_used = tokens_required - minted_v2
+    if minted_v2 < tokens_out_target:
+        buffer_used = tokens_out_target - minted_v2
 
     log V1TokensConvertedToV2(
         swapper=msg.sender,
         tokens_in=tokens_required,
-        tokens_out=tokens_required,
+        tokens_out=tokens_out_target,
         minted=minted_v2,
         buffer_used=buffer_used
     )

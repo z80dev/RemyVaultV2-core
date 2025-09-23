@@ -15,6 +15,8 @@ import {IRescueRouter} from "../src/interfaces/IRescueRouter.sol";
 import {AddressBook, CoreAddresses} from "./helpers/AddressBook.sol";
 
 contract LaunchTest is BaseTest, AddressBook {
+    uint256 internal constant LEGACY_TOKENS_PER_NFT = 1000 * 1e18;
+    uint256 internal constant NEW_TOKENS_PER_NFT = 1e18;
     CoreAddresses internal core;
     IRescueRouter public rescueRouter;
     address internal routerOwner;
@@ -137,13 +139,13 @@ contract LaunchTest is BaseTest, AddressBook {
         // RemyVaultV2 owns the ManagedToken, so we impersonate it to add minting authority
         vm.startPrank(address(remyVaultV2));
 
-        // Now mint 1000 REMY v2 tokens to the migrator
-        IManagedToken(address(remyV2Token)).mint(address(migrator), 1000 * 10 ** 18);
+        // Now mint REMY v2 tokens to the migrator matching the new unit
+        IManagedToken(address(remyV2Token)).mint(address(migrator), NEW_TOKENS_PER_NFT);
         vm.stopPrank();
 
         // Verify the migrator has the tokens
         uint256 migratorV2Balance = remyV2Token.balanceOf(address(migrator));
-        require(migratorV2Balance == 1000 * 10 ** 18, "Migrator should have 1000 REMY v2 tokens");
+        require(migratorV2Balance == NEW_TOKENS_PER_NFT, "Migrator should have prefunded REMY v2 tokens");
 
         // Exempt migrator from fees on v1 vault using the actual process
         // Step 1: Rescue router owner claims back ownership of the vault
@@ -224,12 +226,14 @@ contract LaunchTest is BaseTest, AddressBook {
         (uint256 migratorV1Final, uint256 migratorV2Final) = migrator.get_token_balances();
 
         // Verify the invariant
-        assertEq(migratorV1Final + migratorV2Final, 1000 * 10 ** 18, "Migrator should maintain 1000 token invariant");
+        uint256 migratorValueInV2 = (migratorV1Final * NEW_TOKENS_PER_NFT) / LEGACY_TOKENS_PER_NFT + migratorV2Final;
+        assertEq(migratorValueInV2, NEW_TOKENS_PER_NFT, "Migrator should maintain 1 token invariant");
 
         // Assertions
         assertEq(finalRemyV1, 0, "User should have no REMY v1 left");
         assertGt(finalRemyV2, initialRemyV2, "User should have gained REMY v2");
-        assertEq(remyV1AfterUnstake, finalRemyV2, "User should have exact amount migrated");
+        uint256 expectedV2 = (remyV1AfterUnstake * NEW_TOKENS_PER_NFT) / LEGACY_TOKENS_PER_NFT;
+        assertEq(finalRemyV2, expectedV2, "User should have exact amount migrated");
     }
 
     function testVaultOwnershipRecoveryFromRescueRouter() public {
