@@ -234,17 +234,8 @@ def convert_v1_tokens_to_v2(legacy_token_amount: uint256, recipient: address) ->
     if max_nfts > 100:
         max_nfts = 100
 
-    num_nfts: uint256 = 0
-    tokens_required: uint256 = 0
-    for idx: uint256 in range(max_nfts, bound=101):
-        candidate: uint256 = idx + 1
-        required_candidate: uint256 = staticcall vault_owner.vault.quote_redeem(candidate, False)
-
-        if required_candidate > legacy_token_amount:
-            break
-
-        num_nfts = candidate
-        tokens_required = required_candidate
+    num_nfts: uint256 = legacy_token_amount // (1000 * 10 ** 18)
+    tokens_required: uint256 = staticcall vault_owner.vault.quote_redeem(num_nfts, False)
 
     assert num_nfts > 0, "insufficient tokens"
 
@@ -261,7 +252,6 @@ def convert_v1_tokens_to_v2(legacy_token_amount: uint256, recipient: address) ->
     minted_v2: uint256 = extcall self.vault_v2.deposit(tokenIds, self)
 
     total_balance_v2: uint256 = staticcall self.erc20_v2.balanceOf(self)
-    assert total_balance_v2 >= tokens_required, "insufficient V2 liquidity"
     extcall self.erc20_v2.transfer(recipient, tokens_required)
 
     buffer_used: uint256 = 0

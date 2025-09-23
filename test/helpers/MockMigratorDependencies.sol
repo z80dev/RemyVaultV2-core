@@ -216,7 +216,7 @@ contract MockERC721Simple {
 }
 
 contract MockVaultV1 is IERC721Receiver {
-    uint256 public constant UNIT = 1e18;
+    uint256 public constant UNIT = 1000 * 1e18;
 
     MockERC20DN404 public immutable token;
     MockERC721Simple public immutable nft;
@@ -318,7 +318,7 @@ contract MockVaultV1 is IERC721Receiver {
 }
 
 contract MockVaultV2 is IERC721Receiver {
-    uint256 public constant UNIT = 1e18;
+    uint256 public constant UNIT = 1000 * 1e18;
 
     MockERC20DN404 public immutable token;
     MockERC721Simple public immutable nft;

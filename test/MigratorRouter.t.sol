@@ -23,7 +23,7 @@ interface IMigratorRouter {
 }
 
 contract MigratorRouterTest is Test {
-    uint256 internal constant UNIT = 1e18;
+    uint256 internal constant UNIT = 1000 * 1e18;
 
     IMigratorRouter internal router;
     MockERC20DN404 internal tokenV1;
