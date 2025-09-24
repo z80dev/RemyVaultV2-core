@@ -19,8 +19,7 @@ contract DeployRemyVault is Script {
     address public constant NFT_COLLECTION = 0x0000000000000000000000000000000000000000; // Replace with actual NFT collection
     address public constant INITIAL_OWNER = 0x0000000000000000000000000000000000000000; // Replace with actual owner
 
-    // Contract addresses will be set during deployment
-    address public managedToken;
+    // Contract address will be set during deployment
     address public remyVault;
 
     function run() external {
@@ -38,49 +37,30 @@ contract DeployRemyVault is Script {
         
         vm.startBroadcast(deployerPrivateKey);
         
-        // 1. Deploy ManagedToken (REMY token)
-        managedToken = deployManagedToken("REMY Token", "REMY", deployer);
-        console.log("ManagedToken (REMY) deployed at:", managedToken);
-        
-        // 2. Deploy RemyVault
-        remyVault = deployRemyVault(NFT_COLLECTION, managedToken, INITIAL_OWNER);
+        // Deploy RemyVault (self-managing ERC20)
+        remyVault = deployRemyVault("REMY Token", "REMY", NFT_COLLECTION);
         console.log("RemyVault deployed at:", remyVault);
-        
-        // 3. Transfer ManagedToken management to RemyVault
-        transferManagedTokenManagement(managedToken, remyVault);
-        console.log("Management of REMY token transferred to RemyVault");
+
+        // Transfer ownership to the desired owner if necessary
+        if (INITIAL_OWNER != address(0)) {
+            transferVaultOwnership(remyVault, INITIAL_OWNER);
+            console.log("RemyVault ownership transferred to:", INITIAL_OWNER);
+        }
         
         vm.stopBroadcast();
         
         console.log("=== Deployment Summary ===");
-        console.log("ManagedToken (REMY):", managedToken);
         console.log("RemyVault:", remyVault);
         console.log("NFT Collection:", NFT_COLLECTION);
         console.log("Owner:", INITIAL_OWNER);
     }
     
-    function deployManagedToken(
+    function deployRemyVault(
         string memory name,
         string memory symbol,
-        address manager
+        address nftCollection
     ) internal returns (address) {
-        bytes memory constructorArgs = abi.encode(name, symbol, manager);
-        bytes memory initCode = abi.encodePacked(
-            vm.getCode("ManagedToken.vy"),
-            constructorArgs
-        );
-        
-        address deployed = ICreateX(CREATEX_FACTORY).deployCreate(initCode);
-        require(deployed != address(0), "Failed to deploy ManagedToken");
-        return deployed;
-    }
-    
-    function deployRemyVault(
-        address nftCollection,
-        address token,
-        address owner
-    ) internal returns (address) {
-        bytes memory constructorArgs = abi.encode(nftCollection, token, owner);
+        bytes memory constructorArgs = abi.encode(name, symbol, nftCollection);
         bytes memory initCode = abi.encodePacked(
             vm.getCode("RemyVault.vy"),
             constructorArgs
@@ -90,14 +70,9 @@ contract DeployRemyVault is Script {
         require(deployed != address(0), "Failed to deploy RemyVault");
         return deployed;
     }
-    
-    function transferManagedTokenManagement(
-        address token,
-        address newManager
-    ) internal {
-        (bool success, ) = token.call(
-            abi.encodeWithSignature("change_manager(address)", newManager)
-        );
-        require(success, "Failed to transfer management");
+
+    function transferVaultOwnership(address vault, address newOwner) internal {
+        (bool success, ) = vault.call(abi.encodeWithSignature("transfer_ownership(address)", newOwner));
+        require(success, "Failed to transfer vault ownership");
     }
 }

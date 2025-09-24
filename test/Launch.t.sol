@@ -7,7 +7,6 @@ import {IRemyVault} from "../src/interfaces/IRemyVault.sol";
 import {IERC20} from "../src/interfaces/IERC20.sol";
 import {IERC721} from "../src/interfaces/IERC721.sol";
 import {IERC4626} from "../src/interfaces/IERC4626.sol";
-import {IManagedToken} from "../src/interfaces/IManagedToken.sol";
 import {IERC721Enumerable} from "../src/interfaces/IERC721Enumerable.sol";
 import {IRemyVaultV1} from "../src/interfaces/IRemyVaultV1.sol";
 import {IMigrator} from "../src/interfaces/IMigrator.sol";
@@ -103,15 +102,11 @@ contract LaunchTest is BaseTest, AddressBook {
         nft = IERC721(nftAddr);
         vaultContract = IERC4626(rescueRouter.erc4626_address());
 
-        // Deploy RemyVaultV2
-        // Deploy the ManagedToken for RemyVaultV2
-        remyV2Token = IERC20(deployCode("ManagedToken", abi.encode("REMY", "REMY", address(this))));
+        // Deploy RemyVaultV2 using the existing NFT address from rescue router (vault mints its own ERC20)
+        remyVaultV2 = IRemyVault(deployCode("RemyVault", abi.encode("REMY", "REMY", address(nft))));
 
-        // Deploy RemyVaultV2 using the existing NFT address from rescue router
-        remyVaultV2 = IRemyVault(deployCode("RemyVault", abi.encode(address(remyV2Token), address(nft))));
-
-        // Transfer ownership of the token to RemyVaultV2
-        IManagedToken(address(remyV2Token)).transfer_ownership(address(remyVaultV2));
+        // Treat the vault itself as the ERC20 token
+        remyV2Token = IERC20(address(remyVaultV2));
 
         // Track live v2 token for reference
         liveRemyV2Token = IERC20(core.newRemy);
@@ -135,13 +130,8 @@ contract LaunchTest is BaseTest, AddressBook {
             )
         );
 
-        // Preload migrator with 1000 REMY v2 tokens for handling leftover swaps
-        // RemyVaultV2 owns the ManagedToken, so we impersonate it to add minting authority
-        vm.startPrank(address(remyVaultV2));
-
-        // Now mint REMY v2 tokens to the migrator matching the new unit
-        IManagedToken(address(remyV2Token)).mint(address(migrator), NEW_TOKENS_PER_NFT);
-        vm.stopPrank();
+        // Preload migrator with REMY v2 tokens for handling leftover swaps
+        remyVaultV2.mint(address(migrator), NEW_TOKENS_PER_NFT);
 
         // Verify the migrator has the tokens
         uint256 migratorV2Balance = remyV2Token.balanceOf(address(migrator));

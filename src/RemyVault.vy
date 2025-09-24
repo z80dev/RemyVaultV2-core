@@ -4,15 +4,23 @@
 # INTERFACE IMPORTS
 ################################################################################
 
-from ethereum.ercs import IERC20
 from ethereum.ercs import IERC721
-from interfaces import IManagedVaultToken
+
+################################################################################
+# MODULES
+################################################################################
+
+from snekmate.auth import ownable
+from snekmate.tokens import erc20 as token
+
+initializes: ownable
+initializes: token[ ownable := ownable ]
+exports: (token.__interface__,)
 
 ################################################################################
 # STATE VARIABLES
 ################################################################################
 
-erc20: public(IERC20)
 erc721: public(IERC721)
 UNIT: constant(uint256) = 1 * 10 ** 18
 
@@ -35,9 +43,19 @@ event Withdraw:
 ################################################################################
 
 @deploy
-def __init__(_token_address: address, erc721_address: address):
+def __init__(name_: String[25], symbol_: String[5], erc721_address: address):
+    ownable.__init__()
+    token.__init__(name_, symbol_, 18, name_, "1.0")
     self.erc721 = IERC721(erc721_address)
-    self.erc20 = IERC20(_token_address)
+
+################################################################################
+# TOKEN ADDRESS HELPER
+################################################################################
+
+@external
+@view
+def erc20() -> address:
+    return self
 
 ################################################################################
 # DEPOSIT FUNCTION
@@ -72,14 +90,14 @@ def withdraw(tokenIds: DynArray[uint256, 100], recipient: address = msg.sender) 
 
     # Calculate token amount
     total_amount: uint256 = UNIT * len(tokenIds)
-    
+
     # Burn tokens first
     self.burn_erc20(msg.sender, len(tokenIds))
-    
+
     # Then transfer the NFTs
     for tokenId: uint256 in tokenIds:
         extcall self.erc721.safeTransferFrom(self, recipient, tokenId)
-    
+
     log Withdraw(recipient=recipient, token_ids=tokenIds, erc20_amt=total_amount)
     return total_amount
 
@@ -90,14 +108,13 @@ def withdraw(tokenIds: DynArray[uint256, 100], recipient: address = msg.sender) 
 @internal
 def mint_erc20(recipient: address, num_tokens: uint256) -> uint256:
     erc20_amt: uint256 = num_tokens * UNIT
-    extcall IManagedVaultToken(self.erc20.address).mint(recipient, erc20_amt)
+    token._mint(recipient, erc20_amt)
     return erc20_amt
 
 @internal
 def burn_erc20(holder: address, num_tokens: uint256):
     erc20_amt: uint256 = num_tokens * UNIT
-    extcall self.erc20.transferFrom(holder, self, erc20_amt)
-    extcall IManagedVaultToken(self.erc20.address).burn(self, erc20_amt)
+    token._burn(holder, erc20_amt)
 
 ################################################################################
 # EXTERNAL QUOTE FUNCTIONS

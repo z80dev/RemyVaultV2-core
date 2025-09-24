@@ -11,7 +11,6 @@ import {IRemyVault} from "../src/interfaces/IRemyVault.sol";
 import {IERC20} from "../src/interfaces/IERC20.sol";
 import {IERC721} from "../src/interfaces/IERC721.sol";
 import {IERC721Enumerable} from "../src/interfaces/IERC721Enumerable.sol";
-import {IManagedToken} from "../src/interfaces/IManagedToken.sol";
 
 interface IMigratorRouter {
     function convert_v1_tokens_to_v2(uint256 tokenAmount, address recipient) external returns (uint256);
@@ -52,9 +51,8 @@ contract RemyVaultMigrationTest is BaseTest, AddressBook {
         routerOwner = rescueRouter.owner();
 
         // Deploy fresh V2 token + vault stack
-        remyV2Token = IERC20(deployCode("ManagedToken", abi.encode("REMY", "REMY", address(this))));
-        remyVaultV2 = IRemyVault(deployCode("RemyVault", abi.encode(address(remyV2Token), core.nft)));
-        IManagedToken(address(remyV2Token)).transfer_ownership(address(remyVaultV2));
+        remyVaultV2 = IRemyVault(deployCode("RemyVault", abi.encode("REMY", "REMY", core.nft)));
+        remyV2Token = IERC20(address(remyVaultV2));
 
         // Deploy RescueRouterV2 governed by the current router owner
         vm.prank(routerOwner);
@@ -79,9 +77,7 @@ contract RemyVaultMigrationTest is BaseTest, AddressBook {
             IMigratorRouter(deployCode("MigratorRouter", abi.encode(address(rescueRouter), address(remyVaultV2))));
 
         // Prefund migrator with one unit of v2 tokens for leftover handling
-        vm.startPrank(address(remyVaultV2));
-        IManagedToken(address(remyV2Token)).mint(address(migrator), NEW_TOKENS_PER_NFT);
-        vm.stopPrank();
+        remyVaultV2.mint(address(migrator), NEW_TOKENS_PER_NFT);
 
         // Ensure router + migrator are fee exempt and transfer vault control to RescueRouterV2
         address legacyVaultOwner = vaultV1.owner();

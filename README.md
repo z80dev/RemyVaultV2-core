@@ -202,7 +202,7 @@ This integration creates completely new NFT trading mechanisms not possible in t
 ## Smart Contract Documentation
 
 ### RemyVault.vy
-Minimal vault that mints 1000 REMY per deposited ERC-721 and burns on withdrawal. It keeps custody of the collection set in the constructor and interacts with an `IManagedVaultToken` for minting/burning. Non-reentrancy on `deposit`/`withdraw` and pure quoting helpers (`quoteDeposit`, `quoteWithdraw`) enforce the 1:1 backing invariant.
+Minimal vault that mints 1 REMY (1e18 units) per deposited ERC-721 and burns on withdrawal. It keeps custody of the collection set in the constructor while its embedded Snekmate ERC20 implementation handles minting/burning. Non-reentrancy on `deposit`/`withdraw` and pure quoting helpers (`quoteDeposit`, `quoteWithdraw`) enforce the 1:1 backing invariant.
 
 ### ManagedToken.vy
 Ownable ERC-20 built on Snekmate primitives that represents fractional vault value (e.g., mvREMY). Only the vault or metavault owner can call `mint`/`burn`, while standard ERC-20 functionality and ownership transfer utilities are inherited for downstream governance.

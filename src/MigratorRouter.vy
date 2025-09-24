@@ -59,7 +59,7 @@ def __init__(old_router: address, vault_v2: address):
     self.erc20_v1 = DN404(erc20_address)
 
     self.vault_v2 = RemyVaultV2.__interface__(vault_v2)
-    self.erc20_v2 = staticcall self.vault_v2.erc20()
+    self.erc20_v2 = ERC20(staticcall self.vault_v2.erc20())
 
     # approve vault for all erc721 transfers
     extcall self.erc721.setApprovalForAll(vault_owner.vault.address, True)

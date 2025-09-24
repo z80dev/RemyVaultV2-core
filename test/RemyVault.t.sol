@@ -3,38 +3,17 @@
 pragma solidity >=0.8.7 <0.9.0;
 
 import {Test} from "forge-std/Test.sol";
+import {IRemyVault} from "../src/interfaces/IRemyVault.sol";
+import {IERC721} from "../src/interfaces/IERC721.sol";
+import {IERC20} from "../src/interfaces/IERC20.sol";
+import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {ReentrancyAttacker} from "./helpers/ReentrancyAttacker.sol";
 
-/**
- * @title IERC721
- * @dev Interface for the mock ERC721 token used in tests
- */
-interface IERC721 {
+interface IMockERC721 is IERC721 {
     function mint(address to, uint256 tokenId) external;
     function burn(uint256 tokenId) external;
-    function ownerOf(uint256 tokenId) external view returns (address);
-    function balanceOf(address owner) external view returns (uint256);
-    function isApprovedForAll(address owner, address operator) external view returns (bool);
-    function safeTransferFrom(address from, address to, uint256 tokenId) external;
-    function transferFrom(address from, address to, uint256 tokenId) external;
-    function approve(address to, uint256 tokenId) external;
     function setApprovalForAll(address operator, bool approved) external;
     function getApproved(uint256 tokenId) external view returns (address);
-}
-
-/**
- * @title IERC20
- * @dev Interface for the mock ERC20 token used in tests
- */
-interface IERC20 {
-    function transfer(address to, uint256 value) external returns (bool);
-    function transferFrom(address from, address to, uint256 value) external returns (bool);
-    function balanceOf(address owner) external view returns (uint256);
-    function approve(address spender, uint256 value) external returns (bool);
-    function allowance(address owner, address spender) external view returns (uint256);
-    function totalSupply() external view returns (uint256);
-    function mint(address to, uint256 value) external;
-    function burn(uint256 amount) external;
 }
 
 /**
@@ -42,30 +21,6 @@ interface IERC20 {
  * @dev Interface for the ownable pattern implemented in mock contracts
  */
 interface Ownable {
-    function owner() external view returns (address);
-    function transfer_ownership(address newOwner) external;
-}
-
-/**
- * @title IVault
- * @dev Interface for the RemyVault contract being tested
- */
-interface IVault {
-    function deposit(uint256[] calldata tokenIds, address recipient) external returns (uint256);
-    function withdraw(uint256[] calldata tokenIds, address recipient) external returns (uint256);
-    function quoteDeposit(uint256 count) external pure returns (uint256);
-    function quoteWithdraw(uint256 count) external pure returns (uint256);
-    function erc20() external view returns (address);
-    function erc721() external view returns (address);
-}
-
-/**
- * @title IManagedToken
- * @dev Interface for the ManagedToken functions used by the vault
- */
-interface IManagedToken {
-    function mint(address to, uint256 value) external;
-    function burn(uint256 amount) external;
     function owner() external view returns (address);
     function transfer_ownership(address newOwner) external;
 }
@@ -84,13 +39,13 @@ interface IManagedToken {
 contract RemyVaultTest is Test {
     uint256 internal constant UNIT = 1e18;
     /// @notice Mock ERC721 token representing NFTs
-    IERC721 public nft;
+    IMockERC721 public nft;
 
     /// @notice Mock ERC20 token representing fungible tokens
     IERC20 public token;
 
-    /// @notice RemyVault contract instance being tested
-    IVault public vault;
+    /// @notice RemyVault contract instance being tested (also the ERC20 token)
+    IRemyVault public vault;
 
     /// @notice Test user address
     address public alice;
@@ -105,24 +60,23 @@ contract RemyVaultTest is Test {
      * @dev Setup function to deploy contracts and initialize test environment
      *
      * This function:
-     * 1. Deploys mock ERC721 and ERC20 contracts
-     * 2. Deploys the RemyVault contract with the token addresses
-     * 3. Transfers ownership of token contracts to the vault (for minting/burning)
+     * 1. Deploys the mock ERC721 contract
+     * 2. Deploys the RemyVault contract which mints/burns its own ERC20 supply
+     * 3. Transfers ownership of the NFT contract to the vault so it can mint/burn
      * 4. Creates test user addresses and the reentrancy attack contract
      * 5. Configures Foundry's invariant testing properties
      */
     function setUp() public {
         // Deploy mock contracts
-        nft = IERC721(deployCode("MockERC721", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
+        nft = IMockERC721(deployCode("MockERC721", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
 
-        // Deploy the ManagedToken (our implementation) instead of MockERC20
-        token = IERC20(deployCode("ManagedToken", abi.encode("MOCK", "MOCK", address(this))));
+        // Deploy the vault (which manages its own ERC20 supply)
+        vault = IRemyVault(deployCode("RemyVault", abi.encode("MOCK", "MOCK", address(nft))));
 
-        // Deploy vault and configure ownership
-        vault = IVault(deployCode("RemyVault", abi.encode(address(token), address(nft))));
+        // Treat the vault itself as the ERC20 token
+        token = IERC20(address(vault));
 
-        // Transfer ownership of tokens to vault
-        IManagedToken(address(token)).transfer_ownership(address(vault));
+        // Transfer ownership of the mock NFT to the vault so it can mint/burn
         Ownable(address(nft)).transfer_ownership(address(vault));
 
         // Create test addresses
@@ -134,6 +88,23 @@ contract RemyVaultTest is Test {
 
         // Configure invariant test properties
         excludeSender(address(vault));
+
+        bytes4[] memory selectors = new bytes4[](2);
+        selectors[0] = IRemyVault.deposit.selector;
+        selectors[1] = IRemyVault.withdraw.selector;
+        targetSelector(StdInvariant.FuzzSelector({addr: address(vault), selectors: selectors}));
+    }
+
+    function testManualTransferWithApproval() public {
+        vm.prank(address(vault));
+        nft.mint(address(this), 2);
+
+        nft.approve(address(vault), 2);
+
+        vm.prank(address(vault));
+        nft.transferFrom(address(this), address(vault), 2);
+
+        assertEq(nft.ownerOf(2), address(vault));
     }
 
     function testSetup() public view {
@@ -149,6 +120,9 @@ contract RemyVaultTest is Test {
 
         // approve the vault to transfer the token
         nft.approve(address(vault), 1);
+
+        // sanity check approval recorded
+        assertEq(nft.getApproved(1), address(vault));
 
         // create array with single tokenId
         uint256[] memory tokenIds = new uint256[](1);
@@ -208,7 +182,7 @@ contract RemyVaultTest is Test {
         // deposit the token
         vault.deposit(tokenIds, address(this));
 
-        // approve the vault to move out erc20 tokens
+        // legacy approve retained for parity with original vault (not required in ERC20 version)
         token.approve(address(vault), UNIT);
 
         // withdraw the token
@@ -314,7 +288,7 @@ contract RemyVaultTest is Test {
         // deposit the tokens
         vault.deposit(tokenIds, address(this));
 
-        // approve the vault to move out erc20 tokens
+        // legacy approve retained for parity with original vault (not required in ERC20 version)
         token.approve(address(vault), n * UNIT);
 
         // withdraw the tokens
@@ -383,7 +357,7 @@ contract RemyVaultTest is Test {
         // deposit the token
         vault.deposit(tokenIds, address(this));
 
-        // approve the vault to move out erc20 tokens
+        // legacy approve retained for parity with original vault (not required in ERC20 version)
         token.approve(address(vault), UNIT);
 
         // withdraw the token but send it to alice
@@ -426,10 +400,12 @@ contract RemyVaultTest is Test {
         tokenIds[0] = 1;
         vault.deposit(tokenIds, address(this));
 
-        // do NOT approve the vault to transfer the tokens back
-        // try withdraw - should fail
-        vm.expectRevert();
+        // do NOT approve the vault to transfer the tokens back (not required in the ERC20 version)
         vault.withdraw(tokenIds, address(this));
+
+        // verify withdrawal succeeded without prior approval
+        assertEq(nft.ownerOf(1), address(this));
+        assertEq(token.balanceOf(address(this)), 0);
     }
 
     // Attempt to withdraw token not owned by vault
@@ -625,12 +601,12 @@ contract RemyVaultTest is Test {
         // Try to directly mint tokens
         vm.prank(alice);
         vm.expectRevert();
-        IManagedToken(address(token)).mint(alice, UNIT);
+        vault.mint(alice, UNIT);
 
         // Try to directly burn tokens
         vm.prank(alice);
         vm.expectRevert();
-        IManagedToken(address(token)).burn(UNIT);
+        vault.burn(UNIT);
     }
 
     /**
