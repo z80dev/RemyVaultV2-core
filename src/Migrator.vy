@@ -40,7 +40,7 @@ nft: public(address)
 # Constants
 TOKEN_UNIT: constant(uint256) = 10**18
 LEGACY_TOKENS_PER_NFT: constant(uint256) = 1000 * TOKEN_UNIT
-NEW_TOKENS_PER_NFT: constant(uint256) = 1000 * TOKEN_UNIT
+NEW_TOKENS_PER_NFT: constant(uint256) = TOKEN_UNIT
 
 event Migrated:
     user: indexed(address)

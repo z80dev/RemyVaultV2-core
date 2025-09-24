@@ -17,7 +17,7 @@ from interfaces import IManagedVaultToken as IManagedToken
 # CONSTANTS
 ################################################################################
 
-NFT_UNIT_VALUE: constant(uint256) = 1000 * 10**18  # Base value of 1 NFT (1000 $REMY)
+NFT_UNIT_VALUE: constant(uint256) = 1 * 10**18  # Base value of 1 NFT (1 $REMY)
 MARKUP_BPS: public(constant(uint256)) = 1000  # 10% markup (100 $REMY premium)
 BPS_DENOMINATOR: constant(uint256) = 10000  # Denominator for basis points
 
@@ -436,4 +436,3 @@ def _remove_from_inventory(token_id: uint256):
             self.inventory.pop()
             self.is_in_inventory[token_id] = False
             break
-
