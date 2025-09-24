@@ -22,7 +22,7 @@ exports: (token.__interface__,)
 ################################################################################
 
 erc721: public(IERC721)
-UNIT: constant(uint256) = 1 * 10 ** 18
+UNIT: public(constant(uint256)) = 1 * 10 ** 18
 
 ################################################################################
 # EVENTS
@@ -71,7 +71,8 @@ def deposit(tokenIds: DynArray[uint256, 100], recipient: address = msg.sender) -
     assert len(tokenIds) > 0, "Must deposit at least one token"
     for tokenId: uint256 in tokenIds:
         extcall self.erc721.transferFrom(msg.sender, self, tokenId)
-    mint_amount: uint256 = self.mint_erc20(recipient, len(tokenIds))
+    mint_amount: uint256 = UNIT * len(tokenIds)
+    token._mint(recipient, mint_amount)
     log Deposit(recipient=recipient, token_ids=tokenIds, erc20_amt=mint_amount)
     return mint_amount
 
@@ -92,7 +93,7 @@ def withdraw(tokenIds: DynArray[uint256, 100], recipient: address = msg.sender) 
     total_amount: uint256 = UNIT * len(tokenIds)
 
     # Burn tokens first
-    self.burn_erc20(msg.sender, len(tokenIds))
+    token._burn(msg.sender, total_amount)
 
     # Then transfer the NFTs
     for tokenId: uint256 in tokenIds:
@@ -110,11 +111,6 @@ def mint_erc20(recipient: address, num_tokens: uint256) -> uint256:
     erc20_amt: uint256 = num_tokens * UNIT
     token._mint(recipient, erc20_amt)
     return erc20_amt
-
-@internal
-def burn_erc20(holder: address, num_tokens: uint256):
-    erc20_amt: uint256 = num_tokens * UNIT
-    token._burn(holder, erc20_amt)
 
 ################################################################################
 # EXTERNAL QUOTE FUNCTIONS

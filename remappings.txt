@@ -1,1 +1,2 @@
 @uniswap/v4-periphery/=lib/v4-periphery/
+solady/=lib/solady/src/

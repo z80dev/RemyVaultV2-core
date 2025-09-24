@@ -10,6 +10,8 @@ dependencies = [
     "ape-hardhat>=0.8.5",
     "ape-vyper>=0.8.8",
     "eth-ape>=0.8.24",
+    "python-dotenv>=1.0.1",
     "snekmate>=0.1.1",
+    "titanoboa>=0.2.7",
     "vyper>=0.4.3",
 ]

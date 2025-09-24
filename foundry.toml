@@ -10,6 +10,7 @@ vyper_version = "0.4.3"
 # Add remappings
 remappings = [
     "solmate/=lib/solmate/src/",
+    "solady/=lib/solady/src/",
     "@uniswap/v4-core/=lib/v4-periphery/lib/v4-core/",
     "@uniswap/v4-periphery/=lib/v4-periphery/"
 ]
