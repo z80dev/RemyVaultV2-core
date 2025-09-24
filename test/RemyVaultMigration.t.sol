@@ -11,6 +11,7 @@ import {IRemyVault} from "../src/interfaces/IRemyVault.sol";
 import {IERC20} from "../src/interfaces/IERC20.sol";
 import {IERC721} from "../src/interfaces/IERC721.sol";
 import {IERC721Enumerable} from "../src/interfaces/IERC721Enumerable.sol";
+import {RemyVaultSol} from "../src/RemyVaultSol.sol";
 
 interface IMigratorRouter {
     function convert_v1_tokens_to_v2(uint256 tokenAmount, address recipient) external returns (uint256);
@@ -19,7 +20,7 @@ interface IMigratorRouter {
 
 contract RemyVaultMigrationTest is BaseTest, AddressBook {
     uint256 internal constant LEGACY_TOKENS_PER_NFT = 1000 * 1e18;
-    uint256 internal constant NEW_TOKENS_PER_NFT = 1e18;
+    uint256 internal newTokensPerNFT;
 
     CoreAddresses internal core;
 
@@ -51,7 +52,8 @@ contract RemyVaultMigrationTest is BaseTest, AddressBook {
         routerOwner = rescueRouter.owner();
 
         // Deploy fresh V2 token + vault stack
-        remyVaultV2 = IRemyVault(deployCode("RemyVault", abi.encode("REMY", "REMY", core.nft)));
+        remyVaultV2 = IRemyVault(address(new RemyVaultSol("REMY", "REMY", core.nft)));
+        newTokensPerNFT = remyVaultV2.quoteDeposit(1);
         remyV2Token = IERC20(address(remyVaultV2));
 
         // Deploy RescueRouterV2 governed by the current router owner
@@ -77,7 +79,7 @@ contract RemyVaultMigrationTest is BaseTest, AddressBook {
             IMigratorRouter(deployCode("MigratorRouter", abi.encode(address(rescueRouter), address(remyVaultV2))));
 
         // Prefund migrator with one unit of v2 tokens for leftover handling
-        remyVaultV2.mint(address(migrator), NEW_TOKENS_PER_NFT);
+        deal(address(remyVaultV2), address(migrator), newTokensPerNFT, true);
 
         // Ensure router + migrator are fee exempt and transfer vault control to RescueRouterV2
         address legacyVaultOwner = vaultV1.owner();
@@ -108,14 +110,14 @@ contract RemyVaultMigrationTest is BaseTest, AddressBook {
 
         // User should have zero legacy tokens and newly minted v2 tokens 1:1
         assertEq(remyV1Token.balanceOf(user), 0, "v1 tokens should be burned");
-        assertEq(remyV2Token.balanceOf(user), NEW_TOKENS_PER_NFT, "v2 tokens should mint 1:1");
+        assertEq(remyV2Token.balanceOf(user), newTokensPerNFT, "v2 tokens should mint 1:1");
 
         // The NFT redeemed from v1 vault should now live inside v2 vault
         assertEq(nft.ownerOf(firstVaultTokenId), address(remyVaultV2), "NFT should migrate to v2 vault");
 
         // Migrator invariant is preserved (prefunded amount never changes)
         (uint256 v1Balance, uint256 v2Balance) = migrator.get_token_balances();
-        assertEq(v1Balance + v2Balance, NEW_TOKENS_PER_NFT, "migrator token totals should remain constant");
+        assertEq(v1Balance + v2Balance, newTokensPerNFT, "migrator token totals should remain constant");
     }
 
     function testConvertLegacyTokensToV2ViaRouter() public {
@@ -138,7 +140,7 @@ contract RemyVaultMigrationTest is BaseTest, AddressBook {
         vm.stopPrank();
 
         assertEq(remyV1Token.balanceOf(user), 0, "V1 tokens should be burned during conversion");
-        assertEq(remyV2Token.balanceOf(user), NEW_TOKENS_PER_NFT, "User should receive V2 tokens 1:1");
+        assertEq(remyV2Token.balanceOf(user), newTokensPerNFT, "User should receive V2 tokens 1:1");
         assertEq(nft.ownerOf(convertId), address(remyVaultV2), "NFT should restake into V2 vault");
         assertEq(remyV2Token.balanceOf(address(migratorRouter)), 0, "Router should not retain V2 tokens");
 

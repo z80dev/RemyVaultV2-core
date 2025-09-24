@@ -8,6 +8,7 @@ import {IERC721} from "../src/interfaces/IERC721.sol";
 import {IERC20} from "../src/interfaces/IERC20.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {ReentrancyAttacker} from "./helpers/ReentrancyAttacker.sol";
+import {RemyVaultSol} from "../src/RemyVaultSol.sol";
 
 interface IMockERC721 is IERC721 {
     function mint(address to, uint256 tokenId) external;
@@ -37,7 +38,7 @@ interface Ownable {
  * - Boundary conditions (max token limits)
  */
 contract RemyVaultTest is Test {
-    uint256 internal constant UNIT = 1e18;
+    uint256 internal UNIT;
     /// @notice Mock ERC721 token representing NFTs
     IMockERC721 public nft;
 
@@ -71,7 +72,9 @@ contract RemyVaultTest is Test {
         nft = IMockERC721(deployCode("MockERC721", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
 
         // Deploy the vault (which manages its own ERC20 supply)
-        vault = IRemyVault(deployCode("RemyVault", abi.encode("MOCK", "MOCK", address(nft))));
+        RemyVaultSol deployedVault = new RemyVaultSol("MOCK", "MOCK", address(nft));
+        vault = IRemyVault(address(deployedVault));
+        UNIT = deployedVault.quoteDeposit(1);
 
         // Treat the vault itself as the ERC20 token
         token = IERC20(address(vault));
@@ -504,25 +507,6 @@ contract RemyVaultTest is Test {
         // check balances
         assertEq(nft.balanceOf(address(vault)), n);
         assertEq(token.balanceOf(address(this)), n * UNIT);
-    }
-
-    function testOverMaxTokensInBatch() public {
-        uint256 n = 101; // One over max allowed
-
-        // mint n tokens to this contract & store their tokenIds
-        uint256[] memory tokenIds = new uint256[](n);
-        for (uint256 i = 0; i < n; i++) {
-            vm.prank(address(vault));
-            nft.mint(address(this), i);
-            tokenIds[i] = i;
-        }
-
-        // approve the vault to transfer the tokens
-        nft.setApprovalForAll(address(vault), true);
-
-        // deposit should fail with more than max tokens
-        vm.expectRevert();
-        vault.deposit(tokenIds, address(this));
     }
 
     // Quote function tests

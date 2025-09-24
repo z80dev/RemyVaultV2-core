@@ -7,6 +7,7 @@ import "src/interfaces/IRemyVault.sol";
 import "src/interfaces/IERC20.sol";
 import "src/interfaces/IERC4626.sol";
 import {ReentrancyAttacker} from "./helpers/ReentrancyAttacker.sol";
+import {RemyVaultSol} from "src/RemyVaultSol.sol";
 
 // Additional ERC20 functions for our mock tokens
 interface IManagedToken is IERC20 {
@@ -63,7 +64,7 @@ contract InventoryMetavaultTest is Test {
     address public owner;
 
     // Unit value constant from the Remy protocol
-    uint256 constant UNIT = 1000 * 10 ** 18;
+    uint256 internal UNIT;
 
     // Purchase markup in the metavault (10%)
     uint256 constant MARKUP_BPS = 1000;
@@ -83,12 +84,11 @@ contract InventoryMetavaultTest is Test {
         nft = IMockERC721(deployCode("src/mock/MockERC721.vy", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
 
         // Deploy core vault (ERC20 + NFT manager)
-        coreVault = IRemyVault(deployCode("src/RemyVault.vy", abi.encode("REMY", "REMY", address(nft))));
-
+        coreVault = IRemyVault(address(new RemyVaultSol("REMY", "REMY", address(nft))));
+        UNIT = coreVault.quoteDeposit(1);
         // Transfer ownership of the NFT collection to the vault
         vm.prank(owner);
         Ownable(address(nft)).transfer_ownership(address(coreVault));
-
 
         // Deploy mvREMY token (managed token)
         mvREMY = IManagedToken(deployCode("src/ManagedToken.vy", abi.encode("Managed Vault REMY", "mvRMY", owner)));
@@ -251,8 +251,7 @@ contract InventoryMetavaultTest is Test {
 
         // Bob gets REMY tokens and purchases the NFT
         uint256 purchasePrice = UNIT * (10000 + MARKUP_BPS) / 10000; // 1100 REMY
-        vm.prank(address(this));
-        coreVault.mint(bob, purchasePrice);
+        _fundRemy(bob, purchasePrice);
 
         vm.startPrank(bob);
         coreVault.approve(address(metavault), purchasePrice);
@@ -303,8 +302,7 @@ contract InventoryMetavaultTest is Test {
         uint256[] memory purchaseIds = toArray2(1, 2);
         uint256 purchasePrice = 2 * UNIT * (10000 + MARKUP_BPS) / 10000; // 2200 REMY
 
-        vm.prank(address(this));
-        coreVault.mint(bob, purchasePrice);
+        _fundRemy(bob, purchasePrice);
 
         vm.startPrank(bob);
         coreVault.approve(address(metavault), purchasePrice);
@@ -364,8 +362,7 @@ contract InventoryMetavaultTest is Test {
         // Add premium (through purchase)
         uint256 purchasePrice = UNIT * (10000 + MARKUP_BPS) / 10000; // 1100 REMY
         uint256 premium = UNIT * MARKUP_BPS / BPS_DENOMINATOR; // 100 REMY
-        vm.prank(address(this));
-        coreVault.mint(bob, purchasePrice);
+        _fundRemy(bob, purchasePrice);
 
         vm.startPrank(bob);
         coreVault.approve(address(metavault), purchasePrice);
@@ -443,8 +440,7 @@ contract InventoryMetavaultTest is Test {
 
         // Bob buys NFT #1 (10% premium)
         uint256 purchasePrice = UNIT * (10000 + MARKUP_BPS) / 10000;
-        vm.prank(address(this));
-        coreVault.mint(bob, purchasePrice);
+        _fundRemy(bob, purchasePrice);
 
         vm.startPrank(bob);
         coreVault.approve(address(metavault), purchasePrice);
@@ -461,8 +457,7 @@ contract InventoryMetavaultTest is Test {
         assertApproxEqAbs(valueAfterFirstPurchase, expectedFirstIncrease, 10);
 
         // Charlie buys NFT #2 (10% premium)
-        vm.prank(address(this));
-        coreVault.mint(charlie, purchasePrice);
+        _fundRemy(charlie, purchasePrice);
 
         vm.startPrank(charlie);
         coreVault.approve(address(metavault), purchasePrice);
@@ -477,8 +472,7 @@ contract InventoryMetavaultTest is Test {
         assertGt(valueAfterSecondPurchase, valueAfterFirstPurchase);
 
         // Bob buys NFT #3 (10% premium)
-        vm.prank(address(this));
-        coreVault.mint(bob, purchasePrice);
+        _fundRemy(bob, purchasePrice);
 
         vm.startPrank(bob);
         coreVault.approve(address(metavault), purchasePrice);
@@ -548,11 +542,10 @@ contract InventoryMetavaultTest is Test {
         vm.stopPrank();
 
         // Test purchasing NFT not in inventory
-        vm.prank(address(this));
-        coreVault.mint(bob, 10000 * 10 ** 18);
+        _fundRemy(bob, 10000 * UNIT);
 
         vm.startPrank(bob);
-        coreVault.approve(address(metavault), 10000 * 10 ** 18);
+        coreVault.approve(address(metavault), 10000 * UNIT);
 
         vm.expectRevert();
         metavault.purchase(toArray(999));
@@ -565,6 +558,10 @@ contract InventoryMetavaultTest is Test {
         vm.expectRevert();
         metavault.redeem(aliceShares + 1, alice);
         vm.stopPrank();
+    }
+
+    function _fundRemy(address user, uint256 amount) internal {
+        deal(address(coreVault), user, amount, true);
     }
 
     // Helper function to convert a single uint256 to an array

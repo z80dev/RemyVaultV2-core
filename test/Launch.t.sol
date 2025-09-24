@@ -12,10 +12,11 @@ import {IRemyVaultV1} from "../src/interfaces/IRemyVaultV1.sol";
 import {IMigrator} from "../src/interfaces/IMigrator.sol";
 import {IRescueRouter} from "../src/interfaces/IRescueRouter.sol";
 import {AddressBook, CoreAddresses} from "./helpers/AddressBook.sol";
+import {RemyVaultSol} from "../src/RemyVaultSol.sol";
 
 contract LaunchTest is BaseTest, AddressBook {
     uint256 internal constant LEGACY_TOKENS_PER_NFT = 1000 * 1e18;
-    uint256 internal constant NEW_TOKENS_PER_NFT = 1e18;
+    uint256 internal newTokensPerNFT;
     CoreAddresses internal core;
     IRescueRouter public rescueRouter;
     address internal routerOwner;
@@ -103,7 +104,8 @@ contract LaunchTest is BaseTest, AddressBook {
         vaultContract = IERC4626(rescueRouter.erc4626_address());
 
         // Deploy RemyVaultV2 using the existing NFT address from rescue router (vault mints its own ERC20)
-        remyVaultV2 = IRemyVault(deployCode("RemyVault", abi.encode("REMY", "REMY", address(nft))));
+        remyVaultV2 = IRemyVault(address(new RemyVaultSol("REMY", "REMY", address(nft))));
+        newTokensPerNFT = remyVaultV2.quoteDeposit(1);
 
         // Treat the vault itself as the ERC20 token
         remyV2Token = IERC20(address(remyVaultV2));
@@ -131,11 +133,11 @@ contract LaunchTest is BaseTest, AddressBook {
         );
 
         // Preload migrator with REMY v2 tokens for handling leftover swaps
-        remyVaultV2.mint(address(migrator), NEW_TOKENS_PER_NFT);
+        deal(address(remyVaultV2), address(migrator), newTokensPerNFT, true);
 
         // Verify the migrator has the tokens
         uint256 migratorV2Balance = remyV2Token.balanceOf(address(migrator));
-        require(migratorV2Balance == NEW_TOKENS_PER_NFT, "Migrator should have prefunded REMY v2 tokens");
+        require(migratorV2Balance == newTokensPerNFT, "Migrator should have prefunded REMY v2 tokens");
 
         // Exempt migrator from fees on v1 vault using the actual process
         // Step 1: Rescue router owner claims back ownership of the vault
@@ -216,13 +218,13 @@ contract LaunchTest is BaseTest, AddressBook {
         (uint256 migratorV1Final, uint256 migratorV2Final) = migrator.get_token_balances();
 
         // Verify the invariant
-        uint256 migratorValueInV2 = (migratorV1Final * NEW_TOKENS_PER_NFT) / LEGACY_TOKENS_PER_NFT + migratorV2Final;
-        assertEq(migratorValueInV2, NEW_TOKENS_PER_NFT, "Migrator should maintain 1 token invariant");
+        uint256 migratorValueInV2 = (migratorV1Final * newTokensPerNFT) / LEGACY_TOKENS_PER_NFT + migratorV2Final;
+        assertEq(migratorValueInV2, newTokensPerNFT, "Migrator should maintain 1 token invariant");
 
         // Assertions
         assertEq(finalRemyV1, 0, "User should have no REMY v1 left");
         assertGt(finalRemyV2, initialRemyV2, "User should have gained REMY v2");
-        uint256 expectedV2 = (remyV1AfterUnstake * NEW_TOKENS_PER_NFT) / LEGACY_TOKENS_PER_NFT;
+        uint256 expectedV2 = (remyV1AfterUnstake * newTokensPerNFT) / LEGACY_TOKENS_PER_NFT;
         assertEq(finalRemyV2, expectedV2, "User should have exact amount migrated");
     }
 

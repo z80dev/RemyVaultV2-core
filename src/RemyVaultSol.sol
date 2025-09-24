@@ -6,7 +6,7 @@ import {IERC721} from "./interfaces/IERC721.sol";
 
 contract RemyVaultSol is ERC20 {
     /// @notice Number of ERC20 tokens minted per deposited NFT.
-    uint256 public constant UNIT = 1e18;
+    uint256 public constant UNIT = 1000 * 1e18;
 
     /// @dev Cached keccak256 hash of the token name for permit domain separation.
     bytes32 private immutable _nameHash;
