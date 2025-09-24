@@ -103,16 +103,6 @@ def withdraw(tokenIds: DynArray[uint256, 100], recipient: address = msg.sender) 
     return total_amount
 
 ################################################################################
-# INTERNAL BURN/MINT HELPERS
-################################################################################
-
-@internal
-def mint_erc20(recipient: address, num_tokens: uint256) -> uint256:
-    erc20_amt: uint256 = num_tokens * UNIT
-    token._mint(recipient, erc20_amt)
-    return erc20_amt
-
-################################################################################
 # EXTERNAL QUOTE FUNCTIONS
 ################################################################################
 
