@@ -3,8 +3,9 @@ pragma solidity ^0.8.20;
 
 import {ERC20} from "solady/tokens/ERC20.sol";
 import {IERC721} from "./interfaces/IERC721.sol";
+import {IERCXX} from "./interfaces/IERCXX.sol";
 
-contract RemyVaultSol is ERC20 {
+contract RemyVaultSol is ERC20, IERCXX {
     /// @notice Number of ERC20 tokens minted per deposited NFT.
     uint256 public constant UNIT = 1e18;
 
@@ -20,12 +21,6 @@ contract RemyVaultSol is ERC20 {
     /// @dev ERC20 metadata storage compatible with Solady's ERC20 base.
     string private _name;
     string private _symbol;
-
-    /// @notice Emitted when NFTs are deposited into the vault.
-    event Deposit(address indexed recipient, uint256[] tokenIds, uint256 erc20Amt);
-
-    /// @notice Emitted when NFTs are withdrawn from the vault.
-    event Withdraw(address indexed recipient, uint256[] tokenIds, uint256 erc20Amt);
 
     constructor(string memory name_, string memory symbol_, address erc721_) {
         _name = name_;
@@ -46,11 +41,11 @@ contract RemyVaultSol is ERC20 {
         return _symbol;
     }
 
-    function erc20() external view returns (address) {
+    function erc20() public view override returns (address) {
         return address(this);
     }
 
-    function erc721() public view returns (address) {
+    function erc721() public view override returns (address) {
         return address(_erc721);
     }
 
@@ -58,15 +53,19 @@ contract RemyVaultSol is ERC20 {
     // ERC721 Accounting Helpers
     // -------------------------------------------------------------------------
 
-    function quoteDeposit(uint256 count) external pure returns (uint256) {
+    function quoteDeposit(uint256 count) external pure override returns (uint256) {
         return UNIT * count;
     }
 
-    function quoteWithdraw(uint256 count) external pure returns (uint256) {
+    function quoteWithdraw(uint256 count) external pure override returns (uint256) {
         return UNIT * count;
     }
 
-    function deposit(uint256[] calldata tokenIds, address recipient) external returns (uint256 mintedAmount) {
+    function deposit(uint256[] calldata tokenIds, address recipient)
+        external
+        override
+        returns (uint256 mintedAmount)
+    {
         uint256 tokenCount = tokenIds.length;
         require(tokenCount != 0, "Must deposit at least one token");
 
@@ -88,7 +87,11 @@ contract RemyVaultSol is ERC20 {
         emit Deposit(receiver, tokenIds, mintedAmount);
     }
 
-    function withdraw(uint256[] calldata tokenIds, address recipient) external returns (uint256 burnedAmount) {
+    function withdraw(uint256[] calldata tokenIds, address recipient)
+        external
+        override
+        returns (uint256 burnedAmount)
+    {
         uint256 tokenCount = tokenIds.length;
         require(tokenCount != 0, "Must withdraw at least one token");
 
