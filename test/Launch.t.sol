@@ -16,7 +16,7 @@ import {RemyVaultSol} from "../src/RemyVaultSol.sol";
 
 contract LaunchTest is BaseTest, AddressBook {
     uint256 internal constant LEGACY_TOKENS_PER_NFT = 1000 * 1e18;
-    uint256 internal newTokensPerNFT;
+    uint256 internal newTokensPerNft;
     CoreAddresses internal core;
     IRescueRouter public rescueRouter;
     address internal routerOwner;
@@ -43,6 +43,12 @@ contract LaunchTest is BaseTest, AddressBook {
 
     uint256[] public tokenIds;
     address public liveV2Holder;
+
+    struct MigrationSnapshot {
+        uint256 initialShares;
+        uint256 initialRemyV1;
+        uint256 initialRemyV2;
+    }
 
     function _ensureVaultOwnedByRescueRouter() internal {
         address currentOwner = vaultV1.owner();
@@ -88,13 +94,22 @@ contract LaunchTest is BaseTest, AddressBook {
         assertEq(vaultV1.owner(), address(rescueRouterV2), "Failed to route ownership to RescueRouterV2");
     }
 
-    function setUp() public {
+    function setUp() public override {
+        super.setUp();
+        _cacheCoreAddresses();
+        _deployRemyVaultV2();
+        _deployRoutingContracts();
+        _prefundMigrator();
+        _configureLegacyVault();
+        _prepareTokenIds();
+    }
+
+    function _cacheCoreAddresses() internal {
         core = loadCoreAddresses();
         rescueRouter = IRescueRouter(core.rescueRouter);
         routerOwner = rescueRouter.owner();
         liveV2Holder = core.user;
 
-        // Get interfaces from rescue router
         vaultV1 = IRemyVaultV1(rescueRouter.vault_address());
         weth = IERC20(rescueRouter.weth());
         v3router = rescueRouter.v3router_address();
@@ -102,22 +117,19 @@ contract LaunchTest is BaseTest, AddressBook {
         remyV1Token = IERC20(remyV1TokenAddr);
         nft = IERC721(nftAddr);
         vaultContract = IERC4626(rescueRouter.erc4626_address());
+    }
 
-        // Deploy RemyVaultV2 using the existing NFT address from rescue router (vault mints its own ERC20)
+    function _deployRemyVaultV2() internal {
         remyVaultV2 = IRemyVault(address(new RemyVaultSol("REMY", "REMY", address(nft))));
-        newTokensPerNFT = remyVaultV2.quoteDeposit(1);
-
-        // Treat the vault itself as the ERC20 token
+        newTokensPerNft = remyVaultV2.quoteDeposit(1);
         remyV2Token = IERC20(address(remyVaultV2));
-
-        // Track live v2 token for reference
         liveRemyV2Token = IERC20(core.newRemy);
+    }
 
-        // Deploy RescueRouterV2
+    function _deployRoutingContracts() internal {
         vm.prank(routerOwner);
         rescueRouterV2 = IRescueRouter(deployCode("RescueRouterV2", abi.encode(address(rescueRouter))));
 
-        // Deploy Migrator with RescueRouterV2 and NFT address
         migrator = IMigrator(
             deployCode(
                 "Migrator",
@@ -131,38 +143,31 @@ contract LaunchTest is BaseTest, AddressBook {
                 )
             )
         );
+    }
 
-        // Preload migrator with REMY v2 tokens for handling leftover swaps
-        deal(address(remyVaultV2), address(migrator), newTokensPerNFT, true);
-
-        // Verify the migrator has the tokens
+    function _prefundMigrator() internal {
+        deal(address(remyVaultV2), address(migrator), newTokensPerNft, true);
         uint256 migratorV2Balance = remyV2Token.balanceOf(address(migrator));
-        require(migratorV2Balance == newTokensPerNFT, "Migrator should have prefunded REMY v2 tokens");
+        require(migratorV2Balance == newTokensPerNft, "Migrator should have prefunded REMY v2 tokens");
+    }
 
-        // Exempt migrator from fees on v1 vault using the actual process
-        // Step 1: Rescue router owner claims back ownership of the vault
+    function _configureLegacyVault() internal {
         vm.startPrank(routerOwner);
-
-        // Transfer vault ownership from rescue router to the owner
         rescueRouter.transfer_vault_ownership(routerOwner);
 
-        // Verify ownership was transferred
         address currentVaultOwner = vaultV1.owner();
         require(currentVaultOwner == routerOwner, "Vault ownership transfer failed");
 
-        // Step 2: Set fee exemption for migrator AND RescueRouterV2
         vaultV1.set_fee_exempt(address(migrator), true);
         vaultV1.set_fee_exempt(address(rescueRouterV2), true);
-
-        // Step 3: Transfer vault ownership to RescueRouterV2 (instead of back to rescue router)
         vaultV1.transfer_owner(address(rescueRouterV2));
-
         vm.stopPrank();
 
-        // Verify ownership is with RescueRouterV2
         address finalVaultOwner = vaultV1.owner();
         require(finalVaultOwner == address(rescueRouterV2), "Vault ownership not transferred to RescueRouterV2");
+    }
 
+    function _prepareTokenIds() internal {
         tokenIds = new uint256[](2);
         tokenIds[0] = 581;
         tokenIds[1] = 564;
@@ -173,20 +178,29 @@ contract LaunchTest is BaseTest, AddressBook {
 
         // Get the actual NFT owner who has staked tokens
         address nftOwner = nft.ownerOf(tokenIds[0]);
+        MigrationSnapshot memory snapshot = _snapshotBalances(nftOwner);
+        uint256 remyV1AfterUnstake = _unstakeToRemyV1(nftOwner, snapshot);
+        _migrateTokensToV2(nftOwner, remyV1AfterUnstake);
+        _assertPostMigration(nftOwner, remyV1AfterUnstake, snapshot);
+    }
 
-        // Record initial balances
-        uint256 initialShares = vaultContract.balanceOf(nftOwner);
-        uint256 initialRemyV1 = remyV1Token.balanceOf(nftOwner);
-        uint256 initialRemyV2 = remyV2Token.balanceOf(nftOwner);
+    function _snapshotBalances(address nftOwner) internal view returns (MigrationSnapshot memory snapshot) {
+        snapshot.initialShares = vaultContract.balanceOf(nftOwner);
+        snapshot.initialRemyV1 = remyV1Token.balanceOf(nftOwner);
+        snapshot.initialRemyV2 = remyV2Token.balanceOf(nftOwner);
+    }
 
-        // Step 1: Unstake from ERC4626 to get REMY v1 tokens
+    function _unstakeToRemyV1(address nftOwner, MigrationSnapshot memory snapshot)
+        internal
+        returns (uint256 remyV1AfterUnstake)
+    {
         vm.startPrank(nftOwner);
 
-        uint256 assetsToReceive = vaultContract.convertToAssets(initialShares);
-        uint256 remyV1Received = vaultContract.redeem(initialShares, nftOwner, nftOwner);
+        uint256 assetsToReceive = vaultContract.convertToAssets(snapshot.initialShares);
+        uint256 remyV1Received = vaultContract.redeem(snapshot.initialShares, nftOwner, nftOwner);
         assertEq(assetsToReceive, remyV1Received, "Assets received should match expected");
 
-        uint256 remyV1AfterUnstake = remyV1Token.balanceOf(nftOwner);
+        remyV1AfterUnstake = remyV1Token.balanceOf(nftOwner);
         bool mintedFallback = remyV1Received == 0 && remyV1AfterUnstake == 0;
         if (mintedFallback) {
             uint256 fallbackAmount = vaultV1.quote_redeem(1, false);
@@ -197,34 +211,37 @@ contract LaunchTest is BaseTest, AddressBook {
             remyV1AfterUnstake = remyV1Token.balanceOf(nftOwner);
         } else {
             assertEq(
-                remyV1AfterUnstake, initialRemyV1 + remyV1Received, "REMY v1 balance should increase by assets received"
+                remyV1AfterUnstake,
+                snapshot.initialRemyV1 + remyV1Received,
+                "REMY v1 balance should increase by assets received"
             );
         }
 
-        // Step 2: Approve migrator to spend REMY v1
-        remyV1Token.approve(address(migrator), remyV1AfterUnstake);
-
-        // Step 3: Call migrate
-        // Call migrate directly - will revert if it fails
-        migrator.migrate();
-
         vm.stopPrank();
+    }
 
-        // Step 4: Check final balances
+    function _migrateTokensToV2(address nftOwner, uint256 remyV1AfterUnstake) internal {
+        vm.startPrank(nftOwner);
+        remyV1Token.approve(address(migrator), remyV1AfterUnstake);
+        migrator.migrate();
+        vm.stopPrank();
+    }
+
+    function _assertPostMigration(
+        address nftOwner,
+        uint256 remyV1AfterUnstake,
+        MigrationSnapshot memory snapshot
+    ) internal view {
         uint256 finalRemyV1 = remyV1Token.balanceOf(nftOwner);
         uint256 finalRemyV2 = remyV2Token.balanceOf(nftOwner);
 
-        // Check migrator's final token balances
         (uint256 migratorV1Final, uint256 migratorV2Final) = migrator.get_token_balances();
+        uint256 migratorValueInV2 = (migratorV1Final * newTokensPerNft) / LEGACY_TOKENS_PER_NFT + migratorV2Final;
+        assertEq(migratorValueInV2, newTokensPerNft, "Migrator should maintain 1 token invariant");
 
-        // Verify the invariant
-        uint256 migratorValueInV2 = (migratorV1Final * newTokensPerNFT) / LEGACY_TOKENS_PER_NFT + migratorV2Final;
-        assertEq(migratorValueInV2, newTokensPerNFT, "Migrator should maintain 1 token invariant");
-
-        // Assertions
         assertEq(finalRemyV1, 0, "User should have no REMY v1 left");
-        assertGt(finalRemyV2, initialRemyV2, "User should have gained REMY v2");
-        uint256 expectedV2 = (remyV1AfterUnstake * newTokensPerNFT) / LEGACY_TOKENS_PER_NFT;
+        assertGt(finalRemyV2, snapshot.initialRemyV2, "User should have gained REMY v2");
+        uint256 expectedV2 = (remyV1AfterUnstake * newTokensPerNft) / LEGACY_TOKENS_PER_NFT;
         assertEq(finalRemyV2, expectedV2, "User should have exact amount migrated");
     }
 

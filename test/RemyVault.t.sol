@@ -573,12 +573,12 @@ contract RemyVaultTest is Test {
             halfTokenIds[i] = i;
         }
 
-        token.approve(address(vault), (n / 2) * UNIT);
+        token.approve(address(vault), (n * UNIT) / 2);
         vault.withdraw(halfTokenIds, address(this));
 
         // Verify state: should have half NFTs and half tokens remaining
         assertEq(nft.balanceOf(address(vault)), n / 2);
-        assertEq(token.balanceOf(address(this)), (n / 2) * UNIT);
+        assertEq(token.balanceOf(address(this)), (n * UNIT) / 2);
     }
 
     function testNonManagerCannotMintBurn() public {
@@ -605,13 +605,13 @@ contract RemyVaultTest is Test {
      */
     function invariant_tokenSupply() public view {
         // Calculate the actual NFT balance of the vault
-        uint256 vaultNFTBalance = nft.balanceOf(address(vault));
+        uint256 vaultNftBalance = nft.balanceOf(address(vault));
 
         // Get the current total supply of the ERC20 token
         uint256 totalSupply = token.totalSupply();
 
         // Calculate what the ERC20 supply should be based on the NFT count
-        uint256 expectedSupply = vault.quoteDeposit(vaultNFTBalance);
+        uint256 expectedSupply = vault.quoteDeposit(vaultNftBalance);
 
         // Verify the invariant holds
         assertEq(totalSupply, expectedSupply, "Invariant broken: token supply != NFT balance * UNIT");

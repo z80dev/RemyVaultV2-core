@@ -18,7 +18,8 @@ contract VaultOwnershipTest is BaseTest, AddressBook {
     // RescueRouterV2 deployment
     IRescueRouter public rescueRouterV2;
 
-    function setUp() public {
+    function setUp() public override {
+        super.setUp();
         core = loadCoreAddresses();
 
         rescueRouter = IRescueRouter(core.rescueRouter);
@@ -32,7 +33,7 @@ contract VaultOwnershipTest is BaseTest, AddressBook {
         rescueRouterV2 = IRescueRouter(deployCode("RescueRouterV2", abi.encode(address(rescueRouter))));
     }
 
-    function testInitialVaultOwnership() public {
+    function testInitialVaultOwnership() public view {
         // Verify rescue router owns the vault initially
         assertEq(vaultV1.owner(), address(rescueRouter), "RescueRouter should own vault initially");
     }

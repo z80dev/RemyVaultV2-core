@@ -10,13 +10,13 @@ contract RemyVaultSol is ERC20, IERCXX {
     uint256 public constant UNIT = 1e18;
 
     /// @dev Cached keccak256 hash of the token name for permit domain separation.
-    bytes32 private immutable _nameHash;
+    bytes32 private immutable NAME_HASH;
 
     /// @dev EIP-712 version hash, matching the Vyper implementation's "1.0" domain.
     bytes32 private constant VERSION_HASH = keccak256("1.0");
 
     /// @notice The ERC721 collection held by the vault (unused until deposit logic is ported).
-    IERC721 private immutable _erc721;
+    IERC721 private immutable ERC721_TOKEN;
 
     /// @dev ERC20 metadata storage compatible with Solady's ERC20 base.
     string private _name;
@@ -25,8 +25,8 @@ contract RemyVaultSol is ERC20, IERCXX {
     constructor(string memory name_, string memory symbol_, address erc721_) {
         _name = name_;
         _symbol = symbol_;
-        _nameHash = keccak256(bytes(name_));
-        _erc721 = IERC721(erc721_);
+        NAME_HASH = keccak256(bytes(name_));
+        ERC721_TOKEN = IERC721(erc721_);
     }
 
     // -------------------------------------------------------------------------
@@ -46,7 +46,7 @@ contract RemyVaultSol is ERC20, IERCXX {
     }
 
     function erc721() public view override returns (address) {
-        return address(_erc721);
+        return address(ERC721_TOKEN);
     }
 
     // -------------------------------------------------------------------------
@@ -70,12 +70,12 @@ contract RemyVaultSol is ERC20, IERCXX {
         require(tokenCount != 0, "Must deposit at least one token");
 
         address receiver = recipient == address(0) ? msg.sender : recipient;
-        IERC721 nft = _erc721;
+        IERC721 nft = ERC721_TOKEN;
         address sender = msg.sender;
         address vault = address(this);
 
         for (uint256 i = 0; i < tokenCount;) {
-            nft.transferFrom(sender, vault, tokenIds[i]);
+            nft.safeTransferFrom(sender, vault, tokenIds[i]);
             unchecked {
                 ++i;
             }
@@ -100,7 +100,7 @@ contract RemyVaultSol is ERC20, IERCXX {
 
         _burn(msg.sender, burnedAmount);
 
-        IERC721 nft = _erc721;
+        IERC721 nft = ERC721_TOKEN;
         for (uint256 i = 0; i < tokenCount;) {
             nft.safeTransferFrom(address(this), receiver, tokenIds[i]);
             unchecked {
@@ -116,10 +116,14 @@ contract RemyVaultSol is ERC20, IERCXX {
     // -------------------------------------------------------------------------
 
     function _constantNameHash() internal view override returns (bytes32) {
-        return _nameHash;
+        return NAME_HASH;
     }
 
     function _versionHash() internal pure override returns (bytes32) {
         return VERSION_HASH;
+    }
+
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC721Received.selector;
     }
 }
