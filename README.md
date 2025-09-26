@@ -1,174 +1,77 @@
 # RemyVault: NFT Fractionalization Protocol
 
-RemyVault is a minimalist, gas-efficient NFT fractionalization protocol written in Vyper 0.4.3. The core vault enables users to deposit ERC-721 NFTs and receive fungible ERC-20 tokens representing fractional ownership of those NFTs.
+RemyVault is a minimalist, gas-efficient NFT fractionalization protocol. The current core vault lives in Solidity (`RemyVaultSol`) and lets users deposit ERC-721 NFTs to mint fungible ERC-20 tokens that track vault ownership.
 
 ## Overview
 
-RemyVault is designed as a modular, extensible system for NFT financialization. It consists of two main layers:
+The system focuses on two production components:
 
-1. **Core Vault (RemyVault)**: The base layer handling NFT fractionalization
-2. **Metavaults**: Specialized vaults built on top that implement specific strategies
+1. **Core Vault (`RemyVaultSol`)** – handles the NFT ↔ ERC20 mint/burn cycle
+2. **Derivative & Liquidity Tooling** – `DerivativeFactory`, `RemyVaultNFT`, and the Uniswap V4 hook wire the vault into on-chain markets
 
-This separation of concerns allows the core fractionalization mechanism to remain simple and secure, while enabling complex functionality to be built on top.
+The separation keeps the fractionalization layer small while still enabling new collections and liquidity strategies to launch through the derivative factory.
 
 ## Key Advantages
 
 ### For NFT Holders
-- **Instant Liquidity**: Convert illiquid NFTs into tradable tokens
-- **Yield Generation**: Earn premiums from NFT sales in InventoryMetavault
-- **Partial Exposure**: Maintain exposure to NFT collections without 100% allocation
+- **Instant Liquidity**: Convert illiquid NFTs into fungible REMY tokens
+- **Partial Exposure**: Stay long NFTs without committing an entire token
 
 ### For Traders
-- **Reduced Barriers**: Trade fractional NFT positions with smaller capital requirements
-- **Enhanced Liquidity**: Access deeper liquidity for popular NFT collections
-- **Arbitrage Opportunities**: Exploit price differences between whole NFTs and fractions
+- **Deeper Markets**: Trade fractional exposure instead of whole tokens
+- **Arbitrage Windows**: Balance price between the vault token and on-chain pools
 
 ### For Protocols
-- **Composable Building Block**: Integrate fractionalized NFTs into existing DeFi products
-- **New Market Mechanics**: Enable new types of NFT-related financial instruments
-- **Standardized Value Units**: Use REMY tokens as consistent units of account
+- **Composable Primitive**: Integrate REMY as a staked or collateral asset
+- **Deterministic Supply**: The vault always mints 1e18 REMY per NFT and burns on redemption
 
 ## Core Vault
 
-RemyVault Core implements a simple mechanism for NFT fractionalization:
+`RemyVaultSol` implements the ground-level fractionalization mechanics:
 
 ### Purpose
-The core vault (RemyVault.vy) serves one fundamental purpose: converting NFTs into fungible ERC20 tokens at a fixed rate.
+The vault converts NFTs into fungible ERC20 tokens at a fixed 1e18 REMY per NFT. It maintains the reverse operation so every ERC20 unit can unlock the underlying inventory.
 
 ### Mechanics
-- Users deposit NFTs and receive 1000 REMY tokens per NFT
-- These tokens are fully backed 1:1 by NFTs in the vault
-- Users can always redeem 1000 REMY tokens for an NFT
-- This creates a baseline "floor price" unit of account: 1000 REMY = 1 NFT
+- Depositing transfers NFTs into the vault and mints REMY for the recipient
+- Withdrawing burns REMY from the caller before safely returning each NFT
+- Quoting functions expose deterministic pricing (`UNIT = 1e18`)
 
 ### Key Properties
-- **Simplicity**: The core vault does one thing and does it well
-- **Reliability**: No complex price discovery or valuation mechanisms
-- **Composability**: Creates a fungible token that other protocols can build upon
-- **Redeemability**: Always maintains 1:1 backing of tokens to NFTs
-- **Gas Efficient**: Written in Vyper
+- **Simplicity**: Focuses solely on deposit/withdraw logic
+- **Reliability**: No price or oracle dependency, only inventory-backed accounting
+- **Composability**: Downstream contracts can reason about REMY supply deterministically
+- **Security**: Emits structured `Deposit`/`Withdraw` events for off-chain reconciliation
 
-### Key Functions
-```vyper
-interface IRemyVault:
-    def deposit(tokenIds: DynArray[uint256, 100], recipient: address) -> uint256
-    def withdraw(tokenIds: DynArray[uint256, 100], recipient: address) -> uint256
-```
-
-``` solidity
+### Interface
+```solidity
 interface IRemyVault {
     function deposit(uint256[] calldata tokenIds, address recipient) external returns (uint256);
     function withdraw(uint256[] calldata tokenIds, address recipient) external returns (uint256);
+    function quoteDeposit(uint256 count) external pure returns (uint256);
+    function quoteWithdraw(uint256 count) external pure returns (uint256);
 }
 ```
 
-## Metavault Ecosystem
+## Derivative Factory & Vault NFTs
 
-Metavaults extend the core functionality through specialized strategies:
+The derivative toolchain extends the vault without modifying core logic:
 
-### Implemented Metavaults
-#### InventoryMetavault
-- **Strategy**: Sell NFTs at premium pricing with profit distribution
-- **Premium Rate**: 10% markup on NFT floor price (configurable)
-- **Profit Mechanism**: Premiums distributed to all depositors via ERC4626 shares
-- **ERC4626 Compliance**: Full implementation of the tokenized vault standard
+- `DerivativeFactory` mints new `RemyVaultNFT` collections and pairs them with freshly deployed `RemyVaultSol` instances.
+- Root and child pools are registered with `RemyVaultHook` to share liquidity across Uniswap V4 markets.
+- Metadata and minter permissions are configured at deployment time so launch scripts can tailor new drops.
 
-### Planned Metavaults
-
-1. **Lending Vaults**
-   - Use fractionalized NFTs as collateral
-   - Implement specific liquidation strategies
-
-2. **Trading Vaults**
-   - Algorithmic buying/selling of NFTs
-   - Dynamic pricing mechanisms
-
-3. **Yield Vaults**
-   - Stake fractionalized NFTs in DeFi protocols
-   - Distribute yield to depositors
-
-4. **Index Vaults**
-   - Create baskets of different NFT collections
-   - Enable broad market exposure
-
-5. **Options Vaults**
-   - Write covered calls on NFTs
-   - Implement complex derivatives strategies
-
-6. **DerivativeVaults**
-   - Issue new NFTs backed by REMY tokens
-   - Create derivative collections with custom properties
-   - Maintain refundability to original backing asset
-   
-Each metavault can:
-- Implement its own tokenomics
-- Define unique value capture mechanisms
-- Create specific incentive structures
-- Integrate with other DeFi protocols
-
-#### DerivativeVaults
-
-##### Key Mechanics
-- Users deposit REMY tokens and receive derivative NFTs
-- Custom exchange rates (e.g., 1 derivative NFT = 200 REMY)
-- Small refund fee to prevent trait farming
-- Fee distribution to derivative collection depositors
-
-##### Applications
-- Create "fractional" derivatives (e.g., 5 derivatives per original NFT)
-- Create "bundled" derivatives (e.g., 1 derivative representing 5 original NFTs)
-- Implement custom traits or generative aspects
-- Add utility features to derivative collections
-
-##### Composability
-- Derivative collections can use their own InventoryMetavaults
-- Derivatives can be used in other DeFi protocols
-- Multiple derivative collections can be created from the same base collection
-- Derivatives can be programmatically linked to original collection traits
-
-##### Example: BundledCollectionVault
-1. Issues 1 "Bundle NFT" for every 5000 REMY (5 original NFTs worth)
-2. Each Bundle NFT has unique traits derived from a basket of the original collection
-3. Bundles can be "unbundled" back to REMY for a small fee
-4. Fees are distributed to Bundle NFT holders who stake in the BundleInventoryMetavault
-5. Creates a higher price-point entry into the ecosystem
-
-##### Example: MicroNFTVault
-1. Issues 5 "Micro NFTs" for every 1000 REMY (1 original NFT worth)
-2. Each Micro NFT has derived traits but at a lower price point
-3. Can be redeemed for 200 REMY each (minus small fee)
-4. Enables lower-cost participation in the collection
-5. Creates more granular market exposure
-
-This pattern demonstrates the recursive composability of the RemyVault architecture - 
-not only can new metavaults be built on top of the core vault, but metavaults can 
-also be built on top of other metavaults, creating a rich ecosystem of interconnected 
-NFT financial products.
+These pieces let integrators spin up their own NFT wrappers while inheriting the redemption guarantees of the base vault.
 
 ## System Benefits
 
-This architectural approach provides several key advantages:
+A trimmed surface area keeps the protocol auditable while still supporting growth:
 
-1. **Modularity**
-   - Each component has a single responsibility
-   - Metavaults can be added without changing core logic
-   - Failures are contained within individual vaults
+1. **Modularity** – Core vault code stays unchanged while derivative tooling evolves independently
+2. **Composability** – REMY tokens can flow into AMMs, staking contracts, or collateral systems
+3. **Flexibility** – New derivative collections or hooks can launch with factory calls instead of redeploying the base logic
+4. **Security** – Fewer contracts reduce the attack surface and simplify auditing
 
-2. **Composability**
-   - Core vault provides a stable building block
-   - Metavaults can be layered and combined
-   - Easy integration with existing DeFi protocols
-
-3. **Flexibility**
-   - New strategies can be implemented as metavaults
-   - Different risk/reward profiles can be offered
-   - Various market participants can be served
-
-4. **Security**
-   - Core logic remains simple and auditable
-   - Complex strategies don't compromise base layer
-   - Clear separation of concerns
-   
 ## Uniswap V4 Integration
 
 RemyVault includes a custom Uniswap V4 hook that enables native NFT trading directly through Uniswap liquidity pools:
@@ -187,10 +90,10 @@ This integration creates completely new NFT trading mechanisms not possible in t
 ## Technical Implementation
 
 ### Core Technology Stack
-- **Language**: Vyper 0.4.3 for gas-efficient and secure smart contracts
+- **Languages**: Solidity for the core vault and derivative tooling, Vyper 0.4.3 for legacy routers and migration helpers
 - **Architecture**: Modular design with clear separation of concerns
-- **Standards**: ERC20, ERC721, ERC4626 compliant implementations
-- **Testing Framework**: Comprehensive Foundry test suite with 100% coverage
+- **Standards**: ERC20, ERC721, ERC4626 compliant implementations where applicable
+- **Testing Framework**: Comprehensive Foundry test suite with deterministic builds
 
 ### Security Features
 - Nonreentrant guards protecting against reentrancy attacks
@@ -201,20 +104,8 @@ This integration creates completely new NFT trading mechanisms not possible in t
 
 ## Smart Contract Documentation
 
-### RemyVault.vy
-Minimal vault that mints 1 REMY (1e18 units) per deposited ERC-721 and burns on withdrawal. It keeps custody of the collection set in the constructor while its embedded Snekmate ERC20 implementation handles minting/burning. Non-reentrancy on `deposit`/`withdraw` and pure quoting helpers (`quoteDeposit`, `quoteWithdraw`) enforce the 1:1 backing invariant.
-
-### ManagedToken.vy
-Ownable ERC-20 built on Snekmate primitives that represents fractional vault value (e.g., mvREMY). Only the vault or metavault owner can call `mint`/`burn`, while standard ERC-20 functionality and ownership transfer utilities are inherited for downstream governance.
-
-### StakingVault.vy
-ERC4626 wrapper around the managed token that issues yield-bearing shares (stMV). Implemented via Snekmate’s `erc4626` module, it exposes the standard deposit/mint/withdraw/redeem surface plus permit/EIP-5267 metadata for signature-based flows.
-
-### InventoryMetavault.vy
-Strategy layer that takes custody of NFTs from RemyVault depositors, mints mvREMY internally, and deposits into the staking vault on behalf of users. Handles withdrawals, partial redemptions, and premium sales via `purchase` with a configurable 10% markup, while tracking on-chain inventory.
-
-### RescueRouter.vy
-Legacy utility router that sequences mint/redeem operations, ERC-4626 deposits, and Uniswap V3 swaps for users. It can stake inventory, unstake, and mediate NFT↔︎ETH trades while managing approvals, wrapped ETH handling, and fee payments for the original vault deployment.
+### RemyVaultSol.sol
+Solidity vault that locks a collection, mints `UNIT` (1e18) REMY per NFT deposit, burns on withdrawal, and exposes deterministic quoting helpers to enforce the 1:1 backing invariant. Deposit and withdraw events mirror each inventory mutation for downstream accounting.
 
 ### RescueRouterV2.vy
 Updated router used by v2 flows. Adds direct token-for-NFT swaps (`swap_tokens_for_nfts`), richer quoting helpers, internal mint fee accounting, and improved ETH refund logic while retaining staking, unstaking, and Uniswap V3 bridging routines.
