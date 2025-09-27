@@ -12,7 +12,7 @@ import {IRemyVaultV1} from "../src/interfaces/IRemyVaultV1.sol";
 import {IMigrator} from "../src/interfaces/IMigrator.sol";
 import {IRescueRouter} from "../src/interfaces/IRescueRouter.sol";
 import {AddressBook, CoreAddresses} from "./helpers/AddressBook.sol";
-import {RemyVaultSol} from "../src/RemyVaultSol.sol";
+import {RemyVault} from "../src/RemyVault.sol";
 
 contract LaunchTest is BaseTest, AddressBook {
     uint256 internal constant LEGACY_TOKENS_PER_NFT = 1000 * 1e18;
@@ -120,7 +120,7 @@ contract LaunchTest is BaseTest, AddressBook {
     }
 
     function _deployRemyVaultV2() internal {
-        remyVaultV2 = IRemyVault(address(new RemyVaultSol("REMY", "REMY", address(nft))));
+        remyVaultV2 = IRemyVault(address(new RemyVault("REMY", "REMY", address(nft))));
         newTokensPerNft = remyVaultV2.quoteDeposit(1);
         remyV2Token = IERC20(address(remyVaultV2));
         liveRemyV2Token = IERC20(core.newRemy);
@@ -227,11 +227,10 @@ contract LaunchTest is BaseTest, AddressBook {
         vm.stopPrank();
     }
 
-    function _assertPostMigration(
-        address nftOwner,
-        uint256 remyV1AfterUnstake,
-        MigrationSnapshot memory snapshot
-    ) internal view {
+    function _assertPostMigration(address nftOwner, uint256 remyV1AfterUnstake, MigrationSnapshot memory snapshot)
+        internal
+        view
+    {
         uint256 finalRemyV1 = remyV1Token.balanceOf(nftOwner);
         uint256 finalRemyV2 = remyV2Token.balanceOf(nftOwner);
 

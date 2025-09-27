@@ -93,25 +93,24 @@ contract RemyVaultNFT is ERC721, Ownable {
         return safeMint(to, tokenUriSuffix);
     }
 
-    function batchMint(
-        address to,
-        uint256 amount,
-        string[] calldata tokenUriSuffixes
-    ) public returns (uint256[] memory tokenIds) {
+    function batchMint(address to, uint256 amount, string[] calldata tokenUriSuffixes)
+        public
+        returns (uint256[] memory tokenIds)
+    {
         if (!_minters[msg.sender]) revert NotMinter();
         if (amount == 0) revert InvalidBatchLength();
         if (tokenUriSuffixes.length != 0 && tokenUriSuffixes.length != amount) revert InvalidBatchLength();
 
         tokenIds = new uint256[](amount);
         if (tokenUriSuffixes.length == 0) {
-            for (uint256 i; i < amount; ) {
+            for (uint256 i; i < amount;) {
                 tokenIds[i] = _mintWithUri(to, "");
                 unchecked {
                     ++i;
                 }
             }
         } else {
-            for (uint256 i; i < amount; ) {
+            for (uint256 i; i < amount;) {
                 tokenIds[i] = _mintWithUri(to, tokenUriSuffixes[i]);
                 unchecked {
                     ++i;
@@ -120,11 +119,10 @@ contract RemyVaultNFT is ERC721, Ownable {
         }
     }
 
-    function batch_mint(
-        address to,
-        uint256 amount,
-        string[] calldata tokenUriSuffixes
-    ) external returns (uint256[] memory) {
+    function batch_mint(address to, uint256 amount, string[] calldata tokenUriSuffixes)
+        external
+        returns (uint256[] memory)
+    {
         return batchMint(to, amount, tokenUriSuffixes);
     }
 
@@ -135,7 +133,7 @@ contract RemyVaultNFT is ERC721, Ownable {
     function batchBurn(uint256[] calldata tokenIds) public {
         uint256 length = tokenIds.length;
         if (length == 0) revert InvalidBatchLength();
-        for (uint256 i; i < length; ) {
+        for (uint256 i; i < length;) {
             _burn(msg.sender, tokenIds[i]);
             unchecked {
                 ++i;

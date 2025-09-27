@@ -105,8 +105,14 @@ contract DerivativeFactoryForkTest is BaseTest {
         (uint160 rootPrice,,,) = POOL_MANAGER.getSlot0(rootPoolId);
         assertEq(rootPrice, SQRT_PRICE_1_1, "root sqrt price mismatch");
 
-        (bool childInitialized, bool childHasParent, PoolKey memory parentKey, Currency childSharedCurrency,
-            bool childSharedIsChild0, bool childSharedIsParent0) = hook.poolConfig(childPoolId);
+        (
+            bool childInitialized,
+            bool childHasParent,
+            PoolKey memory parentKey,
+            Currency childSharedCurrency,
+            bool childSharedIsChild0,
+            bool childSharedIsParent0
+        ) = hook.poolConfig(childPoolId);
         assertTrue(childInitialized, "child not configured");
         assertTrue(childHasParent, "child missing parent");
         assertEq(PoolId.unwrap(parentKey.toId()), PoolId.unwrap(rootPoolId), "parent key mismatch");
@@ -131,9 +137,21 @@ contract DerivativeFactoryForkTest is BaseTest {
         Currency currencyB = Currency.wrap(tokenB);
         IHooks hooksInstance = IHooks(address(hook));
         if (Currency.unwrap(currencyA) < Currency.unwrap(currencyB)) {
-            key = PoolKey({currency0: currencyA, currency1: currencyB, fee: fee, tickSpacing: spacing, hooks: hooksInstance});
+            key = PoolKey({
+                currency0: currencyA,
+                currency1: currencyB,
+                fee: fee,
+                tickSpacing: spacing,
+                hooks: hooksInstance
+            });
         } else {
-            key = PoolKey({currency0: currencyB, currency1: currencyA, fee: fee, tickSpacing: spacing, hooks: hooksInstance});
+            key = PoolKey({
+                currency0: currencyB,
+                currency1: currencyA,
+                fee: fee,
+                tickSpacing: spacing,
+                hooks: hooksInstance
+            });
         }
     }
 }

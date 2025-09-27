@@ -5,7 +5,7 @@ pragma solidity ^0.8.24;
 import "forge-std/Test.sol";
 
 import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
-import {RemyVaultSol} from "../src/RemyVaultSol.sol";
+import {RemyVault} from "../src/RemyVault.sol";
 import {RemyVaultHook} from "../src/RemyVaultHook.sol";
 import {MockERC721Simple} from "./helpers/MockMigratorDependencies.sol";
 
@@ -42,7 +42,7 @@ contract RemyVaultHookIntegrationTest is Test {
 
     function testDeployVaultTokenAndInitializeHookedPool() public {
         address vaultAddr = factory.deployVault(address(collection), "Remy Token", "REMYT");
-        RemyVaultSol vault = RemyVaultSol(vaultAddr);
+        RemyVault vault = RemyVault(vaultAddr);
 
         uint256 depositCount = 50;
         for (uint256 i = 0; i < depositCount; ++i) {

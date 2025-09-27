@@ -8,7 +8,7 @@ import {DerivativeFactory} from "../src/DerivativeFactory.sol";
 import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
 import {RemyVaultHook} from "../src/RemyVaultHook.sol";
 import {RemyVaultNFT} from "../src/RemyVaultNFT.sol";
-import {RemyVaultSol} from "../src/RemyVaultSol.sol";
+import {RemyVault} from "../src/RemyVault.sol";
 import {MockERC721Simple} from "./helpers/MockMigratorDependencies.sol";
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
@@ -101,16 +101,11 @@ contract DerivativeFactoryTest is Test {
         emit DerivativeFactory.ParentVaultRegistered(address(parentCollection), predictedVault, expectedRootId);
 
         (address parentVault, PoolId rootPoolId) = factory.createVaultForCollection(
-            address(parentCollection),
-            "Parent Token",
-            "PRMT",
-            3000,
-            60,
-            SQRT_PRICE_1_1
+            address(parentCollection), "Parent Token", "PRMT", 3000, 60, SQRT_PRICE_1_1
         );
 
         assertEq(vaultFactory.vaultFor(address(parentCollection)), parentVault, "vault mapping mismatch");
-        RemyVaultSol vaultToken = RemyVaultSol(parentVault);
+        RemyVault vaultToken = RemyVault(parentVault);
         assertEq(vaultToken.name(), "Parent Token", "vault name mismatch");
         assertEq(vaultToken.symbol(), "PRMT", "vault symbol mismatch");
 
@@ -120,8 +115,7 @@ contract DerivativeFactoryTest is Test {
         assertTrue(storedKey.currency0.isAddressZero(), "currency0 should be ETH");
         assertEq(Currency.unwrap(storedKey.currency1), parentVault, "currency1 should be vault token");
 
-        (bool initialized, bool hasParent,, Currency sharedCurrency, bool sharedIsChild0,) =
-            hook.poolConfig(rootPoolId);
+        (bool initialized, bool hasParent,, Currency sharedCurrency, bool sharedIsChild0,) = hook.poolConfig(rootPoolId);
         assertTrue(initialized, "root pool not registered");
         assertFalse(hasParent, "root should not have parent");
         assertEq(Currency.unwrap(sharedCurrency), parentVault, "shared token mismatch");
@@ -155,9 +149,8 @@ contract DerivativeFactoryTest is Test {
         (address derivativeNft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
-        bytes32 derivativeCreatedTopic = keccak256(
-            "DerivativeCreated(address,address,address,address,bytes32,uint24,int24,uint160)"
-        );
+        bytes32 derivativeCreatedTopic =
+            keccak256("DerivativeCreated(address,address,address,address,bytes32,uint24,int24,uint160)");
         bool foundDerivativeEvent;
         for (uint256 i; i < entries.length; ++i) {
             Vm.Log memory entry = entries[i];
@@ -170,8 +163,13 @@ contract DerivativeFactoryTest is Test {
             assertEq(address(uint160(uint256(entry.topics[2]))), params.parentVault, "parent vault mismatch");
             assertEq(address(uint160(uint256(entry.topics[3]))), derivativeNft, "nft mismatch in event");
 
-            (address eventDerivativeVault, bytes32 eventChildPoolId, uint24 eventFee, int24 eventTickSpacing,
-                uint160 eventSqrtPrice) = abi.decode(entry.data, (address, bytes32, uint24, int24, uint160));
+            (
+                address eventDerivativeVault,
+                bytes32 eventChildPoolId,
+                uint24 eventFee,
+                int24 eventTickSpacing,
+                uint160 eventSqrtPrice
+            ) = abi.decode(entry.data, (address, bytes32, uint24, int24, uint160));
             assertEq(eventDerivativeVault, derivativeVault, "derivative vault mismatch in event");
             assertEq(eventChildPoolId, PoolId.unwrap(childPoolId), "child pool id mismatch");
             assertEq(eventFee, params.fee, "fee mismatch in event");
@@ -250,10 +248,10 @@ contract DerivativeFactoryTest is Test {
     }
 
     function testRegisterRootPoolRequiresFactoryVault() public {
-        address randomToken = address(new RemyVaultSol("Mock", "MOCK", address(parentCollection)));
+        address randomToken = address(new RemyVault("Mock", "MOCK", address(parentCollection)));
         vm.expectRevert(abi.encodeWithSelector(DerivativeFactory.ParentVaultNotFromFactory.selector, randomToken));
         factory.registerRootPool(randomToken, 3000, 60, SQRT_PRICE_1_1);
-}
+    }
 
     function _buildKey(address tokenA, address tokenB, uint24 fee, int24 spacing)
         internal
@@ -263,9 +261,21 @@ contract DerivativeFactoryTest is Test {
         Currency currencyA = Currency.wrap(tokenA);
         Currency currencyB = Currency.wrap(tokenB);
         if (Currency.unwrap(currencyA) < Currency.unwrap(currencyB)) {
-            key = PoolKey({currency0: currencyA, currency1: currencyB, fee: fee, tickSpacing: spacing, hooks: IHooks(hookAddress)});
+            key = PoolKey({
+                currency0: currencyA,
+                currency1: currencyB,
+                fee: fee,
+                tickSpacing: spacing,
+                hooks: IHooks(hookAddress)
+            });
         } else {
-            key = PoolKey({currency0: currencyB, currency1: currencyA, fee: fee, tickSpacing: spacing, hooks: IHooks(hookAddress)});
+            key = PoolKey({
+                currency0: currencyB,
+                currency1: currencyA,
+                fee: fee,
+                tickSpacing: spacing,
+                hooks: IHooks(hookAddress)
+            });
         }
     }
 }

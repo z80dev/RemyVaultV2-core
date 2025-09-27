@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
-import {RemyVaultSol} from "../src/RemyVaultSol.sol";
+import {RemyVault} from "../src/RemyVault.sol";
 
 contract RemyVaultFactoryInvariantTest is Test {
     string internal constant DEPLOY_NAME = "Remy Vault Token";
@@ -36,7 +36,7 @@ contract RemyVaultFactoryInvariantTest is Test {
             assertTrue(factory.isVault(vault), "vault flag missing for deployed vault");
             assertFalse(factory.isVault(collection), "collection incorrectly flagged as vault");
             assertEq(factory.vaultFor(vault), address(0), "vault address reused as collection");
-            assertEq(RemyVaultSol(vault).erc721(), collection, "vault erc721 target mismatch");
+            assertEq(RemyVault(vault).erc721(), collection, "vault erc721 target mismatch");
 
             address predicted = factory.predictVaultAddress(collection, name_, symbol_);
             assertEq(predicted, vault, "predictVaultAddress no longer deterministic");

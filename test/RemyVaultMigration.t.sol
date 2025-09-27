@@ -11,7 +11,7 @@ import {IRemyVault} from "../src/interfaces/IRemyVault.sol";
 import {IERC20} from "../src/interfaces/IERC20.sol";
 import {IERC721} from "../src/interfaces/IERC721.sol";
 import {IERC721Enumerable} from "../src/interfaces/IERC721Enumerable.sol";
-import {RemyVaultSol} from "../src/RemyVaultSol.sol";
+import {RemyVault} from "../src/RemyVault.sol";
 
 interface IMigratorRouter {
     function convert_v1_tokens_to_v2(uint256 tokenAmount, address recipient) external returns (uint256);
@@ -53,7 +53,7 @@ contract RemyVaultMigrationTest is BaseTest, AddressBook {
         routerOwner = rescueRouter.owner();
 
         // Deploy fresh V2 token + vault stack
-        remyVaultV2 = IRemyVault(address(new RemyVaultSol("REMY", "REMY", core.nft)));
+        remyVaultV2 = IRemyVault(address(new RemyVault("REMY", "REMY", core.nft)));
         newTokensPerNft = remyVaultV2.quoteDeposit(1);
         remyV2Token = IERC20(address(remyVaultV2));
 

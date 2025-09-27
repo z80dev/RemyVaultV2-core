@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {IERC721} from "../src/interfaces/IERC721.sol";
 import {IERC20} from "../src/interfaces/IERC20.sol";
-import {RemyVaultSol} from "../src/RemyVaultSol.sol";
+import {RemyVault} from "../src/RemyVault.sol";
 
 interface IMockERC721 is IERC721 {
     function mint(address to, uint256 tokenId) external;
@@ -23,7 +23,7 @@ contract RemyVaultAccountInvariantTest is Test {
 
     IMockERC721 internal nft;
     IERC20 internal token;
-    RemyVaultSol internal vault;
+    RemyVault internal vault;
     uint256 internal unit;
 
     address[] internal actors;
@@ -36,7 +36,7 @@ contract RemyVaultAccountInvariantTest is Test {
 
     function setUp() public {
         nft = IMockERC721(deployCode("MockERC721", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
-        vault = new RemyVaultSol("MOCK", "MOCK", address(nft));
+        vault = new RemyVault("MOCK", "MOCK", address(nft));
         unit = vault.quoteDeposit(1);
 
         token = IERC20(address(vault));

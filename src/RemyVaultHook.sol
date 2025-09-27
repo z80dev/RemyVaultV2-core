@@ -8,7 +8,9 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
 import {BalanceDelta, BalanceDeltaLibrary} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {
+    BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta
+} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 
 contract RemyVaultHook is BaseHook {
     using PoolIdLibrary for PoolKey;
@@ -70,7 +72,9 @@ contract RemyVaultHook is BaseHook {
 
         if (hasParent) {
             if (address(parentKey.hooks) != address(this)) revert HookMismatch();
-            if (childKey.currency0.isAddressZero() || childKey.currency1.isAddressZero()) revert ChildPoolCannotUseEth();
+            if (childKey.currency0.isAddressZero() || childKey.currency1.isAddressZero()) {
+                revert ChildPoolCannotUseEth();
+            }
 
             PoolId parentId = parentKey.toId();
             PoolConfig memory parentConfig = poolConfig[parentId];
@@ -105,12 +109,11 @@ contract RemyVaultHook is BaseHook {
         permissions.afterSwapReturnDelta = true;
     }
 
-    function _beforeSwap(
-        address,
-        PoolKey calldata key,
-        IPoolManager.SwapParams calldata params,
-        bytes calldata
-    ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
+    function _beforeSwap(address, PoolKey calldata key, IPoolManager.SwapParams calldata params, bytes calldata)
+        internal
+        override
+        returns (bytes4, BeforeSwapDelta, uint24)
+    {
         PoolConfig memory config = poolConfig[key.toId()];
         if (!config.initialized) {
             return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
@@ -134,10 +137,7 @@ contract RemyVaultHook is BaseHook {
 
         if (childFee > 0) {
             poolManager.donate(
-                key,
-                config.sharedIsChild0 ? childFee : 0,
-                config.sharedIsChild0 ? 0 : childFee,
-                bytes("")
+                key, config.sharedIsChild0 ? childFee : 0, config.sharedIsChild0 ? 0 : childFee, bytes("")
             );
         }
 
@@ -185,10 +185,7 @@ contract RemyVaultHook is BaseHook {
 
         if (childFee > 0) {
             poolManager.donate(
-                key,
-                config.sharedIsChild0 ? childFee : 0,
-                config.sharedIsChild0 ? 0 : childFee,
-                bytes("")
+                key, config.sharedIsChild0 ? childFee : 0, config.sharedIsChild0 ? 0 : childFee, bytes("")
             );
         }
 
@@ -242,11 +239,7 @@ contract RemyVaultHook is BaseHook {
         if (matches != 1) revert MustShareExactlyOneToken();
     }
 
-    function _splitFees(uint256 totalFee, bool hasParent)
-        private
-        pure
-        returns (uint256 childFee, uint256 parentFee)
-    {
+    function _splitFees(uint256 totalFee, bool hasParent) private pure returns (uint256 childFee, uint256 parentFee) {
         if (hasParent) {
             childFee = (totalFee * CHILD_SHARE_WITH_PARENT_BPS) / TOTAL_FEE_BPS;
             parentFee = totalFee - childFee;

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {RemyVaultSol} from "./RemyVaultSol.sol";
+import {RemyVault} from "./RemyVault.sol";
 
-/// @notice Deploys deterministic `RemyVaultSol` instances keyed by ERC721 collection.
+/// @notice Deploys deterministic `RemyVault` instances keyed by ERC721 collection.
 contract RemyVaultFactory {
     /// @dev Track deployed vault per collection to prevent duplicates.
     mapping(address => address) public vaultFor;
@@ -29,7 +29,7 @@ contract RemyVaultFactory {
         if (isVault[collection]) revert CollectionIsVault(collection);
 
         bytes32 salt = _salt(collection);
-        vault = address(new RemyVaultSol{salt: salt}(name_, symbol_, collection));
+        vault = address(new RemyVault{salt: salt}(name_, symbol_, collection));
 
         vaultFor[collection] = vault;
         isVault[vault] = true;
@@ -45,7 +45,8 @@ contract RemyVaultFactory {
         if (collection == address(0)) revert CollectionAddressZero();
         if (isVault[collection]) revert CollectionIsVault(collection);
 
-        bytes32 bytecodeHash = keccak256(abi.encodePacked(type(RemyVaultSol).creationCode, abi.encode(name_, symbol_, collection)));
+        bytes32 bytecodeHash =
+            keccak256(abi.encodePacked(type(RemyVault).creationCode, abi.encode(name_, symbol_, collection)));
         return _computeCreate2Address(_salt(collection), bytecodeHash);
     }
 

@@ -24,7 +24,7 @@ from interfaces import LegacyRemyVault as RemyVault
 from interfaces import DN404
 from interfaces import InventoryERC721
 from interfaces import VaultERC4626
-from interfaces import RemyVaultSol as RemyVaultV2
+from interfaces import RemyVault as RemyVaultV2
 
 from snekmate.auth import ownable
 

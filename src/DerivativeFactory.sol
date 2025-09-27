@@ -6,7 +6,7 @@ import {Ownable} from "solady/auth/Ownable.sol";
 import {RemyVaultFactory} from "./RemyVaultFactory.sol";
 import {RemyVaultHook} from "./RemyVaultHook.sol";
 import {RemyVaultNFT} from "./RemyVaultNFT.sol";
-import {RemyVaultSol} from "./RemyVaultSol.sol";
+import {RemyVault} from "./RemyVault.sol";
 
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
@@ -44,11 +44,7 @@ contract DerivativeFactory is Ownable {
     }
 
     event RootPoolRegistered(
-        address indexed parentVault,
-        PoolId indexed poolId,
-        uint24 fee,
-        int24 tickSpacing,
-        uint160 sqrtPriceX96
+        address indexed parentVault, PoolId indexed poolId, uint24 fee, int24 tickSpacing, uint160 sqrtPriceX96
     );
     event ParentVaultRegistered(address indexed collection, address indexed parentVault, PoolId indexed poolId);
     event DerivativeCreated(
@@ -104,12 +100,7 @@ contract DerivativeFactory is Ownable {
         uint24 fee,
         int24 tickSpacing,
         uint160 sqrtPriceX96
-    )
-        external
-        onlyOwner
-        requiresHookOwnership
-        returns (address vault, PoolId poolId)
-    {
+    ) external onlyOwner requiresHookOwnership returns (address vault, PoolId poolId) {
         vault = VAULT_FACTORY.deployVault(collection, vaultName, vaultSymbol);
         poolId = _registerRootPool(vault, fee, tickSpacing, sqrtPriceX96);
         emit ParentVaultRegistered(collection, vault, poolId);
@@ -125,7 +116,8 @@ contract DerivativeFactory is Ownable {
         if (!root.exists) revert ParentVaultNotRegistered(params.parentVault);
         if (params.sqrtPriceX96 == 0) revert InvalidSqrtPrice();
 
-        RemyVaultNFT derivativeNft = new RemyVaultNFT(params.nftName, params.nftSymbol, params.nftBaseUri, address(this));
+        RemyVaultNFT derivativeNft =
+            new RemyVaultNFT(params.nftName, params.nftSymbol, params.nftBaseUri, address(this));
         if (params.initialMinter != address(0)) {
             derivativeNft.setMinter(params.initialMinter, true);
         }
@@ -144,7 +136,7 @@ contract DerivativeFactory is Ownable {
         derivativeForVault[vault] = DerivativeInfo({nft: nft, parentVault: params.parentVault, poolId: childPoolId});
         vaultForNft[nft] = vault;
 
-        address parentCollection = RemyVaultSol(params.parentVault).erc721();
+        address parentCollection = RemyVault(params.parentVault).erc721();
 
         emit DerivativeCreated(
             parentCollection,
@@ -158,11 +150,7 @@ contract DerivativeFactory is Ownable {
         );
     }
 
-    function rootPool(address parentVault)
-        external
-        view
-        returns (PoolKey memory key, PoolId poolId)
-    {
+    function rootPool(address parentVault) external view returns (PoolKey memory key, PoolId poolId) {
         RootPool storage root = _rootPools[parentVault];
         if (!root.exists) revert ParentVaultNotRegistered(parentVault);
         key = root.key;

@@ -1,12 +1,12 @@
 # RemyVault: NFT Fractionalization Protocol
 
-RemyVault is a minimalist, gas-efficient NFT fractionalization protocol. The current core vault lives in Solidity (`RemyVaultSol`) and lets users deposit ERC-721 NFTs to mint fungible ERC-20 tokens that track vault ownership.
+RemyVault is a minimalist, gas-efficient NFT fractionalization protocol. The current core vault lives in Solidity (`RemyVault`) and lets users deposit ERC-721 NFTs to mint fungible ERC-20 tokens that track vault ownership.
 
 ## Overview
 
 The system focuses on two production components:
 
-1. **Core Vault (`RemyVaultSol`)** – handles the NFT ↔ ERC20 mint/burn cycle
+1. **Core Vault (`RemyVault`)** – handles the NFT ↔ ERC20 mint/burn cycle
 2. **Derivative & Liquidity Tooling** – `DerivativeFactory`, `RemyVaultNFT`, and the Uniswap V4 hook wire the vault into on-chain markets
 
 The separation keeps the fractionalization layer small while still enabling new collections and liquidity strategies to launch through the derivative factory.
@@ -27,7 +27,7 @@ The separation keeps the fractionalization layer small while still enabling new 
 
 ## Core Vault
 
-`RemyVaultSol` implements the ground-level fractionalization mechanics:
+`RemyVault` implements the ground-level fractionalization mechanics:
 
 ### Purpose
 The vault converts NFTs into fungible ERC20 tokens at a fixed 1e18 REMY per NFT. It maintains the reverse operation so every ERC20 unit can unlock the underlying inventory.
@@ -58,7 +58,7 @@ interface IRemyVault {
 
 The derivative toolchain extends the vault without modifying core logic:
 
-- `DerivativeFactory` mints new `RemyVaultNFT` collections and pairs them with freshly deployed `RemyVaultSol` instances.
+- `DerivativeFactory` mints new `RemyVaultNFT` collections and pairs them with freshly deployed `RemyVault` instances.
 - Root and child pools are registered with `RemyVaultHook` to share liquidity across Uniswap V4 markets.
 - Metadata and minter permissions are configured at deployment time so launch scripts can tailor new drops.
 
@@ -105,7 +105,7 @@ This integration creates completely new NFT trading mechanisms not possible in t
 
 ## Smart Contract Documentation
 
-### RemyVaultSol.sol
+### RemyVault.sol
 Solidity vault that locks a collection, mints `UNIT` (1e18) REMY per NFT deposit, burns on withdrawal, and exposes deterministic quoting helpers to enforce the 1:1 backing invariant. Deposit and withdraw events mirror each inventory mutation for downstream accounting.
 
 ### RescueRouterV2.vy

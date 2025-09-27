@@ -1,7 +1,7 @@
 # Admin Notes
 
 ## Vault Versions
-- `RemyVaultSol` implements RemyVault V2. It purposefully has **no owner** and exports no admin-only entrypoints. Anyone can deposit NFTs, mint the fungible supply (fixed at `1e18` tokens per NFT), and withdraw against the inventory. Treat it as "WETH for NFTs".
+- `RemyVault` implements RemyVault V2. It purposefully has **no owner** and exports no admin-only entrypoints. Anyone can deposit NFTs, mint the fungible supply (fixed at `1e18` tokens per NFT), and withdraw against the inventory. Treat it as "WETH for NFTs".
 - Code that references legacy RemyVault V1 (e.g., `Migrator.vy`, `RescueRouterV2.vy`, `modules/vault_owner.vy`) interacts with that system strictly through interfaces (`src/interfaces/LegacyRemyVault.vyi`). The actual V1 implementation is **not** vendored in this repository.
 
 ## Factories & Ownership

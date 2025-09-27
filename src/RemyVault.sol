@@ -5,7 +5,7 @@ import {ERC20} from "solady/tokens/ERC20.sol";
 import {IERC721} from "./interfaces/IERC721.sol";
 import {IERCXX} from "./interfaces/IERCXX.sol";
 
-contract RemyVaultSol is ERC20, IERCXX {
+contract RemyVault is ERC20, IERCXX {
     /// @notice Number of ERC20 tokens minted per deposited NFT.
     uint256 public constant UNIT = 1e18;
 
@@ -61,11 +61,7 @@ contract RemyVaultSol is ERC20, IERCXX {
         return UNIT * count;
     }
 
-    function deposit(uint256[] calldata tokenIds, address recipient)
-        external
-        override
-        returns (uint256 mintedAmount)
-    {
+    function deposit(uint256[] calldata tokenIds, address recipient) external override returns (uint256 mintedAmount) {
         uint256 tokenCount = tokenIds.length;
         require(tokenCount != 0, "Must deposit at least one token");
 
