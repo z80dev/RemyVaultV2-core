@@ -3,6 +3,7 @@
 pragma solidity >=0.8.7 <0.9.0;
 
 import {Test} from "forge-std/Test.sol";
+import {DerivativeRemyVault} from "../src/DerivativeRemyVault.sol";
 import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
 
 contract RemyVaultFactoryTest is Test {
@@ -40,5 +41,22 @@ contract RemyVaultFactoryTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(RemyVaultFactory.CollectionIsVault.selector, firstVault));
         factory.predictVaultAddress(firstVault, "RemyVault", "REM");
+    }
+
+    function testDeployDerivativeVaultPreMintsSupply() public {
+        address derivativeVault = factory.deployDerivativeVault(collection, "Derivative", "DRV", 5);
+        assertEq(factory.vaultFor(collection), derivativeVault, "vault mapping mismatch");
+        assertTrue(factory.isVault(derivativeVault), "vault flag missing");
+
+        DerivativeRemyVault vaultToken = DerivativeRemyVault(derivativeVault);
+        uint256 expectedSupply = vaultToken.UNIT() * 5;
+        assertEq(vaultToken.totalSupply(), expectedSupply, "supply mismatch");
+        assertEq(vaultToken.balanceOf(address(this)), expectedSupply, "creator balance mismatch");
+    }
+
+    function testPredictDerivativeVaultAddressMatchesDeployment() public {
+        address predicted = factory.predictDerivativeVaultAddress(collection, "Derivative", "DRV", 1);
+        address deployed = factory.deployDerivativeVault(collection, "Derivative", "DRV", 1);
+        assertEq(predicted, deployed, "predicted address mismatch");
     }
 }

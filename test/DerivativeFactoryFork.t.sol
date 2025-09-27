@@ -7,6 +7,7 @@ import {DerivativeFactory} from "../src/DerivativeFactory.sol";
 import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
 import {RemyVaultHook} from "../src/RemyVaultHook.sol";
 import {RemyVaultNFT} from "../src/RemyVaultNFT.sol";
+import {RemyVault} from "../src/RemyVault.sol";
 import {MockERC721Simple} from "./helpers/MockMigratorDependencies.sol";
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
@@ -60,6 +61,18 @@ contract DerivativeFactoryForkTest is BaseTest {
 
         address nftOwner = makeAddr("nftOwner");
         address saleMinter = makeAddr("saleMinter");
+        address derivativeTokenRecipient = makeAddr("derivativeTokenRecipient");
+
+        // Provide inventory so the factory can add liquidity.
+        uint256[] memory tokenIds = new uint256[](10);
+        for (uint256 i; i < tokenIds.length; ++i) {
+            uint256 tokenId = i + 1;
+            parentCollection.mint(address(this), tokenId);
+            tokenIds[i] = tokenId;
+        }
+        parentCollection.setApprovalForAll(parentVault, true);
+        RemyVault(parentVault).deposit(tokenIds, address(this));
+        RemyVault(parentVault).approve(address(factory), type(uint256).max);
 
         DerivativeFactory.DerivativeParams memory params;
         params.parentVault = parentVault;
@@ -73,6 +86,13 @@ contract DerivativeFactoryForkTest is BaseTest {
         params.fee = 3000;
         params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
+        params.maxSupply = 50;
+        params.tickLower = -120;
+        params.tickUpper = 120;
+        params.liquidity = 5e5;
+        params.parentTokenContribution = 3 * 1e18;
+        params.derivativeTokenRecipient = derivativeTokenRecipient;
+        params.parentTokenRefundRecipient = address(this);
 
         (address derivativeNft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 

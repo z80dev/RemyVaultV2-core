@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
+import {DerivativeRemyVault} from "../src/DerivativeRemyVault.sol";
 import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
 import {RemyVaultHook} from "../src/RemyVaultHook.sol";
 import {RemyVaultNFT} from "../src/RemyVaultNFT.sol";
@@ -129,8 +130,22 @@ contract DerivativeFactoryTest is Test {
         address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
         PoolId parentPoolId = factory.registerRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
+        // Seed the parent vault with inventory so the factory can provide liquidity.
+        uint256 depositCount = 100;
+        uint256[] memory tokenIds = new uint256[](depositCount);
+        for (uint256 i; i < depositCount; ++i) {
+            uint256 tokenId = i + 1;
+            parentCollection.mint(address(this), tokenId);
+            tokenIds[i] = tokenId;
+        }
+        parentCollection.setApprovalForAll(parentVault, true);
+        RemyVault(parentVault).deposit(tokenIds, address(this));
+        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        uint256 availableParentTokens = RemyVault(parentVault).balanceOf(address(this));
+
         address nftOwner = makeAddr("nftOwner");
         address saleMinter = makeAddr("saleMinter");
+        address derivativeTokenSink = makeAddr("derivativeSink");
 
         DerivativeFactory.DerivativeParams memory params;
         params.parentVault = parentVault;
@@ -144,6 +159,15 @@ contract DerivativeFactoryTest is Test {
         params.fee = 3000;
         params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
+        params.maxSupply = 100;
+        params.tickLower = -120;
+        params.tickUpper = 120;
+        params.liquidity = 1e3;
+        params.parentTokenContribution = availableParentTokens;
+        params.derivativeTokenRecipient = derivativeTokenSink;
+        params.parentTokenRefundRecipient = address(this);
+
+        uint256 parentBalanceBefore = RemyVault(parentVault).balanceOf(address(this));
 
         vm.recordLogs();
         (address derivativeNft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
@@ -174,7 +198,7 @@ contract DerivativeFactoryTest is Test {
             assertEq(eventChildPoolId, PoolId.unwrap(childPoolId), "child pool id mismatch");
             assertEq(eventFee, params.fee, "fee mismatch in event");
             assertEq(eventTickSpacing, params.tickSpacing, "tick spacing mismatch in event");
-            assertEq(eventSqrtPrice, params.sqrtPriceX96, "sqrt price mismatch in event");
+            assertEq(eventSqrtPrice, SQRT_PRICE_1_1, "sqrt price mismatch in event");
         }
         assertTrue(foundDerivativeEvent, "DerivativeCreated event not emitted");
 
@@ -190,6 +214,13 @@ contract DerivativeFactoryTest is Test {
         assertEq(nft.owner(), nftOwner, "NFT ownership not transferred");
         assertEq(nft.baseUri(), "ipfs://deriv/", "base URI mismatch");
         assertTrue(nft.isMinter(saleMinter), "minter not configured");
+        assertTrue(nft.isMinter(derivativeVault), "vault should be configured as minter");
+
+        DerivativeRemyVault derivativeToken = DerivativeRemyVault(derivativeVault);
+        assertEq(derivativeToken.maxSupply(), params.maxSupply, "max supply mismatch");
+        assertEq(derivativeToken.totalSupply(), params.maxSupply * derivativeToken.UNIT(), "total supply mismatch");
+        assertEq(derivativeToken.balanceOf(address(factory)), 0, "factory should not retain vault tokens");
+        assertGt(derivativeToken.balanceOf(derivativeTokenSink), 0, "recipient should receive vault tokens");
 
         (bool initialized, bool hasParent, PoolKey memory parentKey, Currency sharedCurrency, bool sharedIsChild0,) =
             hook.poolConfig(childPoolId);
@@ -197,6 +228,7 @@ contract DerivativeFactoryTest is Test {
         assertTrue(hasParent, "child missing parent");
         assertEq(PoolId.unwrap(parentKey.toId()), PoolId.unwrap(parentPoolId), "parent pool mismatch");
         assertEq(Currency.unwrap(sharedCurrency), parentVault, "shared token mismatch");
+
         PoolKey memory expectedChildKey = _buildKey(derivativeVault, parentVault, 3000, 60);
         bool childCurrency0IsParent = Currency.unwrap(expectedChildKey.currency0) == parentVault;
         assertEq(sharedIsChild0, childCurrency0IsParent, "shared orientation mismatch");
@@ -204,27 +236,39 @@ contract DerivativeFactoryTest is Test {
         (uint160 childSqrtPrice,,,) = manager.getSlot0(childPoolId);
         assertEq(childSqrtPrice, SQRT_PRICE_1_1, "child sqrt price mismatch");
 
+        bool derivativeIsCurrency0 = Currency.unwrap(expectedChildKey.currency0) == derivativeVault;
+        (int24 lower, int24 upper, uint160 normalizedPrice) =
+            _normalizeTicks(derivativeIsCurrency0, params.tickLower, params.tickUpper, params.sqrtPriceX96);
+
+        (uint128 liquidity,,) = manager.getPositionInfo(childPoolId, address(factory), lower, upper, bytes32(0));
+        assertEq(liquidity, params.liquidity, "liquidity mismatch");
+        assertEq(normalizedPrice, childSqrtPrice, "price normalization mismatch");
+
+        uint256 parentBalanceAfter = RemyVault(parentVault).balanceOf(address(this));
+        assertLt(parentBalanceAfter, parentBalanceBefore, "parent tokens not consumed");
+        assertEq(RemyVault(parentVault).balanceOf(address(factory)), 0, "factory retains parent tokens");
+
         address collector = makeAddr("collector");
-        vm.prank(saleMinter);
-        uint256 tokenId = nft.safeMint(collector, "initial.json");
-        assertEq(nft.tokenURI(tokenId), "ipfs://deriv/initial.json", "mint suffix not applied");
+        vm.prank(derivativeVault);
+        uint256 mintedId = nft.safeMint(collector, "initial.json");
+        assertEq(nft.tokenURI(mintedId), "ipfs://deriv/initial.json", "vault mint failed");
 
         vm.expectRevert(Ownable.Unauthorized.selector);
         vm.prank(saleMinter);
-        nft.setTokenUri(tokenId, "hijack.json");
+        nft.setTokenUri(mintedId, "hijack.json");
 
         vm.prank(nftOwner);
         nft.setBaseUri("ipfs://updated/");
         assertEq(nft.baseUri(), "ipfs://updated/", "base uri not updated");
-        assertEq(nft.tokenURI(tokenId), "ipfs://updated/initial.json", "token uri should reflect new base");
+        assertEq(nft.tokenURI(mintedId), "ipfs://updated/initial.json", "token uri should reflect new base");
 
         vm.prank(nftOwner);
-        nft.setTokenUri(tokenId, "custom.json");
-        assertEq(nft.tokenURI(tokenId), "ipfs://updated/custom.json", "token uri not overridden");
+        nft.setTokenUri(mintedId, "custom.json");
+        assertEq(nft.tokenURI(mintedId), "ipfs://updated/custom.json", "token uri not overridden");
 
         vm.prank(nftOwner);
-        nft.setTokenUri(tokenId, "");
-        assertEq(nft.tokenURI(tokenId), string.concat("ipfs://updated/", tokenId.toString()), "token uri not reset");
+        nft.setTokenUri(mintedId, "");
+        assertEq(nft.tokenURI(mintedId), string.concat("ipfs://updated/", mintedId.toString()), "token uri not reset");
 
         vm.expectRevert(ERC721.TokenDoesNotExist.selector);
         vm.prank(nftOwner);
@@ -242,6 +286,10 @@ contract DerivativeFactoryTest is Test {
         params.fee = 3000;
         params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
+        params.maxSupply = 1;
+        params.tickLower = -60;
+        params.tickUpper = 60;
+        params.liquidity = 1;
 
         vm.expectRevert(abi.encodeWithSelector(DerivativeFactory.ParentVaultNotRegistered.selector, params.parentVault));
         factory.createDerivative(params);
@@ -251,6 +299,20 @@ contract DerivativeFactoryTest is Test {
         address randomToken = address(new RemyVault("Mock", "MOCK", address(parentCollection)));
         vm.expectRevert(abi.encodeWithSelector(DerivativeFactory.ParentVaultNotFromFactory.selector, randomToken));
         factory.registerRootPool(randomToken, 3000, 60, SQRT_PRICE_1_1);
+    }
+
+    function _normalizeTicks(bool derivativeIsCurrency0, int24 tickLower, int24 tickUpper, uint160 sqrtPriceX96)
+        internal
+        pure
+        returns (int24 lower, int24 upper, uint160 priceX96)
+    {
+        if (derivativeIsCurrency0) {
+            return (tickLower, tickUpper, sqrtPriceX96);
+        }
+
+        lower = -tickUpper;
+        upper = -tickLower;
+        priceX96 = uint160((uint256(1) << 192) / sqrtPriceX96);
     }
 
     function _buildKey(address tokenA, address tokenB, uint24 fee, int24 spacing)

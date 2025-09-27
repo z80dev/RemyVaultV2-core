@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {DerivativeRemyVault} from "./DerivativeRemyVault.sol";
 import {RemyVault} from "./RemyVault.sol";
 
 /// @notice Deploys deterministic `RemyVault` instances keyed by ERC721 collection.
@@ -36,6 +37,30 @@ contract RemyVaultFactory {
         emit VaultCreated(collection, vault);
     }
 
+    /// @notice Deploy a derivative vault that pre-mints its full token supply to the caller.
+    function deployDerivativeVault(
+        address collection,
+        string calldata name_,
+        string calldata symbol_,
+        uint256 maxSupply
+    ) external returns (address vault) {
+        if (collection == address(0)) revert CollectionAddressZero();
+        if (vaultFor[collection] != address(0)) revert CollectionAlreadyDeployed(collection);
+        if (isVault[collection]) revert CollectionIsVault(collection);
+
+        bytes32 salt = _salt(collection);
+        vault = address(new DerivativeRemyVault{salt: salt}(name_, symbol_, collection, maxSupply));
+
+        uint256 mintedSupply = DerivativeRemyVault(vault).balanceOf(address(this));
+        if (mintedSupply != 0) {
+            DerivativeRemyVault(vault).transfer(msg.sender, mintedSupply);
+        }
+
+        vaultFor[collection] = vault;
+        isVault[vault] = true;
+        emit VaultCreated(collection, vault);
+    }
+
     /// @notice Predict the vault address for the provided constructor arguments without deploying.
     function predictVaultAddress(address collection, string calldata name_, string calldata symbol_)
         external
@@ -47,6 +72,22 @@ contract RemyVaultFactory {
 
         bytes32 bytecodeHash =
             keccak256(abi.encodePacked(type(RemyVault).creationCode, abi.encode(name_, symbol_, collection)));
+        return _computeCreate2Address(_salt(collection), bytecodeHash);
+    }
+
+    /// @notice Predict the address for a derivative vault without deploying.
+    function predictDerivativeVaultAddress(
+        address collection,
+        string calldata name_,
+        string calldata symbol_,
+        uint256 maxSupply
+    ) external view returns (address) {
+        if (collection == address(0)) revert CollectionAddressZero();
+        if (isVault[collection]) revert CollectionIsVault(collection);
+
+        bytes32 bytecodeHash = keccak256(
+            abi.encodePacked(type(DerivativeRemyVault).creationCode, abi.encode(name_, symbol_, collection, maxSupply))
+        );
         return _computeCreate2Address(_salt(collection), bytecodeHash);
     }
 
