@@ -7,4 +7,8 @@ import {Test} from "forge-std/Test.sol";
 abstract contract BaseTest is Test {
     string baseRpcUrl = vm.envString("BASE_RPC_URL");
     uint256 fork = vm.createSelectFork(baseRpcUrl);
+
+    function setUp() public virtual {
+        vm.selectFork(fork);
+    }
 }

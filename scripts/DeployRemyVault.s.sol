@@ -3,6 +3,8 @@ pragma solidity ^0.8.19;
 
 import "forge-std/Script.sol";
 
+import {RemyVaultSol} from "../src/RemyVaultSol.sol";
+
 interface ICreateX {
     function deployCreate(bytes memory initCode) external payable returns (address newContract);
 }
@@ -61,11 +63,8 @@ contract DeployRemyVault is Script {
         address nftCollection
     ) internal returns (address) {
         bytes memory constructorArgs = abi.encode(name, symbol, nftCollection);
-        bytes memory initCode = abi.encodePacked(
-            vm.getCode("RemyVault.vy"),
-            constructorArgs
-        );
-        
+        bytes memory initCode = abi.encodePacked(type(RemyVaultSol).creationCode, constructorArgs);
+
         address deployed = ICreateX(CREATEX_FACTORY).deployCreate(initCode);
         require(deployed != address(0), "Failed to deploy RemyVault");
         return deployed;

@@ -1,0 +1,40 @@
+@view
+@external
+def erc20() -> address:
+    ...
+
+
+@view
+@external
+def erc721() -> address:
+    ...
+
+
+@view
+@external
+def UNIT() -> uint256:
+    ...
+
+
+@pure
+@external
+def quoteDeposit(count: uint256) -> uint256:
+    ...
+
+
+@pure
+@external
+def quoteWithdraw(count: uint256) -> uint256:
+    ...
+
+
+@external
+@nonpayable
+def deposit(tokenIds: DynArray[uint256, 100], recipient: address) -> uint256:
+    ...
+
+
+@external
+@nonpayable
+def withdraw(tokenIds: DynArray[uint256, 100], recipient: address) -> uint256:
+    ...

@@ -38,10 +38,11 @@ The vault converts NFTs into fungible ERC20 tokens at a fixed 1e18 REMY per NFT.
 - Quoting functions expose deterministic pricing (`UNIT = 1e18`)
 
 ### Key Properties
+- **Permissionless**: No owner or privileged address; anyone can deposit or withdraw against inventory
 - **Simplicity**: Focuses solely on deposit/withdraw logic
 - **Reliability**: No price or oracle dependency, only inventory-backed accounting
 - **Composability**: Downstream contracts can reason about REMY supply deterministically
-- **Security**: Emits structured `Deposit`/`Withdraw` events for off-chain reconciliation
+- **Traceability**: Emits structured `Deposit`/`Withdraw` events for off-chain reconciliation
 
 ### Interface
 ```solidity
@@ -95,12 +96,12 @@ This integration creates completely new NFT trading mechanisms not possible in t
 - **Standards**: ERC20, ERC721, ERC4626 compliant implementations where applicable
 - **Testing Framework**: Comprehensive Foundry test suite with deterministic builds
 
-### Security Features
-- Nonreentrant guards protecting against reentrancy attacks
-- Access control for privileged operations
-- Protocol-controlled token minting/burning with strict validation
-- Proper checks-effects-interactions pattern implementation
-- Invariant-based testing to verify fundamental protocol properties
+### Security Posture
+- The Solidity vault mirrors WETH-style semantics: minting and burning are guarded only by real inventory
+- Factories deploy vaults deterministically via CREATE2 with no upgrade hooks or owner keys
+- Derivative tooling (factories, hooks) layers ownership where needed for routing and pool management
+- Invariant-based Foundry tests assert that ERC20 supply always matches escrowed NFT count
+- Migration and rescue flows interact with legacy RemyVault V1 strictly through interfaces in this repo
 
 ## Smart Contract Documentation
 

@@ -24,8 +24,7 @@ from interfaces import LegacyRemyVault as RemyVault
 from interfaces import DN404
 from interfaces import InventoryERC721
 from interfaces import VaultERC4626
-
-from . import RemyVault as RemyVaultV2
+from interfaces import RemyVaultSol as RemyVaultV2
 
 from snekmate.auth import ownable
 
@@ -42,7 +41,7 @@ erc4626: public(VaultERC4626)
 # - withdraw
 erc721: public(InventoryERC721)
 erc20_v1: public(DN404)
-vault_v2: public(RemyVaultV2.__interface__)
+vault_v2: public(RemyVaultV2)
 erc20_v2: public(ERC20)
 
 @deploy
@@ -58,7 +57,7 @@ def __init__(old_router: address, vault_v2: address):
     erc20_address: address = staticcall vault_owner.vault.erc20()
     self.erc20_v1 = DN404(erc20_address)
 
-    self.vault_v2 = RemyVaultV2.__interface__(vault_v2)
+    self.vault_v2 = RemyVaultV2(vault_v2)
     self.erc20_v2 = ERC20(staticcall self.vault_v2.erc20())
 
     # approve vault for all erc721 transfers

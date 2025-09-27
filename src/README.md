@@ -41,8 +41,8 @@ The hook maintains its own inventory of NFTs available for trading, which can be
 ## Contract Structure
 
 - **RemyVaultHook.sol**: Main hook implementation
+- **RemyVaultSol.sol**: Core vault contract for NFT fractionalization
 - **IRemyVault.sol**: Interface to interact with RemyVault
-- **RemyVault.vy**: The core vault contract for NFT tokenization
 
 ## Setup and Deployment
 

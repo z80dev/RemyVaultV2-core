@@ -9,6 +9,7 @@ vyper_version = "0.4.3"
 
 # Add remappings
 remappings = [
+    "solmate/src/=lib/solmate/src/",
     "solmate/=lib/solmate/src/",
     "solady/=lib/solady/src/",
     "@uniswap/v4-core/=lib/v4-periphery/lib/v4-core/",
@@ -18,3 +19,11 @@ remappings = [
 fs_permissions = [
     { access = "read", path = "./addresses" }
 ]
+
+[etherscan]
+base = { key = "${BASESCAN_API_KEY}" }
+base_sepolia = { key = "${BASESCAN_API_KEY}" }
+
+[rpc_endpoints]
+mainnet = "${MAINNET_RPC_URL}"
+base = "${BASE_RPC_URL}"

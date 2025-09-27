@@ -13,6 +13,7 @@ interface ICreateX {
  */
 contract DeployRemyVaultFactory is Script {
     address public constant CREATEX_FACTORY = 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed;
+    bytes32 internal constant DEFAULT_DEPLOYMENT_SALT = keccak256("remyboysincontrol");
 
     /// @dev Set the salt via env var `SALT` (raw string automatically keccak'd) or `SALT_HEX` for explicit bytes32.
     function run() external {
@@ -47,12 +48,14 @@ contract DeployRemyVaultFactory is Script {
         }
 
         bytes32 rawSalt = vm.envOr("SALT_HEX", bytes32(0));
-        require(rawSalt != bytes32(0), "set SALT or SALT_HEX env var");
-        return rawSalt;
+        if (rawSalt != bytes32(0)) {
+            return rawSalt;
+        }
+
+        return DEFAULT_DEPLOYMENT_SALT;
     }
 
     function _predictAddress(bytes memory initCode, bytes32 salt) internal view returns (address) {
         return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), CREATEX_FACTORY, salt, keccak256(initCode))))));
     }
 }
-

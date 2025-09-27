@@ -12,7 +12,7 @@ contract RemyVaultFactory {
     mapping(address => bool) public isVault;
 
     /// @notice Emitted when a new vault is deployed for an ERC721 collection.
-    event VaultCreated(address indexed collection, address vault);
+    event VaultCreated(address indexed collection, address indexed vault);
 
     error CollectionAlreadyDeployed(address collection);
     error CollectionAddressZero();

@@ -1,154 +1,270 @@
-// // SPDX-License-Identifier: MIT
-// /*
-// pragma solidity ^0.8.0;
-// 
-// import {IRemyVault} from "./interfaces/IRemyVault.sol";
-// import {IERC721} from "./interfaces/IERC721.sol";
-// import {IERC20Minimal} from "@uniswap/v4-core/src/interfaces/external/IERC20Minimal.sol";
-// import {BaseHook} from "@uniswap/v4-periphery/src/utils/BaseHook.sol";
-// import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
-// import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-// import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
-// import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
-// import {BalanceDelta, BalanceDeltaLibrary} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
-// import {CurrencyLibrary, Currency} from "@uniswap/v4-core/src/types/Currency.sol";
-// import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
-// import {BeforeSwapDelta, toBeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
-// import {SafeCast} from "@uniswap/v4-core/src/libraries/SafeCast.sol";
-// 
-// contract RemyVaultHook is BaseHook {
-//     using CurrencyLibrary for Currency;
-//     using PoolIdLibrary for PoolKey;
-//     using BalanceDeltaLibrary for BalanceDelta;
-//     using SafeCast for uint256;
-//     using SafeCast for int256;
-// 
-//     // ============ Constants ============
-// 
-//     uint256 public constant FEE_DENOMINATOR = 10000;
-// 
-//     /// @notice Allowed pools for this hook
-//     mapping(PoolId => bool) public validPools;
-// 
-//     // ============ Constructor ============
-// 
-//     /**
-//      * @notice Constructs the RemyVaultHook
-//      * @param _poolManager Uniswap V4 Pool Manager
-//      * @param _remyVault Address of the RemyVault contract
-//      * @param _feeRecipient Address to receive fees
-//      * @param _buyFee Fee percentage for buying NFTs
-//      */
-//     constructor(IPoolManager _poolManager, address remyVaultFactory)
-//         BaseHook(_poolManager)
-//     {
-//     }
-// 
-//     // ============ Hook Permissions ============
-// 
-//     /**
-//      * @notice Returns the hook's permissions
-//      * @return The hooks that this contract will implement
-//      */
-//     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
-//         return Hooks.Permissions({
-//             beforeInitialize: true,
-//             afterInitialize: false,
-//             beforeAddLiquidity: false,
-//             afterAddLiquidity: false,
-//             beforeRemoveLiquidity: false,
-//             afterRemoveLiquidity: false,
-//             beforeSwap: true,
-//             afterSwap: true,
-//             beforeDonate: false,
-//             afterDonate: false,
-//             beforeSwapReturnDelta: true,
-//             afterSwapReturnDelta: true,
-//             afterAddLiquidityReturnDelta: false,
-//             afterRemoveLiquidityReturnDelta: false
-//         });
-//     }
-// 
-//     // ============ Hook Implementations ============
-// 
-//     /**
-//      * @notice Validates pool initialization parameters
-//      * @dev The sender parameter is not used in this implementation
-//      * @param key The pool key
-//      * @return The function selector if validation passes
-//      */
-//     function _beforeInitialize(address, PoolKey calldata key, uint160) internal override returns (bytes4) {
-//         // Validate that one of the tokens is our vault token
-//         bool isValidPool =
-//             (key.currency0 == Currency.wrap(address(vaultToken)) || key.currency1 == Currency.wrap(address(vaultToken)));
-// 
-//         if (!isValidPool) revert InvalidPool();
-// 
-//         // Register this as a valid pool
-//         validPools[key.toId()] = true;
-// 
-//         return IHooks(address(0)).beforeInitialize.selector;
-//     }
-// 
-//     /**
-//      * @notice Hook called before a swap occurs
-//      * @dev Handles NFT buying/selling logic
-//      * @dev The sender parameter is not used in this implementation
-//      * @param key The pool key
-//      * @param params The swap parameters
-//      * @return selector The function selector
-//      * @return swapDelta Token delta to apply for the swap
-//      * @return lpFeeOverride Fee override (not used in this hook)
-//      */
-//     function _beforeSwap(address, PoolKey calldata key, IPoolManager.SwapParams calldata params, bytes calldata)
-//         internal
-//         view
-//         override
-//         returns (bytes4 selector, BeforeSwapDelta swapDelta, uint24 lpFeeOverride)
-//     {
-//         return (IHooks(address(0)).beforeSwap.selector, toBeforeSwapDelta(int128(0), int128(0)), 0);
-//     }
-// 
-//     /**
-//      * @notice Hook called after a swap occurs
-//      * @dev Executes NFT buying/selling logic
-//      * @dev The sender parameter is not used in this implementation
-//      * @param key The pool key
-//      * @param params The swap parameters
-//      * @param delta Balance delta from the swap
-//      * @return selector The function selector
-//      * @return deltaAdjustment Optional adjustment to the balance delta
-//      */
-//     function _afterSwap(
-//         address sender,
-//         PoolKey calldata key,
-//         IPoolManager.SwapParams calldata params,
-//         BalanceDelta delta,
-//         bytes calldata hookData
-//     ) internal override returns (bytes4 selector, int128 deltaAdjustment) {
-//     }
-// 
-// 
-//     /**
-//      * @notice Helper function to get tokens received from a delta
-//      * @param delta The balance delta from a swap
-//      * @return tokensReceived The amount of tokens received
-//      */
-//     function _getTokensReceived(BalanceDelta delta) internal pure returns (int256 tokensReceived) {
-//         int128 amount0 = delta.amount0();
-//         int128 amount1 = delta.amount1();
-// 
-//         if (amount0 > 0) {
-//             tokensReceived = int256(amount0);
-//         } else if (amount1 > 0) {
-//             tokensReceived = int256(amount1);
-//         }
-//     }
-// 
-//     // ============ External Functions ============
-//     /**
-//      * @notice Required to receive ETH
-//      */
-// receive() external payable {}
-// }
-// */
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import {BaseHook} from "@uniswap/v4-periphery/src/utils/BaseHook.sol";
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
+import {BalanceDelta, BalanceDeltaLibrary} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+
+contract RemyVaultHook is BaseHook {
+    using PoolIdLibrary for PoolKey;
+    using CurrencyLibrary for Currency;
+    using BalanceDeltaLibrary for BalanceDelta;
+
+    uint16 internal constant FEE_DENOMINATOR = 10_000;
+    uint16 internal constant TOTAL_FEE_BPS = 1_000; // 10%
+    uint16 internal constant CHILD_SHARE_WITH_PARENT_BPS = 750; // 7.5%
+
+    error NotOwner();
+    error InvalidOwner();
+    error HookMismatch();
+    error RootPoolRequiresEth();
+    error ChildPoolCannotUseEth();
+    error ParentNotConfigured();
+    error MustShareExactlyOneToken();
+    error SharedTokenCannotBeEth();
+
+    struct PoolConfig {
+        bool initialized;
+        bool hasParent;
+        PoolKey parentKey;
+        Currency sharedCurrency;
+        bool sharedIsChild0;
+        bool sharedIsParent0;
+    }
+
+    address public owner;
+
+    mapping(PoolId => PoolConfig) public poolConfig;
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event ChildConfigured(PoolId indexed childPool, PoolId indexed parentPool, Currency sharedCurrency, bool hasParent);
+
+    constructor(IPoolManager manager, address owner_) BaseHook(manager) {
+        if (owner_ == address(0)) revert InvalidOwner();
+        owner = owner_;
+        emit OwnershipTransferred(address(0), owner_);
+    }
+
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert NotOwner();
+        _;
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert InvalidOwner();
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+
+    function addChild(PoolKey calldata childKey, bool hasParent, PoolKey calldata parentKey) external onlyOwner {
+        if (address(childKey.hooks) != address(this)) revert HookMismatch();
+
+        PoolConfig memory config;
+        config.initialized = true;
+        config.hasParent = hasParent;
+
+        if (hasParent) {
+            if (address(parentKey.hooks) != address(this)) revert HookMismatch();
+            if (childKey.currency0.isAddressZero() || childKey.currency1.isAddressZero()) revert ChildPoolCannotUseEth();
+
+            PoolId parentId = parentKey.toId();
+            PoolConfig memory parentConfig = poolConfig[parentId];
+            if (!parentConfig.initialized) revert ParentNotConfigured();
+
+            (Currency sharedCurrency, bool sharedIsChild0, bool sharedIsParent0) = _sharedToken(childKey, parentKey);
+            if (sharedCurrency.isAddressZero()) revert SharedTokenCannotBeEth();
+            config.parentKey = parentKey;
+            config.sharedCurrency = sharedCurrency;
+            config.sharedIsChild0 = sharedIsChild0;
+            config.sharedIsParent0 = sharedIsParent0;
+        } else {
+            bool childHasEth0 = childKey.currency0.isAddressZero();
+            bool childHasEth1 = childKey.currency1.isAddressZero();
+            if (childHasEth0 == childHasEth1) revert RootPoolRequiresEth();
+
+            config.sharedCurrency = childHasEth0 ? childKey.currency1 : childKey.currency0;
+            config.sharedIsChild0 = !childHasEth0;
+        }
+
+        PoolId childId = childKey.toId();
+        poolConfig[childId] = config;
+
+        PoolId parentPoolId = hasParent ? parentKey.toId() : PoolId.wrap(bytes32(0));
+        emit ChildConfigured(childId, parentPoolId, config.sharedCurrency, hasParent);
+    }
+
+    function getHookPermissions() public pure override returns (Hooks.Permissions memory permissions) {
+        permissions.beforeSwap = true;
+        permissions.beforeSwapReturnDelta = true;
+        permissions.afterSwap = true;
+        permissions.afterSwapReturnDelta = true;
+    }
+
+    function _beforeSwap(
+        address,
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata params,
+        bytes calldata
+    ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
+        PoolConfig memory config = poolConfig[key.toId()];
+        if (!config.initialized) {
+            return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        }
+
+        bool exactIn = params.amountSpecified < 0;
+        bool specifiedIsC0 = _specifiedIsCurrency0(params.zeroForOne, exactIn);
+        bool sharedIsSpecified = (config.sharedIsChild0 == specifiedIsC0);
+
+        if (!sharedIsSpecified) {
+            return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        }
+
+        uint256 specifiedAmount = _abs(params.amountSpecified);
+        uint256 totalFee = (specifiedAmount * TOTAL_FEE_BPS) / FEE_DENOMINATOR;
+        if (totalFee == 0) {
+            return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        }
+
+        (uint256 childFee, uint256 parentFee) = _splitFees(totalFee, config.hasParent);
+
+        if (childFee > 0) {
+            poolManager.donate(
+                key,
+                config.sharedIsChild0 ? childFee : 0,
+                config.sharedIsChild0 ? 0 : childFee,
+                bytes("")
+            );
+        }
+
+        if (config.hasParent && parentFee > 0) {
+            poolManager.donate(
+                config.parentKey,
+                config.sharedIsParent0 ? parentFee : 0,
+                config.sharedIsParent0 ? 0 : parentFee,
+                bytes("")
+            );
+        }
+
+        BeforeSwapDelta delta = toBeforeSwapDelta(int128(int256(totalFee)), int128(0));
+        return (this.beforeSwap.selector, delta, 0);
+    }
+
+    function _afterSwap(
+        address,
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata params,
+        BalanceDelta delta,
+        bytes calldata
+    ) internal override returns (bytes4, int128) {
+        PoolConfig memory config = poolConfig[key.toId()];
+        if (!config.initialized) {
+            return (this.afterSwap.selector, int128(0));
+        }
+
+        bool exactIn = params.amountSpecified < 0;
+        bool specifiedIsC0 = _specifiedIsCurrency0(params.zeroForOne, exactIn);
+        bool sharedIsSpecified = (config.sharedIsChild0 == specifiedIsC0);
+
+        if (sharedIsSpecified) {
+            return (this.afterSwap.selector, int128(0));
+        }
+
+        int128 unspecifiedSigned = specifiedIsC0 ? delta.amount1() : delta.amount0();
+        uint256 unspecifiedAmount = _abs(int256(unspecifiedSigned));
+        uint256 totalFee = (unspecifiedAmount * TOTAL_FEE_BPS) / FEE_DENOMINATOR;
+        if (totalFee == 0) {
+            return (this.afterSwap.selector, int128(0));
+        }
+
+        (uint256 childFee, uint256 parentFee) = _splitFees(totalFee, config.hasParent);
+
+        if (childFee > 0) {
+            poolManager.donate(
+                key,
+                config.sharedIsChild0 ? childFee : 0,
+                config.sharedIsChild0 ? 0 : childFee,
+                bytes("")
+            );
+        }
+
+        if (config.hasParent && parentFee > 0) {
+            poolManager.donate(
+                config.parentKey,
+                config.sharedIsParent0 ? parentFee : 0,
+                config.sharedIsParent0 ? 0 : parentFee,
+                bytes("")
+            );
+        }
+
+        return (this.afterSwap.selector, int128(int256(totalFee)));
+    }
+
+    function _sharedToken(PoolKey calldata childKey, PoolKey calldata parentKey)
+        private
+        pure
+        returns (Currency shared, bool sharedIsChild0, bool sharedIsParent0)
+    {
+        uint8 matches;
+
+        if (childKey.currency0 == parentKey.currency0) {
+            shared = childKey.currency0;
+            sharedIsChild0 = true;
+            sharedIsParent0 = true;
+            matches++;
+        }
+
+        if (childKey.currency0 == parentKey.currency1) {
+            shared = childKey.currency0;
+            sharedIsChild0 = true;
+            sharedIsParent0 = false;
+            matches++;
+        }
+
+        if (childKey.currency1 == parentKey.currency0) {
+            shared = childKey.currency1;
+            sharedIsChild0 = false;
+            sharedIsParent0 = true;
+            matches++;
+        }
+
+        if (childKey.currency1 == parentKey.currency1) {
+            shared = childKey.currency1;
+            sharedIsChild0 = false;
+            sharedIsParent0 = false;
+            matches++;
+        }
+
+        if (matches != 1) revert MustShareExactlyOneToken();
+    }
+
+    function _splitFees(uint256 totalFee, bool hasParent)
+        private
+        pure
+        returns (uint256 childFee, uint256 parentFee)
+    {
+        if (hasParent) {
+            childFee = (totalFee * CHILD_SHARE_WITH_PARENT_BPS) / TOTAL_FEE_BPS;
+            parentFee = totalFee - childFee;
+        } else {
+            childFee = totalFee;
+        }
+    }
+
+    function _specifiedIsCurrency0(bool zeroForOne, bool exactIn) private pure returns (bool) {
+        return zeroForOne ? exactIn : !exactIn;
+    }
+
+    function _abs(int256 value) private pure returns (uint256) {
+        if (value >= 0) {
+            return uint256(value);
+        }
+        unchecked {
+            return uint256(uint256(~value) + 1);
+        }
+    }
+}
