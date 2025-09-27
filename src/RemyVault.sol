@@ -1,45 +1,24 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {ERC20} from "solady/tokens/ERC20.sol";
 import {IERC721} from "./interfaces/IERC721.sol";
 import {IERCXX} from "./interfaces/IERCXX.sol";
+import {RemyVaultEIP712} from "./RemyVaultEIP712.sol";
 
-contract RemyVault is ERC20, IERCXX {
+contract RemyVault is RemyVaultEIP712, IERCXX {
     /// @notice Number of ERC20 tokens minted per deposited NFT.
     uint256 public constant UNIT = 1e18;
-
-    /// @dev Cached keccak256 hash of the token name for permit domain separation.
-    bytes32 private immutable NAME_HASH;
-
-    /// @dev EIP-712 version hash, matching the Vyper implementation's "1.0" domain.
-    bytes32 private constant VERSION_HASH = keccak256("1.0");
 
     /// @notice The ERC721 collection held by the vault (unused until deposit logic is ported).
     IERC721 private immutable ERC721_TOKEN;
 
-    /// @dev ERC20 metadata storage compatible with Solady's ERC20 base.
-    string private _name;
-    string private _symbol;
-
-    constructor(string memory name_, string memory symbol_, address erc721_) {
-        _name = name_;
-        _symbol = symbol_;
-        NAME_HASH = keccak256(bytes(name_));
+    constructor(string memory name_, string memory symbol_, address erc721_) RemyVaultEIP712(name_, symbol_) {
         ERC721_TOKEN = IERC721(erc721_);
     }
 
     // -------------------------------------------------------------------------
     // Metadata
     // -------------------------------------------------------------------------
-
-    function name() public view override returns (string memory) {
-        return _name;
-    }
-
-    function symbol() public view override returns (string memory) {
-        return _symbol;
-    }
 
     function erc20() public view override returns (address) {
         return address(this);
@@ -105,18 +84,6 @@ contract RemyVault is ERC20, IERCXX {
         }
 
         emit Withdraw(receiver, tokenIds, burnedAmount);
-    }
-
-    // -------------------------------------------------------------------------
-    // Solady Overrides
-    // -------------------------------------------------------------------------
-
-    function _constantNameHash() internal view override returns (bytes32) {
-        return NAME_HASH;
-    }
-
-    function _versionHash() internal pure override returns (bytes32) {
-        return VERSION_HASH;
     }
 
     function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {

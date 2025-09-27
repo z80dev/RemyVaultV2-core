@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Ownable} from "solady/auth/Ownable.sol";
 
-import {DerivativeRemyVault} from "./DerivativeRemyVault.sol";
+import {MinterRemyVault} from "./MinterRemyVault.sol";
 import {RemyVaultFactory} from "./RemyVaultFactory.sol";
 import {RemyVaultHook} from "./RemyVaultHook.sol";
 import {RemyVaultNFT} from "./RemyVaultNFT.sol";
@@ -163,7 +163,7 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         HOOK.addChild(childKey, true, root.key);
         POOL_MANAGER.initialize(childKey, normalizedSqrtPrice);
 
-        DerivativeRemyVault derivativeToken = DerivativeRemyVault(vault);
+        MinterRemyVault derivativeToken = MinterRemyVault(vault);
         RemyVault parentToken = RemyVault(params.parentVault);
 
         if (params.parentTokenContribution != 0) {

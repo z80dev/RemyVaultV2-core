@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
-import {DerivativeRemyVault} from "../src/DerivativeRemyVault.sol";
+import {MinterRemyVault} from "../src/MinterRemyVault.sol";
 import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
 import {RemyVaultHook} from "../src/RemyVaultHook.sol";
 import {RemyVaultNFT} from "../src/RemyVaultNFT.sol";
@@ -216,7 +216,7 @@ contract DerivativeFactoryTest is Test {
         assertTrue(nft.isMinter(saleMinter), "minter not configured");
         assertTrue(nft.isMinter(derivativeVault), "vault should be configured as minter");
 
-        DerivativeRemyVault derivativeToken = DerivativeRemyVault(derivativeVault);
+        MinterRemyVault derivativeToken = MinterRemyVault(derivativeVault);
         assertEq(derivativeToken.maxSupply(), params.maxSupply, "max supply mismatch");
         assertEq(derivativeToken.totalSupply(), params.maxSupply * derivativeToken.UNIT(), "total supply mismatch");
         assertEq(derivativeToken.balanceOf(address(factory)), 0, "factory should not retain vault tokens");

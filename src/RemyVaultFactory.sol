@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {DerivativeRemyVault} from "./DerivativeRemyVault.sol";
+import {MinterRemyVault} from "./MinterRemyVault.sol";
 import {RemyVault} from "./RemyVault.sol";
 
 /// @notice Deploys deterministic `RemyVault` instances keyed by ERC721 collection.
@@ -49,11 +49,11 @@ contract RemyVaultFactory {
         if (isVault[collection]) revert CollectionIsVault(collection);
 
         bytes32 salt = _salt(collection);
-        vault = address(new DerivativeRemyVault{salt: salt}(name_, symbol_, collection, maxSupply));
+        vault = address(new MinterRemyVault{salt: salt}(name_, symbol_, collection, maxSupply));
 
-        uint256 mintedSupply = DerivativeRemyVault(vault).balanceOf(address(this));
+        uint256 mintedSupply = MinterRemyVault(vault).balanceOf(address(this));
         if (mintedSupply != 0) {
-            DerivativeRemyVault(vault).transfer(msg.sender, mintedSupply);
+            MinterRemyVault(vault).transfer(msg.sender, mintedSupply);
         }
 
         vaultFor[collection] = vault;
@@ -86,7 +86,7 @@ contract RemyVaultFactory {
         if (isVault[collection]) revert CollectionIsVault(collection);
 
         bytes32 bytecodeHash = keccak256(
-            abi.encodePacked(type(DerivativeRemyVault).creationCode, abi.encode(name_, symbol_, collection, maxSupply))
+            abi.encodePacked(type(MinterRemyVault).creationCode, abi.encode(name_, symbol_, collection, maxSupply))
         );
         return _computeCreate2Address(_salt(collection), bytecodeHash);
     }

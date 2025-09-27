@@ -42,7 +42,7 @@ The hook maintains its own inventory of NFTs available for trading, which can be
 
 - **RemyVaultHook.sol**: Main hook implementation
 - **RemyVault.sol**: Core vault contract for NFT fractionalization
-- **DerivativeRemyVault.sol**: Derivative vault that pre-mints supply and handles NFT minting for derivative drops
+- **MinterRemyVault.sol**: Derivative vault that pre-mints supply and handles NFT minting for derivative drops
 - **IRemyVault.sol**: Interface to interact with RemyVault
 
 ## Setup and Deployment

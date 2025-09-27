@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-Core contracts live in `src/`: `RemyVault.sol` handles fractionalization, `DerivativeRemyVault.sol` powers derivative vault drops, `DerivativeFactory.sol` plus `RemyVaultNFT.sol` coordinate new collections, and `RemyVaultHook.sol` integrates Uniswap V4. Interfaces and mocks reside in `src/interfaces/` and `src/mock/`, while deployment scripts sit in `scripts/`. Foundry tests mirror contract names under `test/` with shared fixtures in `test/helpers/`, and vendored dependencies (forge-std, Solmate, Uniswap V4) are tracked in `lib/` via `foundry.toml` remappings.
+Core contracts live in `src/`: `RemyVault.sol` handles fractionalization, `MinterRemyVault.sol` powers derivative vault drops, `DerivativeFactory.sol` plus `RemyVaultNFT.sol` coordinate new collections, and `RemyVaultHook.sol` integrates Uniswap V4. Interfaces and mocks reside in `src/interfaces/` and `src/mock/`, while deployment scripts sit in `scripts/`. Foundry tests mirror contract names under `test/` with shared fixtures in `test/helpers/`, and vendored dependencies (forge-std, Solmate, Uniswap V4) are tracked in `lib/` via `foundry.toml` remappings.
 
 ## Build, Test, and Development Commands
 - `forge build` compiles Vyper 0.4.x and Solidity targets with the via-IR optimizer defined in `foundry.toml`.

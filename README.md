@@ -7,7 +7,7 @@ RemyVault is a minimalist, gas-efficient NFT fractionalization protocol. The cur
 The system focuses on two production components:
 
 1. **Core Vault (`RemyVault`)** – handles the NFT ↔ ERC20 mint/burn cycle
-2. **Derivative & Liquidity Tooling** – `DerivativeFactory`, `RemyVaultNFT`, `DerivativeRemyVault`, and the Uniswap V4 hook wire the vault into on-chain markets
+2. **Derivative & Liquidity Tooling** – `DerivativeFactory`, `RemyVaultNFT`, `MinterRemyVault`, and the Uniswap V4 hook wire the vault into on-chain markets
 
 The separation keeps the fractionalization layer small while still enabling new collections and liquidity strategies to launch through the derivative factory.
 
@@ -58,7 +58,7 @@ interface IRemyVault {
 
 The derivative toolchain extends the vault without modifying core logic:
 
-- `DerivativeFactory` mints new `RemyVaultNFT` collections and pairs them with freshly deployed `DerivativeRemyVault` instances.
+- `DerivativeFactory` mints new `RemyVaultNFT` collections and pairs them with freshly deployed `MinterRemyVault` instances.
 - Root and child pools are registered with `RemyVaultHook` to share liquidity across Uniswap V4 markets.
 - Metadata and minter permissions are configured at deployment time so launch scripts can tailor new drops.
 

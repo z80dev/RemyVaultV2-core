@@ -3,7 +3,7 @@
 pragma solidity >=0.8.7 <0.9.0;
 
 import {Test} from "forge-std/Test.sol";
-import {DerivativeRemyVault} from "../src/DerivativeRemyVault.sol";
+import {MinterRemyVault} from "../src/MinterRemyVault.sol";
 import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
 
 contract RemyVaultFactoryTest is Test {
@@ -48,7 +48,7 @@ contract RemyVaultFactoryTest is Test {
         assertEq(factory.vaultFor(collection), derivativeVault, "vault mapping mismatch");
         assertTrue(factory.isVault(derivativeVault), "vault flag missing");
 
-        DerivativeRemyVault vaultToken = DerivativeRemyVault(derivativeVault);
+        MinterRemyVault vaultToken = MinterRemyVault(derivativeVault);
         uint256 expectedSupply = vaultToken.UNIT() * 5;
         assertEq(vaultToken.totalSupply(), expectedSupply, "supply mismatch");
         assertEq(vaultToken.balanceOf(address(this)), expectedSupply, "creator balance mismatch");
