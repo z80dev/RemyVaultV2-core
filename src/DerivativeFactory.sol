@@ -282,15 +282,9 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         pure
         returns (uint160 normalizedSqrtPriceX96, int24 normalizedLower, int24 normalizedUpper)
     {
-        if (derivativeIsCurrency0) {
-            return (sqrtPriceX96, tickLower, tickUpper);
-        }
-
-        // Flip the orientation when the derivative token is currency1.
-        uint256 q96Squared = uint256(1) << 192;
-        normalizedSqrtPriceX96 = uint160(q96Squared / sqrtPriceX96);
-        normalizedLower = -tickUpper;
-        normalizedUpper = -tickLower;
+        // Use the provided price and ticks as-is
+        // The caller should calculate these based on actual pool token ordering
+        return (sqrtPriceX96, tickLower, tickUpper);
     }
 
     function _addInitialLiquidity(PoolKey memory key, int24 tickLower, int24 tickUpper, uint128 liquidity)

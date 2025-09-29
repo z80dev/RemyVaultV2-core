@@ -10,9 +10,11 @@ contract MinterRemyVaultTest is Test {
     MinterRemyVault internal vault;
     RemyVaultNFT internal nft;
     address internal alice;
+    address internal bob;
 
     function setUp() public {
         alice = makeAddr("alice");
+        bob = makeAddr("bob");
         nft = new RemyVaultNFT("Derivative", "DRV", "ipfs://", address(this));
         vault = new MinterRemyVault("Derivative Token", "dDRV", address(nft), 10);
         nft.setMinter(address(vault), true);
@@ -29,6 +31,25 @@ contract MinterRemyVaultTest is Test {
         assertEq(vault.maxSupply(), 10, "max supply mismatch");
     }
 
+    function testConstructorWithZeroMaxSupply() public {
+        RemyVaultNFT zeroNft = new RemyVaultNFT("Zero", "ZERO", "ipfs://", address(this));
+        MinterRemyVault zeroVault = new MinterRemyVault("Zero Token", "ZERO", address(zeroNft), 0);
+
+        assertEq(zeroVault.totalSupply(), 0, "should have zero supply");
+        assertEq(zeroVault.maxSupply(), 0, "should have zero max supply");
+        assertEq(zeroVault.mintedCount(), 0, "should have zero minted count");
+    }
+
+    function testConstructorSupplyOverflow() public {
+        RemyVaultNFT overflowNft = new RemyVaultNFT("Overflow", "OVR", "ipfs://", address(this));
+
+        // Try to create vault with maxSupply that would overflow when multiplied by UNIT
+        uint256 overflowSupply = type(uint256).max / vault.UNIT() + 1;
+
+        vm.expectRevert(MinterRemyVault.SupplyOverflow.selector);
+        new MinterRemyVault("Overflow Token", "OVR", address(overflowNft), overflowSupply);
+    }
+
     function testMintBurnsAndIssuesNfts() public {
         uint256 cost = 2 * vault.UNIT();
         vault.transfer(alice, cost);
@@ -41,12 +62,88 @@ contract MinterRemyVaultTest is Test {
         assertEq(vault.mintedCount(), 2, "mint counter mismatch");
     }
 
+    function testMintSingleNFT() public {
+        uint256 cost = 1 * vault.UNIT();
+        vault.transfer(alice, cost);
+
+        vm.prank(alice);
+        uint256[] memory mintedIds = vault.mint(1, alice);
+
+        assertEq(mintedIds.length, 1, "should mint exactly one");
+        assertEq(vault.balanceOf(alice), 0, "tokens should be burned");
+        assertEq(nft.balanceOf(alice), 1, "should receive one NFT");
+        assertEq(vault.mintedCount(), 1, "counter should be 1");
+    }
+
+    function testMintToMultipleRecipients() public {
+        uint256 cost = 3 * vault.UNIT();
+
+        // Distribute tokens to different users
+        vault.transfer(alice, cost);
+        vault.transfer(bob, cost);
+
+        // Each user mints independently
+        vm.prank(alice);
+        uint256[] memory aliceMints = vault.mint(3, alice);
+
+        vm.prank(bob);
+        uint256[] memory bobMints = vault.mint(3, bob);
+
+        assertEq(aliceMints.length, 3);
+        assertEq(bobMints.length, 3);
+        assertEq(nft.balanceOf(alice), 3);
+        assertEq(nft.balanceOf(bob), 3);
+        assertEq(vault.mintedCount(), 6);
+    }
+
+    function testMintExactlyAtLimit() public {
+        uint256 cost = 10 * vault.UNIT();
+
+        vm.prank(address(this));
+        uint256[] memory mintedIds = vault.mint(10, address(this));
+
+        assertEq(mintedIds.length, 10, "should mint all 10");
+        assertEq(vault.mintedCount(), 10, "should reach exact limit");
+        assertEq(nft.balanceOf(address(this)), 10, "should receive all 10 NFTs");
+    }
+
     function testMintLimitEnforced() public {
         vm.prank(address(this));
         vault.mint(10, address(this));
 
         vm.expectRevert(MinterRemyVault.MintLimitExceeded.selector);
         vault.mint(1, address(this));
+    }
+
+    function testMintExceedsLimitByMultiple() public {
+        vm.prank(address(this));
+        vault.mint(5, address(this));
+
+        // Try to mint 6 more when only 5 remain
+        vm.expectRevert(MinterRemyVault.MintLimitExceeded.selector);
+        vault.mint(6, address(this));
+    }
+
+    function testMintWithoutEnoughTokens() public {
+        uint256 cost = 5 * vault.UNIT();
+        vault.transfer(alice, cost - 1); // Transfer 1 wei less than needed
+
+        vm.prank(alice);
+        vm.expectRevert(); // ERC20 InsufficientBalance
+        vault.mint(5, alice);
+    }
+
+    function testMintCounterTracking() public {
+        assertEq(vault.mintedCount(), 0, "should start at 0");
+
+        vault.mint(3, address(this));
+        assertEq(vault.mintedCount(), 3, "should be 3 after first mint");
+
+        vault.mint(2, address(this));
+        assertEq(vault.mintedCount(), 5, "should be 5 after second mint");
+
+        vault.mint(5, address(this));
+        assertEq(vault.mintedCount(), 10, "should be 10 after third mint");
     }
 
     function testDepositAndWithdrawFlow() public {
@@ -62,6 +159,42 @@ contract MinterRemyVaultTest is Test {
         assertEq(vault.balanceOf(address(this)), balanceBefore, "withdraw balance mismatch");
     }
 
+    function testMintDepositWithdrawCycle() public {
+        // Mint NFTs
+        uint256[] memory tokenIds = vault.mint(5, address(this));
+        assertEq(nft.balanceOf(address(this)), 5);
+
+        // Deposit them back
+        nft.setApprovalForAll(address(vault), true);
+        uint256 balanceBefore = vault.balanceOf(address(this));
+        vault.deposit(tokenIds, address(this));
+        assertEq(vault.balanceOf(address(this)), balanceBefore + 5 * vault.UNIT());
+
+        // Withdraw them again
+        vault.withdraw(tokenIds, address(this));
+        assertEq(vault.balanceOf(address(this)), balanceBefore);
+        assertEq(nft.balanceOf(address(this)), 5);
+
+        // Mint counter should still be at 5
+        assertEq(vault.mintedCount(), 5);
+    }
+
+    function testCannotMintAfterReachingLimit() public {
+        // Mint all 10
+        vault.mint(10, address(this));
+
+        // Even with tokens from deposits, cannot mint more
+        uint256[] memory someIds = new uint256[](2);
+        someIds[0] = 0;
+        someIds[1] = 1;
+        nft.setApprovalForAll(address(vault), true);
+        vault.deposit(someIds, address(this));
+
+        // Now have tokens but still cannot mint
+        vm.expectRevert(MinterRemyVault.MintLimitExceeded.selector);
+        vault.mint(1, address(this));
+    }
+
     function testMintZeroRecipientReverts() public {
         vm.expectRevert(MinterRemyVault.RecipientZero.selector);
         vault.mint(1, address(0));
@@ -70,5 +203,91 @@ contract MinterRemyVaultTest is Test {
     function testMintZeroCountReverts() public {
         vm.expectRevert(MinterRemyVault.MintZeroCount.selector);
         vault.mint(0, address(this));
+    }
+
+    function testFuzz_MintValidAmounts(uint256 amount) public {
+        // Bound to valid range: 1 to maxSupply
+        amount = bound(amount, 1, vault.maxSupply());
+
+        uint256 cost = amount * vault.UNIT();
+
+        vm.prank(address(this));
+        uint256[] memory mintedIds = vault.mint(amount, address(this));
+
+        assertEq(mintedIds.length, amount);
+        assertEq(vault.mintedCount(), amount);
+        assertEq(nft.balanceOf(address(this)), amount);
+    }
+
+    function testFuzz_CannotExceedLimit(uint256 firstMint, uint256 secondMint) public {
+        // Bound first mint to 1..maxSupply
+        firstMint = bound(firstMint, 1, vault.maxSupply());
+        // Bound second mint to exceed remaining capacity
+        secondMint = bound(secondMint, vault.maxSupply() - firstMint + 1, vault.maxSupply() * 2);
+
+        vault.mint(firstMint, address(this));
+
+        vm.expectRevert(MinterRemyVault.MintLimitExceeded.selector);
+        vault.mint(secondMint, address(this));
+    }
+
+    function testFuzz_MultipleMintsUpToLimit(uint256 count1, uint256 count2, uint256 count3) public {
+        uint256 maxSupply = vault.maxSupply();
+
+        // Ensure counts sum to maxSupply
+        count1 = bound(count1, 1, maxSupply / 3);
+        count2 = bound(count2, 1, (maxSupply - count1) / 2);
+        count3 = maxSupply - count1 - count2;
+
+        vm.assume(count3 > 0);
+
+        vault.mint(count1, address(this));
+        vault.mint(count2, address(this));
+        vault.mint(count3, address(this));
+
+        assertEq(vault.mintedCount(), maxSupply);
+        assertEq(nft.balanceOf(address(this)), maxSupply);
+    }
+
+    function testEmittedEventOnMint() public {
+        uint256[] memory expectedIds = new uint256[](3);
+        expectedIds[0] = 0;
+        expectedIds[1] = 1;
+        expectedIds[2] = 2;
+
+        vm.expectEmit(true, false, false, true);
+        emit MinterRemyVault.DerivativeMint(address(this), 3, expectedIds);
+
+        vault.mint(3, address(this));
+    }
+
+    function testBatchMintGasConsistency() public {
+        uint256 gasBefore = gasleft();
+        vault.mint(5, address(this));
+        uint256 gasUsed = gasBefore - gasleft();
+
+        // Ensure reasonable gas usage (rough check)
+        assertLt(gasUsed, 2_000_000, "gas usage too high for batch mint");
+    }
+
+    function testMaxSupplyImmutable() public view {
+        assertEq(vault.maxSupply(), 10, "maxSupply should be immutable");
+    }
+
+    function testUnitConstant() public view {
+        assertEq(vault.UNIT(), 1e18, "UNIT should be 1e18");
+    }
+
+    function testInvariant_TotalSupplyMatchesFormula() public {
+        uint256 maxSupply = vault.maxSupply();
+        uint256 expectedTotalSupply = maxSupply * vault.UNIT();
+
+        // Total supply should equal maxSupply * UNIT (accounting for mints/burns)
+        uint256 totalSupply = vault.totalSupply();
+        uint256 mintedCount = vault.mintedCount();
+
+        // totalSupply = (maxSupply - mintedCount) * UNIT + deposited NFTs * UNIT
+        // On setup: totalSupply = maxSupply * UNIT (all pre-minted)
+        assertEq(totalSupply, expectedTotalSupply - (mintedCount * vault.UNIT()));
     }
 }
