@@ -91,7 +91,7 @@ This integration creates completely new NFT trading mechanisms not possible in t
 ## Technical Implementation
 
 ### Core Technology Stack
-- **Languages**: Solidity for the core vault and derivative tooling, Vyper 0.4.3 for legacy routers and migration helpers
+- **Languages**: Solidity for the core vault and derivative tooling, plus Vyper 0.4.3 for lightweight mocks used in tests
 - **Architecture**: Modular design with clear separation of concerns
 - **Standards**: ERC20, ERC721, ERC4626 compliant implementations where applicable
 - **Testing Framework**: Comprehensive Foundry test suite with deterministic builds
@@ -101,18 +101,15 @@ This integration creates completely new NFT trading mechanisms not possible in t
 - Factories deploy vaults deterministically via CREATE2 with no upgrade hooks or owner keys
 - Derivative tooling (factories, hooks) layers ownership where needed for routing and pool management
 - Invariant-based Foundry tests assert that ERC20 supply always matches escrowed NFT count
-- Migration and rescue flows interact with legacy RemyVault V1 strictly through interfaces in this repo
+*Legacy migration contracts now live in the separate `RemyVaultV1Migration` repository.*
 
 ## Smart Contract Documentation
 
 ### RemyVault.sol
 Solidity vault that locks a collection, mints `UNIT` (1e18) REMY per NFT deposit, burns on withdrawal, and exposes deterministic quoting helpers to enforce the 1:1 backing invariant. Deposit and withdraw events mirror each inventory mutation for downstream accounting.
 
-### RescueRouterV2.vy
-Updated router used by v2 flows. Adds direct token-for-NFT swaps (`swap_tokens_for_nfts`), richer quoting helpers, internal mint fee accounting, and improved ETH refund logic while retaining staking, unstaking, and Uniswap V3 bridging routines.
-
-### Migrator.vy
-Bridges users from RemyVault v1 to v2. It pulls REMY v1, redeems available NFTs through `RescueRouterV2`, deposits them into the new vault to mint REMY v2, and forwards any leftover balance 1:1. Emits detailed migration events and enforces balance invariants.
+### Migration Tooling
+Contracts that interact with RemyVault V1 (e.g., the migrator and rescue router) have moved to the dedicated [`RemyVaultV1Migration`](../RemyVaultV1Migration) repository so this codebase can remain focused on the V2 primitive and new ecosystem modules.
 
 ### RemyVaultHook.sol
 Uniswap V4 hook extending `BaseHook` to let liquidity pools swap NFTs against REMY directly. Manages hook permissions, validates pools, tracks NFT inventory, and exposes manual controls (`sellNFTs`, `buyNFTs`, `addNFTsToInventory`, `collectETHFees`, etc.) so operators can seed or drain inventory and adjust fees.

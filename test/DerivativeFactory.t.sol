@@ -10,7 +10,7 @@ import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
 import {RemyVaultHook} from "../src/RemyVaultHook.sol";
 import {RemyVaultNFT} from "../src/RemyVaultNFT.sol";
 import {RemyVault} from "../src/RemyVault.sol";
-import {MockERC721Simple} from "./helpers/MockMigratorDependencies.sol";
+import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
