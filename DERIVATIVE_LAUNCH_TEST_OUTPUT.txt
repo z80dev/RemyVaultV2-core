@@ -1,0 +1,333 @@
+No files changed, compilation skipped
+
+Ran 1 test for test/DerivativeFactory.t.sol:DerivativeFactoryTest
+[PASS] testDerivativeLaunchScenarios() (gas: 133635228)
+Logs:
+  
+========================================
+  SCENARIO: Narrow Range - Small Size
+  ========================================
+  
+--- CONFIGURATION ---
+  Max Supply (NFTs): 10
+  Target Liquidity: 1000
+  Tick Lower: -60
+  Tick Upper: 60
+  Tick Width: 120
+  Parent Contribution (tokens): 5
+  
+--- TOKEN FLOWS ---
+  Parent Consumed (tokens): 0
+  Parent Refunded (tokens): 4
+  Parent Utilization (bps): 0
+  Derivative Total Supply (tokens): 10
+  Derivative to Recipient (tokens): 9
+  Derivative in Pool (tokens): 0
+  
+--- POOL STATE ---
+  Actual Liquidity: 1000
+  Liquidity Efficiency (bps): 10000
+  Pool SqrtPriceX96: 79228162514264337593543950336
+  Price Maintained: true
+  Derivative is Currency0: true
+  
+========================================
+  SCENARIO: Narrow Range - Medium Size
+  ========================================
+  
+--- CONFIGURATION ---
+  Max Supply (NFTs): 50
+  Target Liquidity: 100000
+  Tick Lower: -60
+  Tick Upper: 60
+  Tick Width: 120
+  Parent Contribution (tokens): 20
+  
+--- TOKEN FLOWS ---
+  Parent Consumed (tokens): 0
+  Parent Refunded (tokens): 19
+  Parent Utilization (bps): 0
+  Derivative Total Supply (tokens): 50
+  Derivative to Recipient (tokens): 49
+  Derivative in Pool (tokens): 0
+  
+--- POOL STATE ---
+  Actual Liquidity: 100000
+  Liquidity Efficiency (bps): 10000
+  Pool SqrtPriceX96: 79228162514264337593543950336
+  Price Maintained: true
+  Derivative is Currency0: true
+  
+========================================
+  SCENARIO: Narrow Range - Large Size
+  ========================================
+  
+--- CONFIGURATION ---
+  Max Supply (NFTs): 200
+  Target Liquidity: 10000000
+  Tick Lower: -60
+  Tick Upper: 60
+  Tick Width: 120
+  Parent Contribution (tokens): 100
+  
+--- TOKEN FLOWS ---
+  Parent Consumed (tokens): 0
+  Parent Refunded (tokens): 99
+  Parent Utilization (bps): 0
+  Derivative Total Supply (tokens): 200
+  Derivative to Recipient (tokens): 199
+  Derivative in Pool (tokens): 0
+  
+--- POOL STATE ---
+  Actual Liquidity: 10000000
+  Liquidity Efficiency (bps): 10000
+  Pool SqrtPriceX96: 79228162514264337593543950336
+  Price Maintained: true
+  Derivative is Currency0: false
+  
+========================================
+  SCENARIO: Medium Range - Small Size
+  ========================================
+  
+--- CONFIGURATION ---
+  Max Supply (NFTs): 10
+  Target Liquidity: 1000
+  Tick Lower: -120
+  Tick Upper: 120
+  Tick Width: 240
+  Parent Contribution (tokens): 5
+  
+--- TOKEN FLOWS ---
+  Parent Consumed (tokens): 0
+  Parent Refunded (tokens): 4
+  Parent Utilization (bps): 0
+  Derivative Total Supply (tokens): 10
+  Derivative to Recipient (tokens): 9
+  Derivative in Pool (tokens): 0
+  
+--- POOL STATE ---
+  Actual Liquidity: 1000
+  Liquidity Efficiency (bps): 10000
+  Pool SqrtPriceX96: 79228162514264337593543950336
+  Price Maintained: true
+  Derivative is Currency0: true
+  
+========================================
+  SCENARIO: Medium Range - Medium Size
+  ========================================
+  
+--- CONFIGURATION ---
+  Max Supply (NFTs): 50
+  Target Liquidity: 100000
+  Tick Lower: -120
+  Tick Upper: 120
+  Tick Width: 240
+  Parent Contribution (tokens): 20
+  
+--- TOKEN FLOWS ---
+  Parent Consumed (tokens): 0
+  Parent Refunded (tokens): 19
+  Parent Utilization (bps): 0
+  Derivative Total Supply (tokens): 50
+  Derivative to Recipient (tokens): 49
+  Derivative in Pool (tokens): 0
+  
+--- POOL STATE ---
+  Actual Liquidity: 100000
+  Liquidity Efficiency (bps): 10000
+  Pool SqrtPriceX96: 79228162514264337593543950336
+  Price Maintained: true
+  Derivative is Currency0: false
+  
+========================================
+  SCENARIO: Medium Range - Large Size
+  ========================================
+  
+--- CONFIGURATION ---
+  Max Supply (NFTs): 200
+  Target Liquidity: 10000000
+  Tick Lower: -120
+  Tick Upper: 120
+  Tick Width: 240
+  Parent Contribution (tokens): 100
+  
+--- TOKEN FLOWS ---
+  Parent Consumed (tokens): 0
+  Parent Refunded (tokens): 99
+  Parent Utilization (bps): 0
+  Derivative Total Supply (tokens): 200
+  Derivative to Recipient (tokens): 199
+  Derivative in Pool (tokens): 0
+  
+--- POOL STATE ---
+  Actual Liquidity: 10000000
+  Liquidity Efficiency (bps): 10000
+  Pool SqrtPriceX96: 79228162514264337593543950336
+  Price Maintained: true
+  Derivative is Currency0: true
+  
+========================================
+  SCENARIO: Wide Range - Small Size
+  ========================================
+  
+--- CONFIGURATION ---
+  Max Supply (NFTs): 10
+  Target Liquidity: 1000
+  Tick Lower: -300
+  Tick Upper: 300
+  Tick Width: 600
+  Parent Contribution (tokens): 10
+  
+--- TOKEN FLOWS ---
+  Parent Consumed (tokens): 0
+  Parent Refunded (tokens): 9
+  Parent Utilization (bps): 0
+  Derivative Total Supply (tokens): 10
+  Derivative to Recipient (tokens): 9
+  Derivative in Pool (tokens): 0
+  
+--- POOL STATE ---
+  Actual Liquidity: 1000
+  Liquidity Efficiency (bps): 10000
+  Pool SqrtPriceX96: 79228162514264337593543950336
+  Price Maintained: true
+  Derivative is Currency0: true
+  
+========================================
+  SCENARIO: Wide Range - Medium Size
+  ========================================
+  
+--- CONFIGURATION ---
+  Max Supply (NFTs): 50
+  Target Liquidity: 100000
+  Tick Lower: -300
+  Tick Upper: 300
+  Tick Width: 600
+  Parent Contribution (tokens): 30
+  
+--- TOKEN FLOWS ---
+  Parent Consumed (tokens): 0
+  Parent Refunded (tokens): 29
+  Parent Utilization (bps): 0
+  Derivative Total Supply (tokens): 50
+  Derivative to Recipient (tokens): 49
+  Derivative in Pool (tokens): 0
+  
+--- POOL STATE ---
+  Actual Liquidity: 100000
+  Liquidity Efficiency (bps): 10000
+  Pool SqrtPriceX96: 79228162514264337593543950336
+  Price Maintained: true
+  Derivative is Currency0: true
+  
+========================================
+  SCENARIO: Wide Range - Large Size
+  ========================================
+  
+--- CONFIGURATION ---
+  Max Supply (NFTs): 200
+  Target Liquidity: 10000000
+  Tick Lower: -300
+  Tick Upper: 300
+  Tick Width: 600
+  Parent Contribution (tokens): 150
+  
+--- TOKEN FLOWS ---
+  Parent Consumed (tokens): 0
+  Parent Refunded (tokens): 149
+  Parent Utilization (bps): 0
+  Derivative Total Supply (tokens): 200
+  Derivative to Recipient (tokens): 199
+  Derivative in Pool (tokens): 0
+  
+--- POOL STATE ---
+  Actual Liquidity: 10000000
+  Liquidity Efficiency (bps): 10000
+  Pool SqrtPriceX96: 79228162514264337593543950336
+  Price Maintained: true
+  Derivative is Currency0: true
+  
+========================================
+  SCENARIO: Very Wide Range - Medium Size
+  ========================================
+  
+--- CONFIGURATION ---
+  Max Supply (NFTs): 50
+  Target Liquidity: 100000
+  Tick Lower: -600
+  Tick Upper: 600
+  Tick Width: 1200
+  Parent Contribution (tokens): 50
+  
+--- TOKEN FLOWS ---
+  Parent Consumed (tokens): 0
+  Parent Refunded (tokens): 49
+  Parent Utilization (bps): 0
+  Derivative Total Supply (tokens): 50
+  Derivative to Recipient (tokens): 49
+  Derivative in Pool (tokens): 0
+  
+--- POOL STATE ---
+  Actual Liquidity: 100000
+  Liquidity Efficiency (bps): 10000
+  Pool SqrtPriceX96: 79228162514264337593543950336
+  Price Maintained: true
+  Derivative is Currency0: false
+  
+========================================
+  SCENARIO: Very Wide Range - Large Size
+  ========================================
+  
+--- CONFIGURATION ---
+  Max Supply (NFTs): 200
+  Target Liquidity: 10000000
+  Tick Lower: -600
+  Tick Upper: 600
+  Tick Width: 1200
+  Parent Contribution (tokens): 200
+  
+--- TOKEN FLOWS ---
+  Parent Consumed (tokens): 0
+  Parent Refunded (tokens): 199
+  Parent Utilization (bps): 0
+  Derivative Total Supply (tokens): 200
+  Derivative to Recipient (tokens): 199
+  Derivative in Pool (tokens): 0
+  
+--- POOL STATE ---
+  Actual Liquidity: 10000000
+  Liquidity Efficiency (bps): 10000
+  Pool SqrtPriceX96: 79228162514264337593543950336
+  Price Maintained: true
+  Derivative is Currency0: false
+  
+========================================
+  SCENARIO: Ultra Wide Range - Large Size
+  ========================================
+  
+--- CONFIGURATION ---
+  Max Supply (NFTs): 200
+  Target Liquidity: 10000000
+  Tick Lower: -1200
+  Tick Upper: 1200
+  Tick Width: 2400
+  Parent Contribution (tokens): 300
+  
+--- TOKEN FLOWS ---
+  Parent Consumed (tokens): 0
+  Parent Refunded (tokens): 299
+  Parent Utilization (bps): 0
+  Derivative Total Supply (tokens): 200
+  Derivative to Recipient (tokens): 199
+  Derivative in Pool (tokens): 0
+  
+--- POOL STATE ---
+  Actual Liquidity: 10000000
+  Liquidity Efficiency (bps): 10000
+  Pool SqrtPriceX96: 79228162514264337593543950336
+  Price Maintained: true
+  Derivative is Currency0: false
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 21.86ms (20.75ms CPU time)
+
+Ran 1 test suite in 203.54ms (21.86ms CPU time): 1 tests passed, 0 failed, 0 skipped (1 total tests)

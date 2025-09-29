@@ -1,0 +1,31 @@
+=== TESTING ASYMMETRIC RANGES (INCLUDING CURRENT PRICE) ===
+
+  
+========================================
+  SCENARIO: Asymmetric Above
+  ========================================
+  
+--- CONFIGURATION ---
+  Max Supply (NFTs): 50
+  Target Liquidity: 100000
+  Tick Lower: -60
+  Tick Upper: 240
+  Tick Width: 300
+  Parent Contribution (tokens): 30
+  
+--- TOKEN FLOWS ---
+  Parent Consumed (tokens): 0
+  Parent Refunded (tokens): 29
+  Parent Utilization (bps): 0
+  Derivative Total Supply (tokens): 50
+  Derivative to Recipient (tokens): 49
+  Derivative in Pool (tokens): 0
+  
+--- LIQUIDITY POSITION DEBUG ---
+  Requested Tick Lower: -60
+  Requested Tick Upper: 240
+  Derivative is Currency0: false
+  
+--- POOL STATE ---
+  Actual Liquidity: 100000
+  Liquidity Efficiency (bps): 10000
