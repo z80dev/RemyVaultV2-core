@@ -21,7 +21,9 @@ import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {IV4Quoter} from "@uniswap/v4-periphery/src/interfaces/IV4Quoter.sol";
+import {PathKey} from "@uniswap/v4-periphery/src/libraries/PathKey.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
+import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 import {LiquidityAmounts} from "@uniswap/v4-core/test/utils/LiquidityAmounts.sol";
 
 contract Simulations is BaseTest, DerivativeTestUtils {
@@ -46,6 +48,7 @@ contract Simulations is BaseTest, DerivativeTestUtils {
     RemyVaultHook internal hook;
     DerivativeFactory internal factory;
     PoolModifyLiquidityTest internal liquidityHelper;
+    PoolSwapTest internal swapRouter;
 
     // Parent pool state (initialized in _setUpParentPool)
     MockERC721Simple internal parentCollection;
@@ -66,6 +69,7 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         hook.transferOwnership(address(factory));
 
         liquidityHelper = new PoolModifyLiquidityTest(POOL_MANAGER);
+        swapRouter = new PoolSwapTest(POOL_MANAGER);
 
         // Initialize parent pool with standard parameters
         _setUpParentPool();
@@ -147,21 +151,6 @@ contract Simulations is BaseTest, DerivativeTestUtils {
     }
 
     function test_DerivativeCreation_EntireSupplyAsLiquidity() public {
-        // Parent pool is already initialized in setUp via _setUpParentPool()
-        // Quote: 0.1 ETH -> parent tokens (root pool)
-        (uint256 parentTokensOut, uint256 ethGasEstimate) = QUOTER.quoteExactInputSingle(
-            IV4Quoter.QuoteExactSingleParams({
-                poolKey: rootKey,
-                zeroForOne: true,
-                exactAmount: 0.1 ether,
-                hookData: ""
-            })
-        );
-
-        console.log("=== SWAP QUOTES ===");
-        console.log("0.1 ETH -> parent tokens:", parentTokensOut);
-        console.log("Gas estimate (ETH->parent):", ethGasEstimate);
-
         // Approve parent vault tokens for derivative creation
         RemyVault(parentVault).approve(address(factory), type(uint256).max);
 
@@ -176,7 +165,7 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         params.initialMinter = address(0);
         params.vaultName = "Test Derivative Token";
         params.vaultSymbol = "tDRV";
-        params.fee = 3000;
+        params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
         params.tickSpacing = 60;
         params.maxSupply = maxSupply;
         params.tickLower = -12000;
@@ -191,21 +180,41 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         // Create derivative
         (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
-        // Quote: 1 parent token -> derivative tokens (child pool)
+        // Multi-hop quote: ETH -> parent -> derivative
         PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, params.tickSpacing);
-        bool parentIsZero = Currency.unwrap(childKey.currency0) == parentVault;
-        try QUOTER.quoteExactInputSingle(
-            IV4Quoter.QuoteExactSingleParams({
-                poolKey: childKey,
-                zeroForOne: parentIsZero,
-                exactAmount: 1e18,
-                hookData: ""
-            })
-        ) returns (uint256 derivativeTokensOut, uint256 parentGasEstimate) {
-            console.log("1 parent token -> derivative tokens:", derivativeTokensOut);
-            console.log("Gas estimate (parent->derivative):", parentGasEstimate);
+
+        // Build the path: ETH -> parent -> derivative
+        IV4Quoter.QuoteExactParams memory quoteParams;
+        quoteParams.exactCurrency = Currency.wrap(address(0)); // ETH
+        quoteParams.exactAmount = uint128(0.1 ether);
+
+        // Path has two hops: ETH->parent, then parent->derivative
+        quoteParams.path = new PathKey[](2);
+
+        // First hop: ETH -> parent (root pool)
+        quoteParams.path[0] = PathKey({
+            intermediateCurrency: Currency.wrap(parentVault),
+            fee: 0x800000, // Dynamic fee flag for root pool
+            tickSpacing: 60,
+            hooks: IHooks(HOOK_ADDRESS),
+            hookData: ""
+        });
+
+        // Second hop: parent -> derivative (child pool)
+        quoteParams.path[1] = PathKey({
+            intermediateCurrency: Currency.wrap(derivativeVault),
+            fee: params.fee,
+            tickSpacing: params.tickSpacing,
+            hooks: IHooks(HOOK_ADDRESS),
+            hookData: ""
+        });
+
+        console.log("=== MULTI-HOP SWAP QUOTE (ETH -> parent -> derivative) ===");
+        try QUOTER.quoteExactInput(quoteParams) returns (uint256 derivativeTokensOut, uint256 gasEstimate) {
+            console.log("0.1 ETH -> derivative tokens:", derivativeTokensOut);
+            console.log("Total gas estimate:", gasEstimate);
         } catch {
-            console.log("Derivative quote failed (may be restricted by hook)");
+            console.log("Multi-hop quote failed (may be restricted by hook)");
         }
 
         // Verify factory has no leftover tokens
@@ -213,12 +222,12 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         assertEq(RemyVault(parentVault).balanceOf(address(factory)), 0, "Factory should have 0 parent tokens");
     }
 
-    function _initRootPool(address parentVault, uint24 /* fee */, int24 tickSpacing, uint160 sqrtPriceX96)
+    function _initRootPool(address vault, uint24 /* fee */, int24 tickSpacing, uint160 sqrtPriceX96)
         internal
         returns (PoolId poolId)
     {
         uint24 fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG
-        PoolKey memory key = _buildPoolKey(address(0), parentVault, fee, tickSpacing);
+        PoolKey memory key = _buildPoolKey(address(0), vault, fee, tickSpacing);
         PoolKey memory emptyKey;
         vm.prank(address(factory));
         hook.addChild(key, false, emptyKey);
@@ -267,7 +276,7 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         params.initialMinter = address(0);
         params.vaultName = "1K Derivative Token";
         params.vaultSymbol = "1KDRV";
-        params.fee = 3000;
+        params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
         params.tickSpacing = 60;
         params.maxSupply = maxSupply;
 
@@ -275,12 +284,13 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         // In pool terms (derivative/parent): price = 1 to 10
         // tick 0 = price 1 (1 parent per derivative)
         // tick 23040 ≈ price 10 (0.1 parent per derivative)
+        // Note: Uniswap positions are [tickLower, tickUpper) - half-open interval
         params.tickLower = 0;
         params.tickUpper = 23040;
 
-        // Initialize above range (at tick 23100) for single-sided derivative liquidity
-        // When price > range upper bound, position is 100% token1 (derivative)
-        params.sqrtPriceX96 = TickMath.getSqrtPriceAtTick(23100);
+        // Initialize at tick 23040 (at upper boundary) for single-sided derivative liquidity
+        // When sqrtPrice >= sqrtPrice(tickUpper), position is 100% token1 (derivative)
+        params.sqrtPriceX96 = TickMath.getSqrtPriceAtTick(23040);
 
         // Liquidity will be calculated by factory to consume all 1000 derivative tokens
         params.liquidity = 1; // Factory ignores this, just needs to be non-zero
@@ -300,8 +310,19 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         // Verify pool state
         (uint160 actualSqrtPrice, int24 actualTick,,) = POOL_MANAGER.getSlot0(childPoolId);
         console.log("Child pool initialized at tick:", actualTick);
-        console.log("Expected tick: 23100");
-        assertEq(actualTick, 23100, "Pool should initialize at tick 23100");
+        console.log("Expected tick: 23040");
+        assertEq(actualTick, 23040, "Pool should initialize at tick 23040");
+
+        // Prime the pool with a tiny swap to enable quotes
+        console.log("=== PRIMING POOL WITH SWAP ==");
+        RemyVault(parentVault).approve(address(swapRouter), 1e18);
+        IPoolManager.SwapParams memory swapParams = IPoolManager.SwapParams({
+            zeroForOne: parentIsZero,
+            amountSpecified: -1, // Sell 1 wei of parent token
+            sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+        });
+        swapRouter.swap(childKey, swapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        console.log("Pool primed successfully");
 
         // Try to quote swaps (may fail due to hook restrictions)
         console.log("=== SWAP QUOTES ==");
@@ -316,9 +337,10 @@ contract Simulations is BaseTest, DerivativeTestUtils {
             console.log("1 parent token -> derivative tokens:", derivativeTokensOut);
             console.log("Gas estimate:", gasEstimate);
 
-            // At starting price ~10 (0.1 parent per derivative), should get ~10 derivative tokens per parent
-            assertGt(derivativeTokensOut, 9e18, "Should get at least 9 derivative tokens");
-            assertLt(derivativeTokensOut, 11e18, "Should get at most 11 derivative tokens");
+            // At starting price ~10 (0.1 parent per derivative), expect ~9 derivative tokens
+            // (10 tokens - 10% hook fee = 9 tokens, adjusted for price impact)
+            assertGt(derivativeTokensOut, 8e18, "Should get at least 8 derivative tokens");
+            assertLt(derivativeTokensOut, 10e18, "Should get at most 10 derivative tokens");
 
             // Quote: 0.1 parent token -> derivative tokens
             try QUOTER.quoteExactInputSingle(
@@ -335,6 +357,40 @@ contract Simulations is BaseTest, DerivativeTestUtils {
             }
         } catch {
             console.log("Swap quotes failed (likely restricted by hook before liquidity is added)");
+        }
+
+        // Multi-hop quote: ETH -> parent -> derivative
+        console.log("=== MULTI-HOP SWAP QUOTE (ETH -> parent -> derivative) ===");
+        IV4Quoter.QuoteExactParams memory quoteParams;
+        quoteParams.exactCurrency = Currency.wrap(address(0)); // ETH
+        quoteParams.exactAmount = uint128(0.1 ether);
+
+        // Path has two hops: ETH->parent, then parent->derivative
+        quoteParams.path = new PathKey[](2);
+
+        // First hop: ETH -> parent (root pool)
+        quoteParams.path[0] = PathKey({
+            intermediateCurrency: Currency.wrap(parentVault),
+            fee: 0x800000, // Dynamic fee flag for root pool
+            tickSpacing: 60,
+            hooks: IHooks(HOOK_ADDRESS),
+            hookData: ""
+        });
+
+        // Second hop: parent -> derivative (child pool)
+        quoteParams.path[1] = PathKey({
+            intermediateCurrency: Currency.wrap(derivativeVault),
+            fee: params.fee,
+            tickSpacing: params.tickSpacing,
+            hooks: IHooks(HOOK_ADDRESS),
+            hookData: ""
+        });
+
+        try QUOTER.quoteExactInput(quoteParams) returns (uint256 derivativeTokensOut, uint256 gasEstimate) {
+            console.log("0.1 ETH -> derivative tokens:", derivativeTokensOut);
+            console.log("Total gas estimate:", gasEstimate);
+        } catch {
+            console.log("Multi-hop quote failed (may be restricted by hook)");
         }
 
         // Verify factory has no leftover tokens
