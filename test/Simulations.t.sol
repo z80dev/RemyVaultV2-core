@@ -25,12 +25,17 @@ import {PathKey} from "@uniswap/v4-periphery/src/libraries/PathKey.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 import {LiquidityAmounts} from "@uniswap/v4-core/test/utils/LiquidityAmounts.sol";
+import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
-contract Simulations is BaseTest, DerivativeTestUtils {
+contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
 
     receive() external payable {}
+
+    function onERC721Received(address, address, uint256, bytes calldata) external pure override returns (bytes4) {
+        return IERC721Receiver.onERC721Received.selector;
+    }
 
     uint160 internal constant SQRT_PRICE_1_1 = 79228162514264337593543950336;
     uint160 internal constant CLEAR_HOOK_PERMISSIONS_MASK = ~uint160(0) << 14;
@@ -79,8 +84,8 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         // Create parent collection and vault
         parentCollection = new MockERC721Simple("Parent NFT", "PRNT");
 
-        // Mint 500 parent NFTs to this contract (need 300 for liquidity + some for derivative)
-        for (uint256 i = 1; i <= 500; i++) {
+        // Mint 700 parent NFTs to this contract (need 600 for liquidity + some for derivative)
+        for (uint256 i = 1; i <= 700; i++) {
             parentCollection.mint(address(this), i);
         }
 
@@ -88,8 +93,8 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Vault", "PVAL");
 
         // Deposit NFTs into parent vault
-        uint256[] memory tokenIds = new uint256[](500);
-        for (uint256 i = 0; i < 500; i++) {
+        uint256[] memory tokenIds = new uint256[](700);
+        for (uint256 i = 0; i < 700; i++) {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
@@ -113,13 +118,13 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         // Range 1: Parent tokens for selling as price rises (0.01006 → 0.1 ETH per parent)
         // From tick 23040 (0.1 ETH/parent) to 46020 (current tick)
         // Current tick = upper bound, so range just became inactive, 100% token1 (parent)
-        _addLiquidityToPool(rootKey, 23040, 46020, 300e18, 0, address(this));
+        _addLiquidityToPool(rootKey, 23040, 46020, 600e18, 0, address(this));
 
         // Range 2: ETH for buying parent as price falls (0.01006 → 0.001 ETH per parent)
         // From tick 46020 (current tick) to 69060 (0.001 ETH/parent)
         // Current tick = lower bound, so range is active, provides liquidity
-        vm.deal(address(this), 10 ether);
-        _addLiquidityToPool(rootKey, 46020, 69060, 0, 2 ether, address(this));
+        vm.deal(address(this), 20 ether);
+        _addLiquidityToPool(rootKey, 46020, 69060, 0, 4 ether, address(this));
     }
 
     function test_CreateOGNFTAndVault() public {
@@ -265,17 +270,17 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         // Approve parent vault tokens for derivative creation
         RemyVault(parentVault).approve(address(factory), type(uint256).max);
 
-        // Setup derivative parameters for 1000 token supply
-        uint256 maxSupply = 1000;
+        // Setup derivative parameters for 500 token supply
+        uint256 maxSupply = 500;
         DerivativeFactory.DerivativeParams memory params;
         params.parentCollection = address(parentCollection);
-        params.nftName = "1K Derivative";
-        params.nftSymbol = "1KDRV";
-        params.nftBaseUri = "ipfs://1k/";
+        params.nftName = "500 Derivative";
+        params.nftSymbol = "500DRV";
+        params.nftBaseUri = "ipfs://500/";
         params.nftOwner = address(this);
         params.initialMinter = address(0);
-        params.vaultName = "1K Derivative Token";
-        params.vaultSymbol = "1KDRV";
+        params.vaultName = "500 Derivative Token";
+        params.vaultSymbol = "500DRV";
         params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
         params.tickSpacing = 60;
         params.maxSupply = maxSupply;
@@ -292,7 +297,7 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         // When sqrtPrice >= sqrtPrice(tickUpper), position is 100% token1 (derivative)
         params.sqrtPriceX96 = TickMath.getSqrtPriceAtTick(23040);
 
-        // Liquidity will be calculated by factory to consume all 1000 derivative tokens
+        // Liquidity will be calculated by factory to consume all 500 derivative tokens
         params.liquidity = 1; // Factory ignores this, just needs to be non-zero
 
         params.parentTokenContribution = 0;
@@ -435,5 +440,743 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         });
 
         liquidityHelper.modifyLiquidity{value: amount0Desired}(key, params, "");
+    }
+
+    function test_MintOut_LOW_PRICE_Derivative() public {
+        console.log("=======================================================");
+        console.log("=== LOW PRICE DERIVATIVE: 0.3 to 1.5 parent/deriv ===");
+        console.log("=======================================================");
+
+        // Approve parent vault tokens for derivative creation
+        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+
+        // Setup derivative parameters for 500 token supply
+        uint256 maxSupply = 500;
+        DerivativeFactory.DerivativeParams memory params;
+        params.parentCollection = address(parentCollection);
+        params.nftName = "LOW Price Derivative";
+        params.nftSymbol = "LOWDRV";
+        params.nftBaseUri = "ipfs://low/";
+        params.nftOwner = address(this);
+        params.initialMinter = address(0);
+        params.vaultName = "LOW Price Token";
+        params.vaultSymbol = "LOWDRV";
+        params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
+        params.tickSpacing = 60;
+        params.maxSupply = maxSupply;
+
+        // Price range: 0.3 to 1.5 parent per derivative (5x range)
+        // In pool terms (derivative/parent): price = 0.667 to 3.333
+        params.tickLower = -4080;   // tick -4080 ≈ 1.5 parent per derivative
+        params.tickUpper = 12060;   // tick 12060 ≈ 0.3 parent per derivative
+
+        // Initialize at tick 12060 (at upper boundary) for single-sided derivative liquidity
+        params.sqrtPriceX96 = TickMath.getSqrtPriceAtTick(12060);
+
+        params.liquidity = 1; // Factory calculates this
+        params.parentTokenContribution = 0;
+        params.derivativeTokenRecipient = address(this);
+        params.parentTokenRefundRecipient = address(this);
+        params.salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, maxSupply);
+
+        console.log("\n=== CREATING DERIVATIVE ===");
+        (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
+
+        PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, params.tickSpacing);
+        bool parentIsZero = Currency.unwrap(childKey.currency0) == parentVault;
+
+        (uint160 initialSqrtPrice, int24 initialTick,,) = POOL_MANAGER.getSlot0(childPoolId);
+        console.log("Initial pool tick:", initialTick);
+        console.log("Target starting price: 0.3 parent per derivative");
+
+        // Record initial balances and parent pool state
+        uint256 initialDerivativeInPool = MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER));
+        console.log("Derivative tokens in pool:", initialDerivativeInPool);
+
+        // Track parent pool state before minting
+        (uint160 parentPoolSqrtPriceBefore, int24 parentPoolTickBefore,,) = POOL_MANAGER.getSlot0(rootPoolId);
+        console.log("\n=== PARENT POOL STATE BEFORE DERIVATIVE MINT ===");
+        console.log("Parent pool tick:", parentPoolTickBefore);
+
+        // PROGRESSIVE COST ANALYSIS: Use quoter for exact output
+        console.log("\n=== PROGRESSIVE BUY QUOTES (ETH Cost Per NFT Quantity) ===");
+
+        uint256[] memory targetQuantities = new uint256[](13);
+        targetQuantities[0] = 1;
+        targetQuantities[1] = 5;
+        targetQuantities[2] = 10;
+        targetQuantities[3] = 25;
+        targetQuantities[4] = 50;
+        targetQuantities[5] = 100;
+        targetQuantities[6] = 150;
+        targetQuantities[7] = 200;
+        targetQuantities[8] = 250;
+        targetQuantities[9] = 300;
+        targetQuantities[10] = 350;
+        targetQuantities[11] = 400;
+        targetQuantities[12] = 450;
+
+        for (uint256 i = 0; i < targetQuantities.length; i++) {
+            uint256 targetNFTs = targetQuantities[i];
+            if (targetNFTs >= maxSupply) continue;
+
+            // Multi-hop exact output: want exact derivative tokens, quote ETH needed
+            IV4Quoter.QuoteExactParams memory quoteParams;
+            quoteParams.exactCurrency = Currency.wrap(derivativeVault); // End with derivative
+            quoteParams.exactAmount = uint128(targetNFTs * 1e18);
+
+            quoteParams.path = new PathKey[](2);
+            // Path goes backwards for exact output: start currency -> intermediate -> exact currency
+            quoteParams.path[0] = PathKey({
+                intermediateCurrency: Currency.wrap(parentVault),
+                fee: params.fee,
+                tickSpacing: params.tickSpacing,
+                hooks: IHooks(HOOK_ADDRESS),
+                hookData: ""
+            });
+            quoteParams.path[1] = PathKey({
+                intermediateCurrency: Currency.wrap(address(0)), // ETH
+                fee: 0x800000,
+                tickSpacing: 60,
+                hooks: IHooks(HOOK_ADDRESS),
+                hookData: ""
+            });
+
+            try QUOTER.quoteExactOutput(quoteParams) returns (uint256 ethNeeded, uint256) {
+                console.log("---");
+                console.log("Quote for buying", targetNFTs, "NFTs:");
+                console.log("  ETH needed:", ethNeeded);
+                console.log("  ETH per NFT:", ethNeeded / targetNFTs);
+                console.log("  Supply %:", (targetNFTs * 100) / maxSupply);
+            } catch {
+                // Quote failed, skip
+            }
+        }
+        console.log("---");
+
+        // STEP 1: Buy parent tokens with ETH
+        console.log("\n=== STEP 1: BUY PARENT TOKENS WITH ETH ===");
+        uint256 ethToSpend = 9 ether; // Testing with 9 ETH for 5x range (0.3-1.5)
+        vm.deal(address(this), address(this).balance + ethToSpend); // Ensure we have enough ETH
+        uint256 parentBalanceBeforeEthSwap = RemyVault(parentVault).balanceOf(address(this));
+        console.log("ETH to spend:", ethToSpend);
+
+        IPoolManager.SwapParams memory ethSwapParams = IPoolManager.SwapParams({
+            zeroForOne: true, // ETH -> parent
+            amountSpecified: -int256(ethToSpend),
+            sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
+        });
+
+        swapRouter.swap{value: ethToSpend}(
+            rootKey,
+            ethSwapParams,
+            PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
+            ""
+        );
+
+        uint256 parentTokensAcquired = RemyVault(parentVault).balanceOf(address(this)) - parentBalanceBeforeEthSwap;
+        console.log("Parent tokens acquired:", parentTokensAcquired);
+        console.log("ETH spent:", ethToSpend);
+        console.log("Parent tokens per ETH:", parentTokensAcquired / 1e18);
+
+        // STEP 2: Buy derivative tokens with parent tokens
+        console.log("\n=== STEP 2: BUY DERIVATIVE TOKENS WITH PARENT ===");
+        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
+
+        // Prime the pool with a tiny swap first to enable proper execution
+        console.log("Priming pool with tiny swap...");
+        IPoolManager.SwapParams memory primeSwap = IPoolManager.SwapParams({
+            zeroForOne: parentIsZero,
+            amountSpecified: -1, // Sell 1 wei of parent token
+            sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+        });
+        swapRouter.swap(childKey, primeSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        console.log("Pool primed successfully");
+
+        uint256 parentBalanceBeforeDerivSwap = RemyVault(parentVault).balanceOf(address(this));
+        uint256 parentToSpend = parentTokensAcquired - 1; // Use acquired tokens minus the 1 wei for priming
+
+        console.log("Parent tokens to spend:", parentToSpend);
+
+        IPoolManager.SwapParams memory derivSwapParams = IPoolManager.SwapParams({
+            zeroForOne: parentIsZero,
+            amountSpecified: -int256(parentToSpend),
+            sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+        });
+
+        swapRouter.swap(childKey, derivSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+
+        uint256 derivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(this));
+        uint256 parentSpent = parentBalanceBeforeDerivSwap - RemyVault(parentVault).balanceOf(address(this));
+
+        console.log("Derivative tokens acquired:", derivativeBalance);
+        console.log("Parent tokens actually spent:", parentSpent);
+        console.log("Derivative per parent:", derivativeBalance / (parentSpent / 1e18));
+
+        // Check pool state after swap
+        (uint160 finalSqrtPrice, int24 finalTick,,) = POOL_MANAGER.getSlot0(childPoolId);
+        console.log("Final pool tick:", finalTick);
+        console.log("Tick movement:", int256(finalTick) - int256(initialTick));
+        console.log("Derivative tokens remaining in pool:", MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER)));
+
+        // STEP 3: Mint NFTs from derivative tokens
+        console.log("\n=== STEP 3: MINT NFTs FROM DERIVATIVE TOKENS ===");
+        uint256 nftsToMint = derivativeBalance / 1e18;
+        console.log("NFTs we can mint:", nftsToMint);
+
+        uint256[] memory mintedTokenIds = MinterRemyVault(derivativeVault).mint(nftsToMint, address(this));
+
+        console.log("NFTs successfully minted:", MockERC721Simple(nft).balanceOf(address(this)));
+        console.log("First NFT ID minted:", mintedTokenIds[0]);
+        console.log("Last NFT ID minted:", mintedTokenIds[mintedTokenIds.length - 1]);
+
+        // STEP 4: Analyze Parent Pool Price Impact
+        console.log("\n=== PARENT POOL PRICE IMPACT ANALYSIS ===");
+        (uint160 parentPoolSqrtPriceAfter, int24 parentPoolTickAfter,,) = POOL_MANAGER.getSlot0(rootPoolId);
+        console.log("Parent pool tick after mint:", parentPoolTickAfter);
+        console.log("Parent pool tick movement:", int256(parentPoolTickAfter) - int256(parentPoolTickBefore));
+
+        // Get actual quotes by doing small test swaps and reverting
+        console.log("\n=== PARENT TOKEN SELL QUOTES (Parent -> ETH) ===");
+        uint256[] memory sellAmounts = new uint256[](5);
+        sellAmounts[0] = 1e18;   // 1 parent token
+        sellAmounts[1] = 5e18;   // 5 parent tokens
+        sellAmounts[2] = 10e18;  // 10 parent tokens
+        sellAmounts[3] = 25e18;  // 25 parent tokens
+        sellAmounts[4] = 50e18;  // 50 parent tokens
+
+        for (uint256 i = 0; i < sellAmounts.length; i++) {
+            uint256 sellAmount = sellAmounts[i];
+            console.log("---");
+            console.log("Quote for selling", sellAmount / 1e18, "parent tokens:");
+
+            // Snapshot state
+            uint256 snapshotId = vm.snapshot();
+
+            // Do the swap to see output
+            uint256 ethBefore = address(this).balance;
+            IPoolManager.SwapParams memory sellParams = IPoolManager.SwapParams({
+                zeroForOne: false, // parent -> ETH
+                amountSpecified: -int256(sellAmount),
+                sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
+            });
+
+            swapRouter.swap(rootKey, sellParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+            uint256 ethReceived = address(this).balance - ethBefore;
+
+            console.log("  Parent tokens sold:", sellAmount);
+            console.log("  ETH received:", ethReceived);
+            console.log("  Price (ETH per parent):", ethReceived * 1e18 / sellAmount);
+
+            // Revert to snapshot
+            vm.revertTo(snapshotId);
+        }
+
+        // SUMMARY
+        console.log("\n=== SUMMARY ===");
+        console.log("Total ETH spent:", ethToSpend);
+        console.log("Total parent tokens spent:", parentSpent);
+        console.log("Total derivative tokens acquired:", derivativeBalance);
+        console.log("Total NFTs minted:", nftsToMint);
+        console.log("ETH per NFT:", ethToSpend / nftsToMint);
+        console.log("Parent per NFT:", parentSpent / nftsToMint);
+        console.log("Collection mint progress:", (nftsToMint * 100) / maxSupply, "%");
+        int256 parentPoolTickImpact = int256(parentPoolTickAfter) - int256(parentPoolTickBefore);
+        console.log("Parent pool price impact (ticks):", parentPoolTickImpact);
+
+        // Verify we acquired tokens
+        assertGt(derivativeBalance, 0, "Should have acquired derivative tokens");
+        assertGt(nftsToMint, 0, "Should be able to mint NFTs");
+    }
+
+    function test_MintOut_MEDIUM_PRICE_Derivative() public {
+        console.log("=========================================================");
+        console.log("=== MEDIUM PRICE DERIVATIVE: 0.5 to 2.0 parent/deriv ===");
+        console.log("=========================================================");
+
+        // Approve parent vault tokens for derivative creation
+        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+
+        // Setup derivative parameters for 250 token supply
+        uint256 maxSupply = 250;
+        DerivativeFactory.DerivativeParams memory params;
+        params.parentCollection = address(parentCollection);
+        params.nftName = "MEDIUM Price Derivative";
+        params.nftSymbol = "MEDDRV";
+        params.nftBaseUri = "ipfs://medium/";
+        params.nftOwner = address(this);
+        params.initialMinter = address(0);
+        params.vaultName = "MEDIUM Price Token";
+        params.vaultSymbol = "MEDDRV";
+        params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
+        params.tickSpacing = 60;
+        params.maxSupply = maxSupply;
+
+        // Price range: 0.5 to 2.0 parent per derivative
+        // In pool terms (derivative/parent): price = 0.5 to 2
+        // tick -6932 ≈ price 0.5 (2.0 parent per derivative)
+        // tick 6931 ≈ price 2 (0.5 parent per derivative)
+        params.tickLower = -6960;  // Adjusted to nearest valid tick for spacing 60
+        params.tickUpper = 6960;   // Adjusted to nearest valid tick for spacing 60
+
+        // Initialize at tick 6960 (at upper boundary) for single-sided derivative liquidity
+        params.sqrtPriceX96 = TickMath.getSqrtPriceAtTick(6960);
+
+        params.liquidity = 1; // Factory calculates this
+        params.parentTokenContribution = 0;
+        params.derivativeTokenRecipient = address(this);
+        params.parentTokenRefundRecipient = address(this);
+        params.salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, maxSupply);
+
+        console.log("\n=== CREATING DERIVATIVE ===");
+        (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
+
+        PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, params.tickSpacing);
+        bool parentIsZero = Currency.unwrap(childKey.currency0) == parentVault;
+
+        (uint160 initialSqrtPrice, int24 initialTick,,) = POOL_MANAGER.getSlot0(childPoolId);
+        console.log("Initial pool tick:", initialTick);
+        console.log("Target starting price: 0.5 parent per derivative");
+
+        // Record initial balances and parent pool state
+        uint256 initialDerivativeInPool = MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER));
+        console.log("Derivative tokens in pool:", initialDerivativeInPool);
+
+        // Track parent pool state before minting
+        (uint160 parentPoolSqrtPriceBefore, int24 parentPoolTickBefore,,) = POOL_MANAGER.getSlot0(rootPoolId);
+        console.log("\n=== PARENT POOL STATE BEFORE DERIVATIVE MINT ===");
+        console.log("Parent pool tick:", parentPoolTickBefore);
+
+        // PROGRESSIVE COST ANALYSIS: Use quoter for exact output
+        console.log("\n=== PROGRESSIVE BUY QUOTES (ETH Cost Per NFT Quantity) ===");
+
+        uint256[] memory targetQuantities = new uint256[](9);
+        targetQuantities[0] = 1;
+        targetQuantities[1] = 5;
+        targetQuantities[2] = 10;
+        targetQuantities[3] = 25;
+        targetQuantities[4] = 50;
+        targetQuantities[5] = 100;
+        targetQuantities[6] = 150;
+        targetQuantities[7] = 200;
+        targetQuantities[8] = 249;
+
+        for (uint256 i = 0; i < targetQuantities.length; i++) {
+            uint256 targetNFTs = targetQuantities[i];
+            if (targetNFTs >= maxSupply) continue;
+
+            IV4Quoter.QuoteExactParams memory quoteParams;
+            quoteParams.exactCurrency = Currency.wrap(derivativeVault);
+            quoteParams.exactAmount = uint128(targetNFTs * 1e18);
+
+            quoteParams.path = new PathKey[](2);
+            quoteParams.path[0] = PathKey({
+                intermediateCurrency: Currency.wrap(parentVault),
+                fee: params.fee,
+                tickSpacing: params.tickSpacing,
+                hooks: IHooks(HOOK_ADDRESS),
+                hookData: ""
+            });
+            quoteParams.path[1] = PathKey({
+                intermediateCurrency: Currency.wrap(address(0)),
+                fee: 0x800000,
+                tickSpacing: 60,
+                hooks: IHooks(HOOK_ADDRESS),
+                hookData: ""
+            });
+
+            try QUOTER.quoteExactOutput(quoteParams) returns (uint256 ethNeeded, uint256) {
+                console.log("---");
+                console.log("Quote for buying", targetNFTs, "NFTs:");
+                console.log("  ETH needed:", ethNeeded);
+                console.log("  ETH per NFT:", ethNeeded / targetNFTs);
+                console.log("  Supply %:", (targetNFTs * 100) / maxSupply);
+            } catch {
+                // Quote failed, skip
+            }
+        }
+        console.log("---");
+
+        uint256 ethToSpend = 8 ether;
+
+        // STEP 1: Buy parent tokens with ETH
+        console.log("\n=== STEP 1: BUY PARENT TOKENS WITH ETH ===");
+        vm.deal(address(this), address(this).balance + ethToSpend); // Ensure we have enough ETH
+        uint256 parentBalanceBeforeEthSwap = RemyVault(parentVault).balanceOf(address(this));
+        console.log("ETH to spend:", ethToSpend);
+
+        IPoolManager.SwapParams memory ethSwapParams = IPoolManager.SwapParams({
+            zeroForOne: true, // ETH -> parent
+            amountSpecified: -int256(ethToSpend),
+            sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
+        });
+
+        swapRouter.swap{value: ethToSpend}(
+            rootKey,
+            ethSwapParams,
+            PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
+            ""
+        );
+
+        uint256 parentTokensAcquired = RemyVault(parentVault).balanceOf(address(this)) - parentBalanceBeforeEthSwap;
+        console.log("Parent tokens acquired:", parentTokensAcquired);
+        console.log("ETH spent:", ethToSpend);
+        console.log("Parent tokens per ETH:", parentTokensAcquired / 1e18);
+
+        // STEP 2: Buy derivative tokens with parent tokens
+        console.log("\n=== STEP 2: BUY DERIVATIVE TOKENS WITH PARENT ===");
+        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
+
+        // Prime the pool with a tiny swap first to enable proper execution
+        console.log("Priming pool with tiny swap...");
+        IPoolManager.SwapParams memory primeSwap = IPoolManager.SwapParams({
+            zeroForOne: parentIsZero,
+            amountSpecified: -1, // Sell 1 wei of parent token
+            sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+        });
+        swapRouter.swap(childKey, primeSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        console.log("Pool primed successfully");
+
+        uint256 parentBalanceBeforeDerivSwap = RemyVault(parentVault).balanceOf(address(this));
+        uint256 parentToSpend = parentTokensAcquired - 1; // Use acquired tokens minus the 1 wei for priming
+
+        console.log("Parent tokens to spend:", parentToSpend);
+
+        IPoolManager.SwapParams memory derivSwapParams = IPoolManager.SwapParams({
+            zeroForOne: parentIsZero,
+            amountSpecified: -int256(parentToSpend),
+            sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+        });
+
+        swapRouter.swap(childKey, derivSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+
+        uint256 derivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(this));
+        uint256 parentSpent = parentBalanceBeforeDerivSwap - RemyVault(parentVault).balanceOf(address(this));
+
+        console.log("Derivative tokens acquired:", derivativeBalance);
+        console.log("Parent tokens actually spent:", parentSpent);
+        console.log("Derivative per parent:", derivativeBalance / (parentSpent / 1e18));
+
+        // Check pool state after swap
+        (uint160 finalSqrtPrice, int24 finalTick,,) = POOL_MANAGER.getSlot0(childPoolId);
+        console.log("Final pool tick:", finalTick);
+        console.log("Tick movement:", int256(finalTick) - int256(initialTick));
+        console.log("Derivative tokens remaining in pool:", MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER)));
+
+        // STEP 3: Mint NFTs from derivative tokens
+        console.log("\n=== STEP 3: MINT NFTs FROM DERIVATIVE TOKENS ===");
+        uint256 nftsToMint = derivativeBalance / 1e18;
+        console.log("NFTs we can mint:", nftsToMint);
+
+        uint256[] memory mintedTokenIds = MinterRemyVault(derivativeVault).mint(nftsToMint, address(this));
+
+        console.log("NFTs successfully minted:", MockERC721Simple(nft).balanceOf(address(this)));
+        console.log("First NFT ID minted:", mintedTokenIds[0]);
+        console.log("Last NFT ID minted:", mintedTokenIds[mintedTokenIds.length - 1]);
+
+        // STEP 4: Analyze Parent Pool Price Impact
+        console.log("\n=== PARENT POOL PRICE IMPACT ANALYSIS ===");
+        (uint160 parentPoolSqrtPriceAfter, int24 parentPoolTickAfter,,) = POOL_MANAGER.getSlot0(rootPoolId);
+        console.log("Parent pool tick after mint:", parentPoolTickAfter);
+        console.log("Parent pool tick movement:", int256(parentPoolTickAfter) - int256(parentPoolTickBefore));
+
+        // Get actual quotes by doing small test swaps and reverting
+        console.log("\n=== PARENT TOKEN SELL QUOTES (Parent -> ETH) ===");
+        uint256[] memory sellAmounts = new uint256[](5);
+        sellAmounts[0] = 1e18;   // 1 parent token
+        sellAmounts[1] = 5e18;   // 5 parent tokens
+        sellAmounts[2] = 10e18;  // 10 parent tokens
+        sellAmounts[3] = 25e18;  // 25 parent tokens
+        sellAmounts[4] = 50e18;  // 50 parent tokens
+
+        for (uint256 i = 0; i < sellAmounts.length; i++) {
+            uint256 sellAmount = sellAmounts[i];
+            console.log("---");
+            console.log("Quote for selling", sellAmount / 1e18, "parent tokens:");
+
+            // Snapshot state
+            uint256 snapshotId = vm.snapshot();
+
+            // Do the swap to see output
+            uint256 ethBefore = address(this).balance;
+            IPoolManager.SwapParams memory sellParams = IPoolManager.SwapParams({
+                zeroForOne: false, // parent -> ETH
+                amountSpecified: -int256(sellAmount),
+                sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
+            });
+
+            swapRouter.swap(rootKey, sellParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+            uint256 ethReceived = address(this).balance - ethBefore;
+
+            console.log("  Parent tokens sold:", sellAmount);
+            console.log("  ETH received:", ethReceived);
+            console.log("  Price (ETH per parent):", ethReceived * 1e18 / sellAmount);
+
+            // Revert to snapshot
+            vm.revertTo(snapshotId);
+        }
+
+        // SUMMARY
+        console.log("\n=== SUMMARY ===");
+        console.log("Total ETH spent:", ethToSpend);
+        console.log("Total parent tokens spent:", parentSpent);
+        console.log("Total derivative tokens acquired:", derivativeBalance);
+        console.log("Total NFTs minted:", nftsToMint);
+        console.log("ETH per NFT:", ethToSpend / nftsToMint);
+        console.log("Parent per NFT:", parentSpent / nftsToMint);
+        console.log("Collection mint progress:", (nftsToMint * 100) / maxSupply, "%");
+        int256 parentPoolTickImpact = int256(parentPoolTickAfter) - int256(parentPoolTickBefore);
+        console.log("Parent pool price impact (ticks):", parentPoolTickImpact);
+
+        // Verify we acquired tokens
+        assertGt(derivativeBalance, 0, "Should have acquired derivative tokens");
+        assertGt(nftsToMint, 0, "Should be able to mint NFTs");
+    }
+
+    function test_MintOut_HIGH_SUPPLY_Derivative() public {
+        console.log("===========================================================");
+        console.log("=== HIGH SUPPLY DERIVATIVE: 0.25 to 2.0 parent/deriv ===");
+        console.log("===========================================================");
+
+        // Approve parent vault tokens for derivative creation
+        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+
+        // Setup derivative parameters for 1000 token supply
+        uint256 maxSupply = 1000;
+        DerivativeFactory.DerivativeParams memory params;
+        params.parentCollection = address(parentCollection);
+        params.nftName = "HIGH Supply Derivative";
+        params.nftSymbol = "HIDRV";
+        params.nftBaseUri = "ipfs://high/";
+        params.nftOwner = address(this);
+        params.initialMinter = address(0);
+        params.vaultName = "HIGH Supply Token";
+        params.vaultSymbol = "HIDRV";
+        params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
+        params.tickSpacing = 60;
+        params.maxSupply = maxSupply;
+
+        // Price range: 0.25 to 2.0 parent per derivative (8x range)
+        // In pool terms (derivative/parent): price = 0.5 to 4.0
+        params.tickLower = -6960;   // tick -6960 ≈ 2.0 parent per derivative
+        params.tickUpper = 13860;   // tick 13860 ≈ 0.25 parent per derivative
+
+        // Initialize at tick 13860 (at upper boundary) for single-sided derivative liquidity
+        params.sqrtPriceX96 = TickMath.getSqrtPriceAtTick(13860);
+
+        params.liquidity = 1; // Factory calculates this
+        params.parentTokenContribution = 0;
+        params.derivativeTokenRecipient = address(this);
+        params.parentTokenRefundRecipient = address(this);
+        params.salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, maxSupply);
+
+        console.log("\n=== CREATING DERIVATIVE ===");
+        (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
+
+        PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, params.tickSpacing);
+        bool parentIsZero = Currency.unwrap(childKey.currency0) == parentVault;
+
+        (uint160 initialSqrtPrice, int24 initialTick,,) = POOL_MANAGER.getSlot0(childPoolId);
+        console.log("Initial pool tick:", initialTick);
+        console.log("Target starting price: 0.25 parent per derivative");
+
+        // Record initial balances and parent pool state
+        uint256 initialDerivativeInPool = MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER));
+        console.log("Derivative tokens in pool:", initialDerivativeInPool);
+
+        // Track parent pool state before minting
+        (uint160 parentPoolSqrtPriceBefore, int24 parentPoolTickBefore,,) = POOL_MANAGER.getSlot0(rootPoolId);
+        console.log("\n=== PARENT POOL STATE BEFORE DERIVATIVE MINT ===");
+        console.log("Parent pool tick:", parentPoolTickBefore);
+
+        // PROGRESSIVE COST ANALYSIS: Use quoter for exact output
+        console.log("\n=== PROGRESSIVE BUY QUOTES (ETH Cost Per NFT Quantity) ===");
+
+        uint256[] memory targetQuantities = new uint256[](15);
+        targetQuantities[0] = 1;
+        targetQuantities[1] = 5;
+        targetQuantities[2] = 10;
+        targetQuantities[3] = 25;
+        targetQuantities[4] = 50;
+        targetQuantities[5] = 100;
+        targetQuantities[6] = 150;
+        targetQuantities[7] = 200;
+        targetQuantities[8] = 250;
+        targetQuantities[9] = 300;
+        targetQuantities[10] = 400;
+        targetQuantities[11] = 500;
+        targetQuantities[12] = 600;
+        targetQuantities[13] = 700;
+        targetQuantities[14] = 800;
+
+        for (uint256 i = 0; i < targetQuantities.length; i++) {
+            uint256 targetNFTs = targetQuantities[i];
+            if (targetNFTs >= maxSupply) continue;
+
+            IV4Quoter.QuoteExactParams memory quoteParams;
+            quoteParams.exactCurrency = Currency.wrap(derivativeVault);
+            quoteParams.exactAmount = uint128(targetNFTs * 1e18);
+
+            quoteParams.path = new PathKey[](2);
+            quoteParams.path[0] = PathKey({
+                intermediateCurrency: Currency.wrap(parentVault),
+                fee: params.fee,
+                tickSpacing: params.tickSpacing,
+                hooks: IHooks(HOOK_ADDRESS),
+                hookData: ""
+            });
+            quoteParams.path[1] = PathKey({
+                intermediateCurrency: Currency.wrap(address(0)),
+                fee: 0x800000,
+                tickSpacing: 60,
+                hooks: IHooks(HOOK_ADDRESS),
+                hookData: ""
+            });
+
+            try QUOTER.quoteExactOutput(quoteParams) returns (uint256 ethNeeded, uint256) {
+                console.log("---");
+                console.log("Quote for buying", targetNFTs, "NFTs:");
+                console.log("  ETH needed:", ethNeeded);
+                console.log("  ETH per NFT:", ethNeeded / targetNFTs);
+                console.log("  Supply %:", (targetNFTs * 100) / maxSupply);
+            } catch {
+                // Quote failed, skip
+            }
+        }
+        console.log("---");
+
+        // STEP 1: Buy parent tokens with ETH
+        console.log("\n=== STEP 1: BUY PARENT TOKENS WITH ETH ===");
+        uint256 ethToSpend = 15 ether; // Large supply needs more ETH
+        vm.deal(address(this), address(this).balance + ethToSpend);
+        uint256 parentBalanceBeforeEthSwap = RemyVault(parentVault).balanceOf(address(this));
+        console.log("ETH to spend:", ethToSpend);
+
+        IPoolManager.SwapParams memory ethSwapParams = IPoolManager.SwapParams({
+            zeroForOne: true, // ETH -> parent
+            amountSpecified: -int256(ethToSpend),
+            sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
+        });
+
+        swapRouter.swap{value: ethToSpend}(
+            rootKey,
+            ethSwapParams,
+            PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
+            ""
+        );
+
+        uint256 parentTokensAcquired = RemyVault(parentVault).balanceOf(address(this)) - parentBalanceBeforeEthSwap;
+        console.log("Parent tokens acquired:", parentTokensAcquired);
+        console.log("ETH spent:", ethToSpend);
+        console.log("Parent tokens per ETH:", parentTokensAcquired / 1e18);
+
+        // STEP 2: Buy derivative tokens with parent tokens
+        console.log("\n=== STEP 2: BUY DERIVATIVE TOKENS WITH PARENT ===");
+        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
+
+        // Prime the pool with a tiny swap first to enable proper execution
+        console.log("Priming pool with tiny swap...");
+        IPoolManager.SwapParams memory primeSwap = IPoolManager.SwapParams({
+            zeroForOne: parentIsZero,
+            amountSpecified: -1, // Sell 1 wei of parent token
+            sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+        });
+        swapRouter.swap(childKey, primeSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        console.log("Pool primed successfully");
+
+        uint256 parentBalanceBeforeDerivSwap = RemyVault(parentVault).balanceOf(address(this));
+        uint256 parentToSpend = parentTokensAcquired - 1; // Use acquired tokens minus the 1 wei for priming
+
+        console.log("Parent tokens to spend:", parentToSpend);
+
+        IPoolManager.SwapParams memory derivSwapParams = IPoolManager.SwapParams({
+            zeroForOne: parentIsZero,
+            amountSpecified: -int256(parentToSpend),
+            sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+        });
+
+        swapRouter.swap(childKey, derivSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+
+        uint256 derivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(this));
+        uint256 parentSpent = parentBalanceBeforeDerivSwap - RemyVault(parentVault).balanceOf(address(this));
+
+        console.log("Derivative tokens acquired:", derivativeBalance);
+        console.log("Parent tokens actually spent:", parentSpent);
+        console.log("Derivative per parent:", derivativeBalance / (parentSpent / 1e18));
+
+        // Check pool state after swap
+        (uint160 finalSqrtPrice, int24 finalTick,,) = POOL_MANAGER.getSlot0(childPoolId);
+        console.log("Final pool tick:", finalTick);
+        console.log("Tick movement:", int256(finalTick) - int256(initialTick));
+        console.log("Derivative tokens remaining in pool:", MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER)));
+
+        // STEP 3: Mint NFTs from derivative tokens
+        console.log("\n=== STEP 3: MINT NFTs FROM DERIVATIVE TOKENS ===");
+        uint256 nftsToMint = derivativeBalance / 1e18;
+        console.log("NFTs we can mint:", nftsToMint);
+
+        uint256[] memory mintedTokenIds = MinterRemyVault(derivativeVault).mint(nftsToMint, address(this));
+
+        console.log("NFTs successfully minted:", MockERC721Simple(nft).balanceOf(address(this)));
+        console.log("First NFT ID minted:", mintedTokenIds[0]);
+        console.log("Last NFT ID minted:", mintedTokenIds[mintedTokenIds.length - 1]);
+
+        // STEP 4: Analyze Parent Pool Price Impact
+        console.log("\n=== PARENT POOL PRICE IMPACT ANALYSIS ===");
+        (uint160 parentPoolSqrtPriceAfter, int24 parentPoolTickAfter,,) = POOL_MANAGER.getSlot0(rootPoolId);
+        console.log("Parent pool tick after mint:", parentPoolTickAfter);
+        console.log("Parent pool tick movement:", int256(parentPoolTickAfter) - int256(parentPoolTickBefore));
+
+        // Get actual quotes by doing small test swaps and reverting
+        console.log("\n=== PARENT TOKEN SELL QUOTES (Parent -> ETH) ===");
+        uint256[] memory sellAmounts = new uint256[](5);
+        sellAmounts[0] = 1e18;   // 1 parent token
+        sellAmounts[1] = 5e18;   // 5 parent tokens
+        sellAmounts[2] = 10e18;  // 10 parent tokens
+        sellAmounts[3] = 25e18;  // 25 parent tokens
+        sellAmounts[4] = 50e18;  // 50 parent tokens
+
+        for (uint256 i = 0; i < sellAmounts.length; i++) {
+            uint256 sellAmount = sellAmounts[i];
+            console.log("---");
+            console.log("Quote for selling", sellAmount / 1e18, "parent tokens:");
+
+            // Snapshot state
+            uint256 snapshotId = vm.snapshot();
+
+            // Do the swap to see output
+            uint256 ethBefore = address(this).balance;
+            IPoolManager.SwapParams memory sellParams = IPoolManager.SwapParams({
+                zeroForOne: false, // parent -> ETH
+                amountSpecified: -int256(sellAmount),
+                sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
+            });
+
+            swapRouter.swap(rootKey, sellParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+            uint256 ethReceived = address(this).balance - ethBefore;
+
+            console.log("  Parent tokens sold:", sellAmount);
+            console.log("  ETH received:", ethReceived);
+            console.log("  Price (ETH per parent):", ethReceived * 1e18 / sellAmount);
+
+            // Revert to snapshot
+            vm.revertTo(snapshotId);
+        }
+
+        // SUMMARY
+        console.log("\n=== SUMMARY ===");
+        console.log("Total ETH spent:", ethToSpend);
+        console.log("Total parent tokens spent:", parentSpent);
+        console.log("Total derivative tokens acquired:", derivativeBalance);
+        console.log("Total NFTs minted:", nftsToMint);
+        console.log("ETH per NFT:", ethToSpend / nftsToMint);
+        console.log("Parent per NFT:", parentSpent / nftsToMint);
+        console.log("Collection mint progress:", (nftsToMint * 100) / maxSupply, "%");
+        int256 parentPoolTickImpact = int256(parentPoolTickAfter) - int256(parentPoolTickBefore);
+        console.log("Parent pool price impact (ticks):", parentPoolTickImpact);
+
+        // Verify we acquired tokens
+        assertGt(derivativeBalance, 0, "Should have acquired derivative tokens");
+        assertGt(nftsToMint, 0, "Should be able to mint NFTs");
     }
 }
