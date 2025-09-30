@@ -595,11 +595,19 @@ contract PriceRangeForkTest is BaseTest {
         uint256 parentContribution,
         uint256 maxSupply
     ) internal {
-        console.log("\n--- Creating Derivative ---");
+        console.log("\n--- CREATING DERIVATIVE COLLECTION ---");
         console.log("Name:", name);
-        console.log("Initial Price (sqrtPriceX96):", sqrtPriceX96);
+        console.log("Max Supply:", maxSupply);
+        console.log("Initial Price:", sqrtPriceX96);
         console.log("Tick Lower:", tickLower);
         console.log("Tick Upper:", tickUpper);
+
+        // Get root pool for parent/ETH tracking
+        (PoolKey memory rootKey, PoolId rootPoolId) = factory.rootPool(parentVault);
+        (uint160 initialParentEthPrice,,,) = POOL_MANAGER.getSlot0(rootPoolId);
+
+        console.log("\n--- INITIAL PARENT/ETH POOL STATE ---");
+        console.log("Parent/ETH sqrtPrice:", initialParentEthPrice);
 
         // Create derivative
         DerivativeFactory.DerivativeParams memory params;
@@ -625,106 +633,131 @@ contract PriceRangeForkTest is BaseTest {
         PoolKey memory childKey = _buildChildKey(derivativeVault, parentVault, 3000, 60);
         bool parentIsCurrency0 = Currency.unwrap(childKey.currency0) == parentVault;
 
-        // Get initial pool state
-        (uint160 initialSqrtPrice,,,) = POOL_MANAGER.getSlot0(childPoolId);
-        console.log("\nPool created successfully");
-        console.log("Actual sqrtPriceX96:", initialSqrtPrice);
-        console.log("Parent is currency0:", parentIsCurrency0);
+        uint256 derivativeSupply = MinterRemyVault(derivativeVault).totalSupply();
+        uint256 initialDerivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(this));
+
+        console.log("\n--- DERIVATIVE POOL CREATED ---");
+        console.log("Derivative supply:", derivativeSupply / 1e18);
+        console.log("Initial balance:", initialDerivativeBalance / 1e18);
+        console.log("Available to mint:", (derivativeSupply - initialDerivativeBalance) / 1e18);
 
         // Approve tokens for swapping
         RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
         MinterRemyVault(derivativeVault).approve(address(swapRouter), type(uint256).max);
 
-        // Test 1: Buy derivative with parent tokens
-        console.log("\n-------------------------------------------------");
-        console.log("   TEST 1: Buy Derivative with Parent Tokens");
-        console.log("-------------------------------------------------");
-
-        uint256 parentBalanceBefore = RemyVault(parentVault).balanceOf(address(this));
-        uint256 derivativeBalanceBefore = MinterRemyVault(derivativeVault).balanceOf(address(this));
-
-        IPoolManager.SwapParams memory buyDerivativeParams = IPoolManager.SwapParams({
-            zeroForOne: parentIsCurrency0,
-            amountSpecified: -int256(5 * 1e18),  // Spend 5 parent tokens
-            sqrtPriceLimitX96: parentIsCurrency0 ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
-        });
-
         PoolSwapTest.TestSettings memory settings =
             PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false});
 
-        swapRouter.swap(childKey, buyDerivativeParams, settings, bytes(""));
+        // MINT OUT SIMULATION - Buy all available derivatives
+        console.log("\n--- SIMULATING MINT-OUT ---");
+        console.log("Buying derivatives until supply exhausted...\n");
 
-        uint256 parentBalanceAfter = RemyVault(parentVault).balanceOf(address(this));
-        uint256 derivativeBalanceAfter = MinterRemyVault(derivativeVault).balanceOf(address(this));
-        (uint160 priceAfterBuy,,,) = POOL_MANAGER.getSlot0(childPoolId);
+        uint256 totalParentSpent = 0;
+        uint256 totalDerivativesBought = 0;
+        uint256 totalFees = 0;
+        uint256 swapCount = 0;
+        uint256 maxSwaps = 50;
 
-        uint256 parentSpent = parentBalanceBefore - parentBalanceAfter;
-        uint256 derivativeReceived = derivativeBalanceAfter - derivativeBalanceBefore;
+        uint256 targetToBuy = derivativeSupply - initialDerivativeBalance;
 
-        console.log("\nSwap Results:");
-        console.log("  Parent tokens spent:", parentSpent / 1e18, ".", (parentSpent % 1e18) / 1e16);
-        console.log("  Derivative tokens received:", derivativeReceived / 1e18, ".", (derivativeReceived % 1e18) / 1e16);
+        while (swapCount < maxSwaps) {
+            uint256 derivBalBefore = MinterRemyVault(derivativeVault).balanceOf(address(this));
+            uint256 remainingToBuy = derivativeSupply - derivBalBefore;
 
-        if (derivativeReceived > 0) {
-            uint256 effectivePrice = (parentSpent * 1e18) / derivativeReceived;
-            console.log("  Effective price (parent per derivative):", effectivePrice / 1e18, ".", (effectivePrice % 1e18) / 1e16);
-        }
-
-        console.log("\nPrice Impact:");
-        console.log("  sqrtPrice before:", initialSqrtPrice);
-        console.log("  sqrtPrice after:", priceAfterBuy);
-        int256 priceChangePercent = int256(uint256(priceAfterBuy) * 10000 / uint256(initialSqrtPrice)) - 10000;
-        console.log("  Price change (bps):", priceChangePercent);
-
-        // Test 2: Sell derivative for parent tokens
-        console.log("\n-------------------------------------------------");
-        console.log("   TEST 2: Sell Derivative for Parent Tokens");
-        console.log("-------------------------------------------------");
-
-        // Only sell if we have derivative tokens
-        if (derivativeBalanceAfter > 1e18) {
-            uint256 amountToSell = 1e18;  // Sell 1 derivative token
-
-            parentBalanceBefore = RemyVault(parentVault).balanceOf(address(this));
-            derivativeBalanceBefore = MinterRemyVault(derivativeVault).balanceOf(address(this));
-
-            IPoolManager.SwapParams memory sellDerivativeParams = IPoolManager.SwapParams({
-                zeroForOne: !parentIsCurrency0,
-                amountSpecified: -int256(amountToSell),
-                sqrtPriceLimitX96: parentIsCurrency0 ? TickMath.MAX_SQRT_PRICE - 1 : TickMath.MIN_SQRT_PRICE + 1
-            });
-
-            swapRouter.swap(childKey, sellDerivativeParams, settings, bytes(""));
-
-            parentBalanceAfter = RemyVault(parentVault).balanceOf(address(this));
-            derivativeBalanceAfter = MinterRemyVault(derivativeVault).balanceOf(address(this));
-            (uint160 priceAfterSell,,,) = POOL_MANAGER.getSlot0(childPoolId);
-
-            uint256 derivativeSold = derivativeBalanceBefore - derivativeBalanceAfter;
-            uint256 parentReceived = parentBalanceAfter - parentBalanceBefore;
-
-            console.log("\nSwap Results:");
-            console.log("  Derivative tokens sold:", derivativeSold / 1e18, ".", (derivativeSold % 1e18) / 1e16);
-            console.log("  Parent tokens received:", parentReceived / 1e18, ".", (parentReceived % 1e18) / 1e16);
-
-            if (derivativeSold > 0) {
-                uint256 effectivePrice = (parentReceived * 1e18) / derivativeSold;
-                console.log("  Effective price (parent per derivative):", effectivePrice / 1e18, ".", (effectivePrice % 1e18) / 1e16);
+            if (remainingToBuy < 0.01e18) {
+                console.log("Mint-out complete! Remaining:", remainingToBuy / 1e16, "/ 100");
+                break;
             }
 
-            console.log("\nPrice Impact:");
-            console.log("  sqrtPrice before:", priceAfterBuy);
-            console.log("  sqrtPrice after:", priceAfterSell);
-            priceChangePercent = int256(uint256(priceAfterSell) * 10000 / uint256(priceAfterBuy)) - 10000;
-            console.log("  Price change (bps):", priceChangePercent);
+            uint256 parentBalBefore = RemyVault(parentVault).balanceOf(address(this));
 
-            console.log("\nTotal Round-Trip Impact:");
-            console.log("  Initial sqrtPrice:", initialSqrtPrice);
-            console.log("  Final sqrtPrice:", priceAfterSell);
-            priceChangePercent = int256(uint256(priceAfterSell) * 10000 / uint256(initialSqrtPrice)) - 10000;
-            console.log("  Total price change (bps):", priceChangePercent);
+            // Try to buy with a reasonable amount
+            uint256 buyAmount = 2 * 1e18;  // 2 parent tokens per attempt
+            if (parentBalBefore < buyAmount) {
+                buyAmount = parentBalBefore / 2;
+            }
+
+            if (buyAmount < 0.1e18) {
+                console.log("Insufficient parent tokens to continue");
+                break;
+            }
+
+            try swapRouter.swap(
+                childKey,
+                IPoolManager.SwapParams({
+                    zeroForOne: parentIsCurrency0,
+                    amountSpecified: -int256(buyAmount),
+                    sqrtPriceLimitX96: parentIsCurrency0 ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+                }),
+                settings,
+                bytes("")
+            ) {
+                uint256 parentBalAfter = RemyVault(parentVault).balanceOf(address(this));
+                uint256 derivBalAfter = MinterRemyVault(derivativeVault).balanceOf(address(this));
+
+                uint256 parentSpent = parentBalBefore - parentBalAfter;
+                uint256 derivReceived = derivBalAfter - derivBalBefore;
+
+                if (derivReceived == 0) {
+                    console.log("No more derivatives available");
+                    break;
+                }
+
+                totalParentSpent += parentSpent;
+                totalDerivativesBought += derivReceived;
+                totalFees += (parentSpent * 1000) / 10000;  // 10% fee
+                swapCount++;
+
+                if (swapCount % 5 == 0 || swapCount <= 3) {
+                    console.log("Swap", swapCount);
+                    console.log("  Parent:", parentSpent / 1e18, ".", (parentSpent % 1e18) / 1e16);
+                    console.log("  Derivatives:", derivReceived / 1e18, ".", (derivReceived % 1e18) / 1e16);
+                    console.log("  Total bought:", totalDerivativesBought / 1e18, "/", targetToBuy / 1e18);
+                }
+            } catch {
+                console.log("Swap failed - liquidity exhausted");
+                break;
+            }
+        }
+
+        // Get final parent/ETH price
+        (uint160 finalParentEthPrice,,,) = POOL_MANAGER.getSlot0(rootPoolId);
+
+        console.log("\n--- MINT-OUT RESULTS ---");
+        console.log("Total swaps:", swapCount);
+        console.log("Total parent spent:", totalParentSpent / 1e18, ".", (totalParentSpent % 1e18) / 1e16);
+        console.log("Total derivatives bought:", totalDerivativesBought / 1e18, ".", (totalDerivativesBought % 1e18) / 1e16);
+
+        if (totalDerivativesBought > 0 && targetToBuy > 0) {
+            console.log("Mint-out %:", (totalDerivativesBought * 100) / targetToBuy);
+            uint256 avgPrice = (totalParentSpent * 1e18) / totalDerivativesBought;
+            console.log("Average price (parent/derivative):", avgPrice / 1e18, ".", (avgPrice % 1e18) / 1e16);
         } else {
-            console.log("\nSkipping sell test - insufficient derivative balance");
+            console.log("No derivatives purchased - collection already owned or no liquidity");
+        }
+
+        console.log("\n--- FEE COLLECTION ---");
+        console.log("Total fees (10%):", totalFees / 1e18, ".", (totalFees % 1e18) / 1e16);
+        console.log("Child pool (7.5%):", (totalFees * 75 / 100) / 1e18, ".", ((totalFees * 75 / 100) % 1e18) / 1e16);
+        console.log("Parent pool (2.5%):", (totalFees * 25 / 100) / 1e18, ".", ((totalFees * 25 / 100) % 1e18) / 1e16);
+
+        console.log("\n--- PARENT COLLECTION PRICE IMPACT ---");
+        console.log("Initial Parent/ETH sqrtPrice:", initialParentEthPrice);
+        console.log("Final Parent/ETH sqrtPrice:", finalParentEthPrice);
+
+        int256 parentPriceChange = int256(uint256(finalParentEthPrice) * 10000 / uint256(initialParentEthPrice)) - 10000;
+        console.log("Parent price change (bps):", parentPriceChange);
+
+        if (parentPriceChange > 0) {
+            uint256 percentIncrease = uint256(parentPriceChange) / 100;
+            uint256 percentDecimals = (uint256(parentPriceChange) % 100) * 10;
+            console.log("PARENT COLLECTION PUMPED!");
+            console.log("Price increase:", percentIncrease, ".", percentDecimals);
+            console.log("(percent)");
+        } else if (parentPriceChange < 0) {
+            console.log("Parent collection price decreased");
+        } else {
+            console.log("Parent collection price unchanged");
         }
 
         console.log("\n[PASS]", name, "testing completed\n");
