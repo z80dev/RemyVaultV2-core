@@ -94,8 +94,8 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         // Setup: Create parent collection and vault
         MockERC721Simple parentCollection = new MockERC721Simple("Parent NFT", "PRNT");
 
-        // Mint 100 parent NFTs to this contract
-        for (uint256 i = 1; i <= 100; i++) {
+        // Mint 500 parent NFTs to this contract (need 300 for liquidity + some for derivative)
+        for (uint256 i = 1; i <= 500; i++) {
             parentCollection.mint(address(this), i);
         }
 
@@ -103,8 +103,8 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Vault", "PVAL");
 
         // Deposit NFTs into parent vault
-        uint256[] memory tokenIds = new uint256[](100);
-        for (uint256 i = 0; i < 100; i++) {
+        uint256[] memory tokenIds = new uint256[](500);
+        for (uint256 i = 0; i < 500; i++) {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
@@ -128,7 +128,7 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         // Range 1: Parent tokens for selling as price rises (0.01006 → 0.1 ETH per parent)
         // From tick 23040 (0.1 ETH/parent) to 46020 (current tick)
         // Current tick = upper bound, so range just became inactive, 100% token1 (parent)
-        _addLiquidityToPool(rootKey, 23040, 46020, 10e18, 0, address(this));
+        _addLiquidityToPool(rootKey, 23040, 46020, 300e18, 0, address(this));
 
         // Range 2: ETH for buying parent as price falls (0.01006 → 0.001 ETH per parent)
         // From tick 46020 (current tick) to 69060 (0.001 ETH/parent)
