@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {BaseTest} from "./BaseTest.t.sol";
+import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 import {console} from "forge-std/console.sol";
 
 import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
@@ -19,7 +20,7 @@ import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 
-contract Simulations is BaseTest {
+contract Simulations is BaseTest, DerivativeTestUtils {
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
 
@@ -132,12 +133,7 @@ contract Simulations is BaseTest {
         params.parentTokenRefundRecipient = address(this);
 
         // Mine a salt that ensures derivative vault address > parent vault address (derivative will be token1)
-        // We need to predict the NFT address first - it's deployed with CREATE in the factory
-        // For simplicity, we'll approximate the NFT address
-        // The NFT is created as: new RemyVaultNFT(...) - this is the first CREATE in createDerivative
-        // So the NFT address will be: keccak256(rlp([factory_address, nonce]))
-        // Since we're in a test, we can just mine the salt by trial and error
-        bytes32 salt = _mineSaltForToken1(parentVault, params.vaultName, params.vaultSymbol, maxSupply);
+        bytes32 salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, maxSupply);
         params.salt = salt;
 
         console.log("Mined salt:", uint256(salt));
@@ -208,70 +204,5 @@ contract Simulations is BaseTest {
                 hooks: IHooks(HOOK_ADDRESS)
             });
         }
-    }
-
-    /// @notice Mine a salt that ensures the derivative vault address > parent vault address
-    /// This is necessary because we want the derivative token to always be token1 in the pool
-    function _mineSaltForToken1(
-        address parentVault,
-        string memory vaultName,
-        string memory vaultSymbol,
-        uint256 maxSupply
-    ) internal view returns (bytes32) {
-        // The NFT is created using CREATE (not CREATE2) in createDerivative
-        // So we need to predict the NFT address based on the factory's nonce
-        // NFT address = keccak256(rlp([factory_address, nonce]))
-        uint64 factoryNonce = vm.getNonce(address(factory));
-
-        // The nonce will be incremented when the NFT is created
-        // RLP encoding for nonce < 128: [0xd6, 0x94, ...address..., nonce]
-        // RLP encoding for nonce >= 128: varies
-        address predictedNFT = _computeCreateAddress(address(factory), factoryNonce);
-
-        console.log("Predicted NFT address:", predictedNFT);
-        console.log("Factory nonce:", factoryNonce);
-
-        // Now mine a salt such that the derivative vault address > parent vault address
-        bytes32 salt;
-        for (uint256 i = 0; i < 10000; i++) {
-            salt = bytes32(i);
-            address predictedVault = factory.predictDerivativeVaultAddress(
-                predictedNFT,
-                vaultName,
-                vaultSymbol,
-                maxSupply,
-                salt
-            );
-
-            if (predictedVault > parentVault) {
-                console.log("Found salt:", i);
-                console.log("Predicted vault:", predictedVault);
-                return salt;
-            }
-        }
-
-        revert("Could not find valid salt in 10000 iterations");
-    }
-
-    /// @notice Compute the address of a contract deployed with CREATE
-    function _computeCreateAddress(address deployer, uint64 nonce) internal pure returns (address) {
-        // RLP encoding of [deployer, nonce]
-        bytes memory rlpEncoded;
-
-        if (nonce == 0x00) {
-            rlpEncoded = abi.encodePacked(bytes1(0xd6), bytes1(0x94), deployer, bytes1(0x80));
-        } else if (nonce <= 0x7f) {
-            rlpEncoded = abi.encodePacked(bytes1(0xd6), bytes1(0x94), deployer, bytes1(uint8(nonce)));
-        } else if (nonce <= 0xff) {
-            rlpEncoded = abi.encodePacked(bytes1(0xd7), bytes1(0x94), deployer, bytes1(0x81), bytes1(uint8(nonce)));
-        } else if (nonce <= 0xffff) {
-            rlpEncoded = abi.encodePacked(bytes1(0xd8), bytes1(0x94), deployer, bytes1(0x82), bytes2(uint16(nonce)));
-        } else if (nonce <= 0xffffff) {
-            rlpEncoded = abi.encodePacked(bytes1(0xd9), bytes1(0x94), deployer, bytes1(0x83), bytes3(uint24(nonce)));
-        } else {
-            rlpEncoded = abi.encodePacked(bytes1(0xda), bytes1(0x94), deployer, bytes1(0x84), bytes4(uint32(nonce)));
-        }
-
-        return address(uint160(uint256(keccak256(rlpEncoded))));
     }
 }
