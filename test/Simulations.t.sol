@@ -47,6 +47,12 @@ contract Simulations is BaseTest, DerivativeTestUtils {
     DerivativeFactory internal factory;
     PoolModifyLiquidityTest internal liquidityHelper;
 
+    // Parent pool state (initialized in _setUpParentPool)
+    MockERC721Simple internal parentCollection;
+    address internal parentVault;
+    PoolKey internal rootKey;
+    PoolId internal rootPoolId;
+
     function setUp() public override {
         super.setUp();
 
@@ -60,6 +66,56 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         hook.transferOwnership(address(factory));
 
         liquidityHelper = new PoolModifyLiquidityTest(POOL_MANAGER);
+
+        // Initialize parent pool with standard parameters
+        _setUpParentPool();
+    }
+
+    function _setUpParentPool() internal {
+        // Create parent collection and vault
+        parentCollection = new MockERC721Simple("Parent NFT", "PRNT");
+
+        // Mint 500 parent NFTs to this contract (need 300 for liquidity + some for derivative)
+        for (uint256 i = 1; i <= 500; i++) {
+            parentCollection.mint(address(this), i);
+        }
+
+        // Create parent vault
+        parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Vault", "PVAL");
+
+        // Deposit NFTs into parent vault
+        uint256[] memory tokenIds = new uint256[](500);
+        for (uint256 i = 0; i < 500; i++) {
+            tokenIds[i] = i + 1;
+        }
+        parentCollection.setApprovalForAll(parentVault, true);
+        RemyVault(parentVault).deposit(tokenIds, address(this));
+
+        // Create root pool with price ≈ 0.01 ETH per parent token
+        // Initialize at exactly tick 46020 to enable single-sided liquidity
+        // tick 46020 => price = 1.0001^46020 ≈ 99.405 parent/ETH ≈ 0.01006 ETH/parent
+        uint160 sqrtPriceTick46020 = TickMath.getSqrtPriceAtTick(46020);
+        rootPoolId = _initRootPool(parentVault, 3000, 60, sqrtPriceTick46020);
+        rootKey = _buildPoolKey(address(0), parentVault, 0x800000, 60);
+
+        // Verify initialization
+        (uint160 actualSqrtPrice, int24 actualTick,,) = POOL_MANAGER.getSlot0(rootPoolId);
+        console.log("Initialized pool - tick:", actualTick);
+        console.log("Expected tick: 46020");
+
+        // Add liquidity to root pool (current tick = 46020 exactly)
+        // Ranges bracket the current tick with minimal gap
+
+        // Range 1: Parent tokens for selling as price rises (0.01006 → 0.1 ETH per parent)
+        // From tick 23040 (0.1 ETH/parent) to 46020 (current tick)
+        // Current tick = upper bound, so range just became inactive, 100% token1 (parent)
+        _addLiquidityToPool(rootKey, 23040, 46020, 300e18, 0, address(this));
+
+        // Range 2: ETH for buying parent as price falls (0.01006 → 0.001 ETH per parent)
+        // From tick 46020 (current tick) to 69060 (0.001 ETH/parent)
+        // Current tick = lower bound, so range is active, provides liquidity
+        vm.deal(address(this), 10 ether);
+        _addLiquidityToPool(rootKey, 46020, 69060, 0, 2 ether, address(this));
     }
 
     function test_CreateOGNFTAndVault() public {
@@ -91,51 +147,7 @@ contract Simulations is BaseTest, DerivativeTestUtils {
     }
 
     function test_DerivativeCreation_EntireSupplyAsLiquidity() public {
-        // Setup: Create parent collection and vault
-        MockERC721Simple parentCollection = new MockERC721Simple("Parent NFT", "PRNT");
-
-        // Mint 500 parent NFTs to this contract (need 300 for liquidity + some for derivative)
-        for (uint256 i = 1; i <= 500; i++) {
-            parentCollection.mint(address(this), i);
-        }
-
-        // Create parent vault
-        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Vault", "PVAL");
-
-        // Deposit NFTs into parent vault
-        uint256[] memory tokenIds = new uint256[](500);
-        for (uint256 i = 0; i < 500; i++) {
-            tokenIds[i] = i + 1;
-        }
-        parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-
-        // Create root pool with price ≈ 0.01 ETH per parent token
-        // Initialize at exactly tick 46020 to enable single-sided liquidity
-        // tick 46020 => price = 1.0001^46020 ≈ 99.405 parent/ETH ≈ 0.01006 ETH/parent
-        uint160 sqrtPriceTick46020 = TickMath.getSqrtPriceAtTick(46020);
-        PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, sqrtPriceTick46020);
-        PoolKey memory rootKey = _buildPoolKey(address(0), parentVault, 0x800000, 60);
-
-        // Verify initialization
-        (uint160 actualSqrtPrice, int24 actualTick,,) = POOL_MANAGER.getSlot0(rootPoolId);
-        console.log("Initialized pool - tick:", actualTick);
-        console.log("Expected tick: 46020");
-
-        // Add liquidity to root pool (current tick = 46020 exactly)
-        // Ranges bracket the current tick with minimal gap
-
-        // Range 1: Parent tokens for selling as price rises (0.01006 → 0.1 ETH per parent)
-        // From tick 23040 (0.1 ETH/parent) to 46020 (current tick)
-        // Current tick = upper bound, so range just became inactive, 100% token1 (parent)
-        _addLiquidityToPool(rootKey, 23040, 46020, 300e18, 0, address(this));
-
-        // Range 2: ETH for buying parent as price falls (0.01006 → 0.001 ETH per parent)
-        // From tick 46020 (current tick) to 69060 (0.001 ETH/parent)
-        // Current tick = lower bound, so range is active, provides liquidity
-        vm.deal(address(this), 10 ether);
-        _addLiquidityToPool(rootKey, 46020, 69060, 0, 2 ether, address(this));
-
+        // Parent pool is already initialized in setUp via _setUpParentPool()
         // Quote: 0.1 ETH -> parent tokens (root pool)
         (uint256 parentTokensOut, uint256 ethGasEstimate) = QUOTER.quoteExactInputSingle(
             IV4Quoter.QuoteExactSingleParams({
