@@ -55,8 +55,8 @@ contract RemyVaultFactory {
         emit VaultCreated(collection, vault);
     }
 
-    /// @notice Predict the vault address for the provided constructor arguments without deploying.
-    function predictVaultAddress(address collection) external view returns (address) {
+    /// @notice Compute the vault address for the provided constructor arguments without deploying.
+    function computeAddress(address collection) external view returns (address) {
         if (collection == address(0)) revert CollectionAddressZero();
         if (isVault[collection]) revert CollectionIsVault(collection);
 
@@ -64,8 +64,8 @@ contract RemyVaultFactory {
         return _computeCreate2Address(_salt(collection), bytecodeHash);
     }
 
-    /// @notice Predict the address for a derivative vault without deploying.
-    function predictDerivativeVaultAddress(address collection, uint256 maxSupply, bytes32 salt)
+    /// @notice Compute the address for a derivative vault without deploying.
+    function computeDerivativeAddress(address collection, uint256 maxSupply, bytes32 salt)
         external
         view
         returns (address)

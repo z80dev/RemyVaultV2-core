@@ -249,17 +249,17 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         poolId = root.id;
     }
 
-    /// @notice Predict the derivative vault address for the given parameters without deploying
+    /// @notice Compute the derivative vault address for the given parameters without deploying
     /// @param nftAddress The address of the derivative NFT collection
     /// @param maxSupply The maximum supply of derivative NFTs
     /// @param salt The salt for CREATE2 deployment
-    /// @return The predicted address of the derivative vault
-    function predictDerivativeVaultAddress(address nftAddress, uint256 maxSupply, bytes32 salt)
+    /// @return The computed address of the derivative vault
+    function computeDerivativeAddress(address nftAddress, uint256 maxSupply, bytes32 salt)
         external
         view
         returns (address)
     {
-        return VAULT_FACTORY.predictDerivativeVaultAddress(nftAddress, maxSupply, salt);
+        return VAULT_FACTORY.computeDerivativeAddress(nftAddress, maxSupply, salt);
     }
 
     modifier requiresHookOwnership() {

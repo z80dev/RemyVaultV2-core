@@ -34,8 +34,8 @@ contract RemyVaultFactoryInvariantTest is Test {
             assertEq(factory.vaultFor(vault), address(0), "vault address reused as collection");
             assertEq(RemyVault(vault).erc721(), collection, "vault erc721 target mismatch");
 
-            address predicted = factory.predictVaultAddress(collection);
-            assertEq(predicted, vault, "predictVaultAddress no longer deterministic");
+            address predicted = factory.computeAddress(collection);
+            assertEq(predicted, vault, "computeAddress no longer deterministic");
         }
     }
 }

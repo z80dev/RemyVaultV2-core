@@ -17,7 +17,7 @@ abstract contract DerivativeTestUtils is Test {
         view
         returns (address)
     {
-        return factory.predictDerivativeVaultAddress(nftAddress, maxSupply, salt);
+        return factory.computeDerivativeAddress(nftAddress, maxSupply, salt);
     }
 
     /// @notice Predict both the NFT and vault addresses for a derivative deployment
@@ -37,7 +37,7 @@ abstract contract DerivativeTestUtils is Test {
         nftAddress = _computeCreateAddress(address(factory), factoryNonce);
 
         // Predict the vault address using CREATE2
-        vaultAddress = factory.predictDerivativeVaultAddress(nftAddress, maxSupply, salt);
+        vaultAddress = factory.computeDerivativeAddress(nftAddress, maxSupply, salt);
     }
 
     /// @notice Mine a salt that ensures the derivative vault address > target token address
@@ -59,7 +59,7 @@ abstract contract DerivativeTestUtils is Test {
         // Mine a salt such that the derivative vault address > target token address
         for (uint256 i = 0; i < maxIterations; i++) {
             salt = bytes32(i);
-            address predictedVault = factory.predictDerivativeVaultAddress(predictedNFT, maxSupply, salt);
+            address predictedVault = factory.computeDerivativeAddress(predictedNFT, maxSupply, salt);
 
             if (predictedVault > targetToken) {
                 return salt;

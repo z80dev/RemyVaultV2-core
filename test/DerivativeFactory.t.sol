@@ -111,7 +111,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateVaultForCollectionDeploysVaultAndRootPool() public {
-        address predictedVault = vaultFactory.predictVaultAddress(address(parentCollection));
+        address predictedVault = vaultFactory.computeAddress(address(parentCollection));
         PoolKey memory expectedRootKey = _buildKey(address(0), predictedVault, 3000, 60);
         PoolId expectedRootId = expectedRootKey.toId();
 

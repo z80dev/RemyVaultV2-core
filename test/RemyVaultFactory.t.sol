@@ -49,7 +49,7 @@ contract RemyVaultFactoryTest is Test {
         address firstVault = factory.deployVault(address(collection));
 
         vm.expectRevert(abi.encodeWithSelector(RemyVaultFactory.CollectionIsVault.selector, firstVault));
-        factory.predictVaultAddress(firstVault);
+        factory.computeAddress(firstVault);
     }
 
     function testDeployDerivativeVaultPreMintsSupply() public {
@@ -66,7 +66,7 @@ contract RemyVaultFactoryTest is Test {
 
     function testPredictDerivativeVaultAddressMatchesDeployment() public {
         RemyVaultNFT derivativeCollection = new RemyVaultNFT("Derivative", "DRV", "ipfs://", address(this));
-        address predicted = factory.predictDerivativeVaultAddress(address(derivativeCollection), 1, bytes32(0));
+        address predicted = factory.computeDerivativeAddress(address(derivativeCollection), 1, bytes32(0));
         address deployed = factory.deployDerivativeVault(address(derivativeCollection), 1, bytes32(0));
         assertEq(predicted, deployed, "predicted address mismatch");
     }
