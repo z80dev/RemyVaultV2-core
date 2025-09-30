@@ -112,11 +112,12 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
 
     function testCreateVaultForCollectionDeploysVaultAndRootPool() public {
         address predictedVault = vaultFactory.computeAddress(address(parentCollection));
-        PoolKey memory expectedRootKey = _buildKey(address(0), predictedVault, 3000, 60);
+        uint24 dynamicFee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG
+        PoolKey memory expectedRootKey = _buildKey(address(0), predictedVault, dynamicFee, 60);
         PoolId expectedRootId = expectedRootKey.toId();
 
         vm.expectEmit(true, true, false, true, address(factory));
-        emit DerivativeFactory.RootPoolRegistered(predictedVault, expectedRootId, 3000, 60, SQRT_PRICE_1_1);
+        emit DerivativeFactory.RootPoolRegistered(predictedVault, expectedRootId, dynamicFee, 60, SQRT_PRICE_1_1);
 
         vm.expectEmit(true, true, true, false, address(factory));
         emit DerivativeFactory.ParentVaultRegistered(address(parentCollection), predictedVault, expectedRootId);
@@ -146,8 +147,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeDeploysArtifacts() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
-        PoolId parentPoolId = _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+        (address parentVault, PoolId parentPoolId) = factory.createVaultForCollection(address(parentCollection), 60, SQRT_PRICE_1_1);
 
         // Seed the parent vault with inventory so the factory can provide liquidity.
         uint256 depositCount = 100;
@@ -549,8 +549,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testDerivativeTokenRecipientReceivesTokens() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
-        _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+        (address parentVault,) = factory.createVaultForCollection(address(parentCollection), 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](100);
@@ -589,8 +588,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeDefaultsToNftOwnerWhenNoRecipient() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
-        _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+        (address parentVault,) = factory.createVaultForCollection(address(parentCollection), 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](100);
@@ -666,8 +664,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
 
     /// @notice Comprehensive test exploring various price ranges and liquidity amounts for derivative launches
     function testDerivativeLaunchScenarios() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
-        _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+        (address parentVault,) = factory.createVaultForCollection(address(parentCollection), 60, SQRT_PRICE_1_1);
 
         // Mint large inventory for parent vault
         uint256[] memory tokenIds = new uint256[](1000);

@@ -198,16 +198,8 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
             parentToken.transferFrom(msg.sender, address(this), params.parentTokenContribution);
         }
 
-        // For single-sided liquidity, the entire derivative supply should be used
-        uint256 totalDerivativeSupply = params.maxSupply * derivativeToken.UNIT();
-
-        // Calculate liquidity needed to consume all derivative tokens
-        uint128 calculatedLiquidity = _calculateLiquidityForAmount(
-            derivativeIsCurrency0, normalizedSqrtPrice, normalizedLower, normalizedUpper, totalDerivativeSupply
-        );
-
-        // Use calculated liquidity to ensure all derivative tokens are consumed
-        _addInitialLiquidity(childKey, normalizedLower, normalizedUpper, calculatedLiquidity);
+        // Use the requested liquidity amount from params
+        _addInitialLiquidity(childKey, normalizedLower, normalizedUpper, params.liquidity);
 
         childPoolId = childKey.toId();
         derivativeForVault[vault] = DerivativeInfo({nft: nft, parentVault: parentVault, poolId: childPoolId});

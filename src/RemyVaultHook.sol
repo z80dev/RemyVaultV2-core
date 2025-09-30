@@ -11,11 +11,13 @@ import {BalanceDelta, BalanceDeltaLibrary} from "@uniswap/v4-core/src/types/Bala
 import {
     BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta
 } from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 
 contract RemyVaultHook is BaseHook {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
     using BalanceDeltaLibrary for BalanceDelta;
+    using StateLibrary for IPoolManager;
 
     uint16 internal constant FEE_DENOMINATOR = 10_000;
     uint16 internal constant TOTAL_FEE_BPS = 1_000; // 10%
@@ -135,22 +137,29 @@ contract RemyVaultHook is BaseHook {
 
         (uint256 childFee, uint256 parentFee) = _splitFees(totalFee, config.hasParent);
 
-        if (childFee > 0) {
+        uint256 actualFee = 0;
+        if (childFee > 0 && _hasLiquidity(key)) {
             poolManager.donate(
                 key, config.sharedIsChild0 ? childFee : 0, config.sharedIsChild0 ? 0 : childFee, bytes("")
             );
+            actualFee += childFee;
         }
 
-        if (config.hasParent && parentFee > 0) {
+        if (config.hasParent && parentFee > 0 && _hasLiquidity(config.parentKey)) {
             poolManager.donate(
                 config.parentKey,
                 config.sharedIsParent0 ? parentFee : 0,
                 config.sharedIsParent0 ? 0 : parentFee,
                 bytes("")
             );
+            actualFee += parentFee;
         }
 
-        BeforeSwapDelta delta = toBeforeSwapDelta(int128(int256(totalFee)), int128(0));
+        if (actualFee == 0) {
+            return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        }
+
+        BeforeSwapDelta delta = toBeforeSwapDelta(int128(int256(actualFee)), int128(0));
         return (this.beforeSwap.selector, delta, 0);
     }
 
@@ -183,22 +192,30 @@ contract RemyVaultHook is BaseHook {
 
         (uint256 childFee, uint256 parentFee) = _splitFees(totalFee, config.hasParent);
 
-        if (childFee > 0) {
+        uint256 actualFee = 0;
+        if (childFee > 0 && _hasLiquidity(key)) {
             poolManager.donate(
                 key, config.sharedIsChild0 ? childFee : 0, config.sharedIsChild0 ? 0 : childFee, bytes("")
             );
+            actualFee += childFee;
         }
 
-        if (config.hasParent && parentFee > 0) {
+        if (config.hasParent && parentFee > 0 && _hasLiquidity(config.parentKey)) {
             poolManager.donate(
                 config.parentKey,
                 config.sharedIsParent0 ? parentFee : 0,
                 config.sharedIsParent0 ? 0 : parentFee,
                 bytes("")
             );
+            actualFee += parentFee;
         }
 
-        return (this.afterSwap.selector, int128(int256(totalFee)));
+        return (this.afterSwap.selector, int128(int256(actualFee)));
+    }
+
+    function _hasLiquidity(PoolKey memory key) private view returns (bool) {
+        uint128 liquidity = poolManager.getLiquidity(key.toId());
+        return liquidity > 0;
     }
 
     function _sharedToken(PoolKey calldata childKey, PoolKey calldata parentKey)
