@@ -84,6 +84,20 @@ contract UniversalRouterMintOut is BaseTest {
         // positionManager = new PositionManager(POOL_MANAGER, address(0), 0, address(0), ""); // requires more params
     }
 
+    // Helper to initialize a root pool directly (for testing the permissionless flow)
+    function _initRootPool(address parentVault, uint24 /* fee */, int24 tickSpacing, uint160 sqrtPriceX96)
+        internal
+        returns (PoolId poolId)
+    {
+        uint24 fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG
+        PoolKey memory key = _buildChildKey(address(0), parentVault, fee, tickSpacing);
+        PoolKey memory emptyKey;
+        vm.prank(address(factory));
+        hook.addChild(key, false, emptyKey);
+        POOL_MANAGER.initialize(key, sqrtPriceX96);
+        return key.toId();
+    }
+
     function test_QuoteETHToDerivativeMultihop() public {
         console.log("\n================================================================");
         console.log("  ETH -> PARENT -> DERIVATIVE QUOTE TEST");
@@ -227,7 +241,7 @@ contract UniversalRouterMintOut is BaseTest {
     ) {
         // Create parent vault and pool
         parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
-        rootPoolId = factory.registerRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+        rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint and deposit parent NFTs
         uint256[] memory tokenIds = new uint256[](200);
@@ -253,7 +267,7 @@ contract UniversalRouterMintOut is BaseTest {
 
         // Create derivative
         DerivativeFactory.DerivativeParams memory params;
-        params.parentVault = parentVault;
+        params.parentCollection = RemyVault(parentVault).erc721();
         params.nftName = "Test Derivative";
         params.nftSymbol = "TDRV";
         params.nftBaseUri = "ipfs://test/";

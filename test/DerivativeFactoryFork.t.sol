@@ -54,10 +54,24 @@ contract DerivativeFactoryForkTest is BaseTest {
         hook.transferOwnership(address(factory));
     }
 
+    // Helper to initialize a root pool directly (for testing the permissionless flow)
+    function _initRootPool(address parentVault, uint24 /* fee */, int24 tickSpacing, uint160 sqrtPriceX96)
+        internal
+        returns (PoolId poolId)
+    {
+        uint24 fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG
+        PoolKey memory key = _buildChildKey(address(0), parentVault, fee, tickSpacing);
+        PoolKey memory emptyKey;
+        vm.prank(address(factory));
+        hook.addChild(key, false, emptyKey);
+        POOL_MANAGER.initialize(key, sqrtPriceX96);
+        return key.toId();
+    }
+
     function testCreateDerivative_OnBaseFork_ConfiguresPools() public {
         address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
 
-        PoolId rootPoolId = factory.registerRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+        PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         address nftOwner = makeAddr("nftOwner");
         address saleMinter = makeAddr("saleMinter");
@@ -75,7 +89,7 @@ contract DerivativeFactoryForkTest is BaseTest {
         RemyVault(parentVault).approve(address(factory), type(uint256).max);
 
         DerivativeFactory.DerivativeParams memory params;
-        params.parentVault = parentVault;
+        params.parentCollection = RemyVault(parentVault).erc721();
         params.nftName = "Derivative Collection";
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://derivative/";
@@ -93,6 +107,7 @@ contract DerivativeFactoryForkTest is BaseTest {
         params.parentTokenContribution = 3 * 1e18;
         params.derivativeTokenRecipient = derivativeTokenRecipient;
         params.parentTokenRefundRecipient = address(this);
+        params.salt = bytes32(0);
 
         (address derivativeNft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 

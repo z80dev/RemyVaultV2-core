@@ -92,6 +92,20 @@ contract PriceRangeForkTest is BaseTest {
         liquidityRouter = new PoolModifyLiquidityTest(POOL_MANAGER);
     }
 
+    // Helper to initialize a root pool directly (for testing the permissionless flow)
+    function _initRootPool(address parentVault, uint24 /* fee */, int24 tickSpacing, uint160 sqrtPriceX96)
+        internal
+        returns (PoolId poolId)
+    {
+        uint24 fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG
+        PoolKey memory key = _buildChildKey(address(0), parentVault, fee, tickSpacing);
+        PoolKey memory emptyKey;
+        vm.prank(address(factory));
+        hook.addChild(key, false, emptyKey);
+        POOL_MANAGER.initialize(key, sqrtPriceX96);
+        return key.toId();
+    }
+
     function test_ParentEthPriceRange() public {
         console.log("\n=== TESTING PARENT/ETH POOL PRICE RANGE ===");
         console.log("Target: Parent costs 0.01 to 0.5 ETH per token");
@@ -102,7 +116,7 @@ contract PriceRangeForkTest is BaseTest {
         address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
 
         // Register root pool with calculated parameters
-        PoolId rootPoolId = factory.registerRootPool(parentVault, 3000, 60, PARENT_ETH_SQRT_PRICE);
+        PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, PARENT_ETH_SQRT_PRICE);
 
         // Get root pool key (ETH/Parent)
         (PoolKey memory rootKey,) = factory.rootPool(parentVault);
@@ -194,7 +208,7 @@ contract PriceRangeForkTest is BaseTest {
 
         // Set up parent vault
         address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
-        PoolId rootPoolId = factory.registerRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+        PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](200);
@@ -224,7 +238,7 @@ contract PriceRangeForkTest is BaseTest {
 
         // Create derivative with calculated ticks
         DerivativeFactory.DerivativeParams memory params;
-        params.parentVault = parentVault;
+        params.parentCollection = address(parentCollection);
         params.nftName = "Derivative Collection";
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://derivative/";
@@ -356,7 +370,7 @@ contract PriceRangeForkTest is BaseTest {
 
         // Set up pools
         address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
-        factory.registerRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+        _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](300);
@@ -385,7 +399,7 @@ contract PriceRangeForkTest is BaseTest {
 
         // Create derivative
         DerivativeFactory.DerivativeParams memory params;
-        params.parentVault = parentVault;
+        params.parentCollection = address(parentCollection);
         params.nftName = "Derivative";
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
@@ -450,7 +464,7 @@ contract PriceRangeForkTest is BaseTest {
         // Setup - completely fresh
         MockERC721Simple collection = new MockERC721Simple("Low Price Parent", "LPP");
         address parentVault = vaultFactory.deployVault(address(collection), "Low Price Parent Token", "LPPT");
-        factory.registerRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+        _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](500);
@@ -498,7 +512,7 @@ contract PriceRangeForkTest is BaseTest {
         // Setup - completely fresh
         MockERC721Simple collection = new MockERC721Simple("Medium Price Parent", "MPP");
         address parentVault = vaultFactory.deployVault(address(collection), "Medium Price Parent Token", "MPPT");
-        factory.registerRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+        _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](500);
@@ -546,7 +560,7 @@ contract PriceRangeForkTest is BaseTest {
         // Setup - completely fresh
         MockERC721Simple collection = new MockERC721Simple("High Price Parent", "HPP");
         address parentVault = vaultFactory.deployVault(address(collection), "High Price Parent Token", "HPPT");
-        factory.registerRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+        _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](500);
@@ -611,7 +625,7 @@ contract PriceRangeForkTest is BaseTest {
 
         // Create derivative
         DerivativeFactory.DerivativeParams memory params;
-        params.parentVault = parentVault;
+        params.parentCollection = RemyVault(parentVault).erc721();
         params.nftName = name;
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://test/";
@@ -768,7 +782,7 @@ contract PriceRangeForkTest is BaseTest {
 
         // Setup parent vault and root pool
         address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
-        factory.registerRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+        _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](500);
@@ -798,7 +812,7 @@ contract PriceRangeForkTest is BaseTest {
 
         // Create derivative at medium price (0.5 parent per derivative)
         DerivativeFactory.DerivativeParams memory params;
-        params.parentVault = parentVault;
+        params.parentCollection = address(parentCollection);
         params.nftName = "Analysis Derivative";
         params.nftSymbol = "ANLZ";
         params.nftBaseUri = "ipfs://analysis/";

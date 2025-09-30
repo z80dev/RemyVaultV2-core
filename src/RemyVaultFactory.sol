@@ -42,13 +42,13 @@ contract RemyVaultFactory {
         address collection,
         string calldata name_,
         string calldata symbol_,
-        uint256 maxSupply
+        uint256 maxSupply,
+        bytes32 salt
     ) external returns (address vault) {
         if (collection == address(0)) revert CollectionAddressZero();
         if (vaultFor[collection] != address(0)) revert CollectionAlreadyDeployed(collection);
         if (isVault[collection]) revert CollectionIsVault(collection);
 
-        bytes32 salt = _salt(collection);
         vault = address(new MinterRemyVault{salt: salt}(name_, symbol_, collection, maxSupply));
 
         uint256 mintedSupply = MinterRemyVault(vault).balanceOf(address(this));
@@ -80,7 +80,8 @@ contract RemyVaultFactory {
         address collection,
         string calldata name_,
         string calldata symbol_,
-        uint256 maxSupply
+        uint256 maxSupply,
+        bytes32 salt
     ) external view returns (address) {
         if (collection == address(0)) revert CollectionAddressZero();
         if (isVault[collection]) revert CollectionIsVault(collection);
@@ -88,7 +89,7 @@ contract RemyVaultFactory {
         bytes32 bytecodeHash = keccak256(
             abi.encodePacked(type(MinterRemyVault).creationCode, abi.encode(name_, symbol_, collection, maxSupply))
         );
-        return _computeCreate2Address(_salt(collection), bytecodeHash);
+        return _computeCreate2Address(salt, bytecodeHash);
     }
 
     /// @notice Helper to derive the salt used for CREATE2 deployments.

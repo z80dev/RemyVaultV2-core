@@ -44,7 +44,7 @@ contract RemyVaultFactoryTest is Test {
     }
 
     function testDeployDerivativeVaultPreMintsSupply() public {
-        address derivativeVault = factory.deployDerivativeVault(collection, "Derivative", "DRV", 5);
+        address derivativeVault = factory.deployDerivativeVault(collection, "Derivative", "DRV", 5, bytes32(0));
         assertEq(factory.vaultFor(collection), derivativeVault, "vault mapping mismatch");
         assertTrue(factory.isVault(derivativeVault), "vault flag missing");
 
@@ -55,8 +55,8 @@ contract RemyVaultFactoryTest is Test {
     }
 
     function testPredictDerivativeVaultAddressMatchesDeployment() public {
-        address predicted = factory.predictDerivativeVaultAddress(collection, "Derivative", "DRV", 1);
-        address deployed = factory.deployDerivativeVault(collection, "Derivative", "DRV", 1);
+        address predicted = factory.predictDerivativeVaultAddress(collection, "Derivative", "DRV", 1, bytes32(0));
+        address deployed = factory.deployDerivativeVault(collection, "Derivative", "DRV", 1, bytes32(0));
         assertEq(predicted, deployed, "predicted address mismatch");
     }
 }

@@ -79,6 +79,20 @@ contract DerivativeMintOutSimulation is BaseTest {
         liquidityRouter = new PoolModifyLiquidityTest(POOL_MANAGER);
     }
 
+    // Helper to initialize a root pool directly (for testing the permissionless flow)
+    function _initRootPool(address parentVault, uint24 /* fee */, int24 tickSpacing, uint160 sqrtPriceX96)
+        internal
+        returns (PoolId poolId)
+    {
+        uint24 fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG
+        PoolKey memory key = _buildChildKey(address(0), parentVault, fee, tickSpacing);
+        PoolKey memory emptyKey;
+        vm.prank(address(factory));
+        hook.addChild(key, false, emptyKey);
+        POOL_MANAGER.initialize(key, sqrtPriceX96);
+        return key.toId();
+    }
+
     function test_LowPriceDerivativeMintOut() public {
         console.log("\n");
         console.log("================================================================");
@@ -144,7 +158,7 @@ contract DerivativeMintOutSimulation is BaseTest {
     ) internal {
         // Setup parent vault and root pool
         address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
-        PoolId rootPoolId = factory.registerRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+        PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](500);
@@ -175,7 +189,7 @@ contract DerivativeMintOutSimulation is BaseTest {
 
         // Create derivative
         DerivativeFactory.DerivativeParams memory params;
-        params.parentVault = parentVault;
+        params.parentCollection = RemyVault(parentVault).erc721();
         params.nftName = name;
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://test/";

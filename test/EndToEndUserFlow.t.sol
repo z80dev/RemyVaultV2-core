@@ -125,7 +125,7 @@ contract EndToEndUserFlowTest is Test {
 
         // Protocol owner creates vault for the collection
         (address parentVaultAddr, PoolId rootId) = derivativeFactory.createVaultForCollection(
-            address(nftCollection), "Crypto Punks Token", "CPUNK", 3000, 60, SQRT_PRICE_1_1
+            address(nftCollection), "Crypto Punks Token", "CPUNK", 60, SQRT_PRICE_1_1
         );
 
         parentVault = RemyVault(parentVaultAddr);
@@ -168,7 +168,7 @@ contract EndToEndUserFlowTest is Test {
         parentVault.transfer(protocolOwner, 30 * 1e18);
 
         DerivativeFactory.DerivativeParams memory params;
-        params.parentVault = address(parentVault);
+        params.parentCollection = parentVault.erc721();
         params.nftName = "Mini Punks";
         params.nftSymbol = "MPUNK";
         params.nftBaseUri = "ipfs://minipunks/";
@@ -188,6 +188,7 @@ contract EndToEndUserFlowTest is Test {
         params.liquidity = 5 * 1e18;
         params.parentTokenContribution = 10 * 1e18; // Need both tokens for full range at tick 0
         params.derivativeTokenRecipient = protocolOwner;
+        params.salt = bytes32(uint256(1)); // Use salt 1 to ensure derivative is token1
 
         parentVault.approve(address(derivativeFactory), type(uint256).max);
         (address derivNftAddr, address derivVaultAddr, PoolId childId) = derivativeFactory.createDerivative(params);
@@ -407,7 +408,7 @@ contract EndToEndUserFlowTest is Test {
         nftCollection.setApprovalForAll(address(vaultFactory), true);
 
         (address setupVaultAddr, PoolId rootId) = derivativeFactory.createVaultForCollection(
-            address(nftCollection), "Test Token", "TTKN", 3000, 60, SQRT_PRICE_1_1
+            address(nftCollection), "Test Token", "TTKN", 60, SQRT_PRICE_1_1
         );
 
         parentVault = RemyVault(setupVaultAddr);
@@ -436,7 +437,7 @@ contract EndToEndUserFlowTest is Test {
 
         // Create derivative
         DerivativeFactory.DerivativeParams memory params;
-        params.parentVault = address(parentVault);
+        params.parentCollection = parentVault.erc721();
         params.nftName = "Derivative";
         params.nftSymbol = "DERIV";
         params.nftBaseUri = "ipfs://deriv/";
@@ -454,6 +455,7 @@ contract EndToEndUserFlowTest is Test {
         params.tickUpper = 887220;
         params.liquidity = 5 * 1e18;
         params.parentTokenContribution = 10 * 1e18; // Need both tokens for full range at tick 0
+        params.salt = bytes32(uint256(1)); // Use salt 1 to ensure derivative is token1
 
         parentVault.approve(address(derivativeFactory), type(uint256).max);
         (address nftAddr, address derivVaultAddr, PoolId childId) = derivativeFactory.createDerivative(params);

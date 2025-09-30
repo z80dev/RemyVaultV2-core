@@ -16,14 +16,21 @@ import {IUnlockCallback} from "@uniswap/v4-core/src/interfaces/callback/IUnlockC
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
+import {FixedPoint96} from "@uniswap/v4-core/src/libraries/FixedPoint96.sol";
 import {IERC20Minimal} from "@uniswap/v4-core/src/interfaces/external/IERC20Minimal.sol";
 
 contract DerivativeFactory is Ownable, IUnlockCallback {
     using PoolIdLibrary for PoolKey;
     using BalanceDeltaLibrary for BalanceDelta;
+    using StateLibrary for IPoolManager;
+    using LPFeeLibrary for uint24;
 
     struct DerivativeParams {
-        address parentVault;
+        address parentCollection;
         string nftName;
         string nftSymbol;
         string nftBaseUri;
@@ -41,6 +48,7 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         uint256 parentTokenContribution;
         address derivativeTokenRecipient;
         address parentTokenRefundRecipient;
+        bytes32 salt;
     }
 
     struct RootPool {
@@ -80,12 +88,15 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
     error ParentVaultNotFromFactory(address parentVault);
     error ParentVaultAlreadyInitialized(address parentVault);
     error ParentVaultNotRegistered(address parentVault);
+    error ParentCollectionHasNoVault(address collection);
+    error ParentCollectionHasNoPool(address collection, address vault);
     error InvalidSqrtPrice();
     error InvalidTickRange();
     error ZeroLiquidity();
     error UnsupportedCurrency();
     error CallbackNotPoolManager();
     error TransferFailed();
+    error DerivativeVaultMustBeToken1(address derivativeVault, address parentVault);
 
     RemyVaultFactory public immutable VAULT_FACTORY;
     RemyVaultHook public immutable HOOK;
@@ -106,36 +117,51 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         _initializeOwner(owner_);
     }
 
-    function registerRootPool(address parentVault, uint24 fee, int24 tickSpacing, uint160 sqrtPriceX96)
-        external
-        onlyOwner
-        requiresHookOwnership
-        returns (PoolId poolId)
-    {
-        poolId = _registerRootPool(parentVault, fee, tickSpacing, sqrtPriceX96);
-    }
-
     function createVaultForCollection(
         address collection,
         string calldata vaultName,
         string calldata vaultSymbol,
-        uint24 fee,
         int24 tickSpacing,
         uint160 sqrtPriceX96
     ) external onlyOwner requiresHookOwnership returns (address vault, PoolId poolId) {
         vault = VAULT_FACTORY.deployVault(collection, vaultName, vaultSymbol);
-        poolId = _registerRootPool(vault, fee, tickSpacing, sqrtPriceX96);
+
+        // Initialize the root pool with dynamic fee flag
+        if (sqrtPriceX96 == 0) revert InvalidSqrtPrice();
+        uint24 fee = LPFeeLibrary.DYNAMIC_FEE_FLAG;
+        PoolKey memory key = _buildPoolKey(address(0), vault, fee, tickSpacing);
+        PoolKey memory emptyKey;
+        HOOK.addChild(key, false, emptyKey);
+        POOL_MANAGER.initialize(key, sqrtPriceX96);
+
+        // Cache the root pool
+        poolId = key.toId();
+        RootPool storage root = _rootPools[vault];
+        root.exists = true;
+        root.key = key;
+        root.id = poolId;
+
+        emit RootPoolRegistered(vault, poolId, fee, tickSpacing, sqrtPriceX96);
         emit ParentVaultRegistered(collection, vault, poolId);
     }
 
     function createDerivative(DerivativeParams calldata params)
         external
-        onlyOwner
-        requiresHookOwnership
         returns (address nft, address vault, PoolId childPoolId)
     {
-        RootPool storage root = _rootPools[params.parentVault];
-        if (!root.exists) revert ParentVaultNotRegistered(params.parentVault);
+        // Look up the RemyVault for the parent collection
+        address parentVault = VAULT_FACTORY.vaultFor(params.parentCollection);
+        if (parentVault == address(0)) revert ParentCollectionHasNoVault(params.parentCollection);
+
+        // Get or discover the root pool for this parent vault
+        RootPool storage root = _rootPools[parentVault];
+        if (!root.exists) {
+            // Try to discover an existing root pool
+            _discoverAndCacheRootPool(parentVault, params.fee, params.tickSpacing);
+            // Check again after discovery attempt
+            if (!root.exists) revert ParentCollectionHasNoPool(params.parentCollection, parentVault);
+        }
+
         if (params.sqrtPriceX96 == 0) revert InvalidSqrtPrice();
         if (params.tickLower >= params.tickUpper) revert InvalidTickRange();
         if (params.liquidity == 0) revert ZeroLiquidity();
@@ -144,7 +170,12 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
             new RemyVaultNFT(params.nftName, params.nftSymbol, params.nftBaseUri, address(this));
 
         nft = address(derivativeNft);
-        vault = VAULT_FACTORY.deployDerivativeVault(nft, params.vaultName, params.vaultSymbol, params.maxSupply);
+        vault = VAULT_FACTORY.deployDerivativeVault(nft, params.vaultName, params.vaultSymbol, params.maxSupply, params.salt);
+
+        // Enforce that derivative vault address > parent vault address (derivative will be token1)
+        if (vault <= parentVault) {
+            revert DerivativeVaultMustBeToken1(vault, parentVault);
+        }
 
         derivativeNft.setMinter(vault, true);
         if (params.initialMinter != address(0)) {
@@ -155,7 +186,7 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         }
 
         (PoolKey memory childKey, bool derivativeIsCurrency0) =
-            _buildPoolKeyWithOrientation(vault, params.parentVault, params.fee, params.tickSpacing);
+            _buildPoolKeyWithOrientation(vault, parentVault, params.fee, params.tickSpacing);
 
         (uint160 normalizedSqrtPrice, int24 normalizedLower, int24 normalizedUpper) =
             _normalizePriceAndTicks(derivativeIsCurrency0, params.sqrtPriceX96, params.tickLower, params.tickUpper);
@@ -164,16 +195,29 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         POOL_MANAGER.initialize(childKey, normalizedSqrtPrice);
 
         MinterRemyVault derivativeToken = MinterRemyVault(vault);
-        RemyVault parentToken = RemyVault(params.parentVault);
+        RemyVault parentToken = RemyVault(parentVault);
 
         if (params.parentTokenContribution != 0) {
             parentToken.transferFrom(msg.sender, address(this), params.parentTokenContribution);
         }
 
-        _addInitialLiquidity(childKey, normalizedLower, normalizedUpper, params.liquidity);
+        // For single-sided liquidity, the entire derivative supply should be used
+        uint256 totalDerivativeSupply = params.maxSupply * derivativeToken.UNIT();
+
+        // Calculate liquidity needed to consume all derivative tokens
+        uint128 calculatedLiquidity = _calculateLiquidityForAmount(
+            derivativeIsCurrency0,
+            normalizedSqrtPrice,
+            normalizedLower,
+            normalizedUpper,
+            totalDerivativeSupply
+        );
+
+        // Use calculated liquidity to ensure all derivative tokens are consumed
+        _addInitialLiquidity(childKey, normalizedLower, normalizedUpper, calculatedLiquidity);
 
         childPoolId = childKey.toId();
-        derivativeForVault[vault] = DerivativeInfo({nft: nft, parentVault: params.parentVault, poolId: childPoolId});
+        derivativeForVault[vault] = DerivativeInfo({nft: nft, parentVault: parentVault, poolId: childPoolId});
         vaultForNft[nft] = vault;
 
         uint256 parentBalanceAfter = parentToken.balanceOf(address(this));
@@ -193,11 +237,9 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
             derivativeToken.transfer(derivativeRecipient, derivativeBalanceAfter);
         }
 
-        address parentCollection = RemyVault(params.parentVault).erc721();
-
         emit DerivativeCreated(
-            parentCollection,
-            params.parentVault,
+            params.parentCollection,
+            parentVault,
             nft,
             vault,
             childPoolId,
@@ -214,31 +256,65 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         poolId = root.id;
     }
 
+    /// @notice Predict the derivative vault address for the given parameters without deploying
+    /// @param nftAddress The address of the derivative NFT collection
+    /// @param vaultName The name for the derivative vault token
+    /// @param vaultSymbol The symbol for the derivative vault token
+    /// @param maxSupply The maximum supply of derivative NFTs
+    /// @param salt The salt for CREATE2 deployment
+    /// @return The predicted address of the derivative vault
+    function predictDerivativeVaultAddress(
+        address nftAddress,
+        string calldata vaultName,
+        string calldata vaultSymbol,
+        uint256 maxSupply,
+        bytes32 salt
+    ) external view returns (address) {
+        return VAULT_FACTORY.predictDerivativeVaultAddress(nftAddress, vaultName, vaultSymbol, maxSupply, salt);
+    }
+
     modifier requiresHookOwnership() {
         if (HOOK.owner() != address(this)) revert HookOwnershipMissing();
         _;
     }
 
-    function _registerRootPool(address parentVault, uint24 fee, int24 tickSpacing, uint160 sqrtPriceX96)
-        private
-        returns (PoolId poolId)
-    {
+    function _discoverAndCacheRootPool(address parentVault, uint24 hintFee, int24 hintTickSpacing) private {
         if (!VAULT_FACTORY.isVault(parentVault)) revert ParentVaultNotFromFactory(parentVault);
-        RootPool storage root = _rootPools[parentVault];
-        if (root.exists) revert ParentVaultAlreadyInitialized(parentVault);
-        if (sqrtPriceX96 == 0) revert InvalidSqrtPrice();
 
+        // Always use the dynamic fee flag for permissionless pools
+        uint24 fee = LPFeeLibrary.DYNAMIC_FEE_FLAG;
+
+        // Try the hinted tick spacing first (from derivative params)
+        if (_tryDiscoverPool(parentVault, fee, hintTickSpacing)) return;
+
+        // Try common tick spacings
+        int24[3] memory tickSpacings = [int24(10), int24(60), int24(200)];
+
+        for (uint256 i = 0; i < tickSpacings.length; i++) {
+            // Skip if we already tried this tick spacing
+            if (tickSpacings[i] == hintTickSpacing) continue;
+            if (_tryDiscoverPool(parentVault, fee, tickSpacings[i])) return;
+        }
+    }
+
+    function _tryDiscoverPool(address parentVault, uint24 fee, int24 tickSpacing) private returns (bool) {
         PoolKey memory key = _buildPoolKey(address(0), parentVault, fee, tickSpacing);
-        PoolKey memory emptyKey;
-        HOOK.addChild(key, false, emptyKey);
-        POOL_MANAGER.initialize(key, sqrtPriceX96);
+        PoolId poolId = key.toId();
 
-        poolId = key.toId();
+        // Check if pool is initialized (sqrtPrice != 0)
+        (uint160 sqrtPriceX96,,,) = POOL_MANAGER.getSlot0(poolId);
+        if (sqrtPriceX96 == 0) return false;
+
+        // Verify the hook matches
+        if (address(key.hooks) != address(HOOK)) return false;
+
+        // Cache the discovered pool
+        RootPool storage root = _rootPools[parentVault];
         root.exists = true;
         root.key = key;
         root.id = poolId;
 
-        emit RootPoolRegistered(parentVault, poolId, fee, tickSpacing, sqrtPriceX96);
+        return true;
     }
 
     function _buildPoolKey(address tokenA, address tokenB, uint24 fee, int24 tickSpacing)
@@ -314,6 +390,57 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         _settleCurrencyDelta(data.key.currency1, delta.amount1());
 
         return abi.encode(delta);
+    }
+
+    function _calculateLiquidityForAmount(
+        bool tokenIsCurrency0,
+        uint160 sqrtPriceX96,
+        int24 tickLower,
+        int24 tickUpper,
+        uint256 amount
+    ) private pure returns (uint128) {
+        uint160 sqrtRatioAX96 = TickMath.getSqrtPriceAtTick(tickLower);
+        uint160 sqrtRatioBX96 = TickMath.getSqrtPriceAtTick(tickUpper);
+
+        // Check if position is single-sided
+        // In Uniswap V3: when price < range, liquidity is in currency0; when price > range, liquidity is in currency1
+        uint128 liquidity;
+        if (sqrtPriceX96 <= sqrtRatioAX96) {
+            // Price below range - need currency0
+            liquidity = _getLiquidityForAmount0(sqrtRatioAX96, sqrtRatioBX96, tokenIsCurrency0 ? amount : 0);
+        } else if (sqrtPriceX96 >= sqrtRatioBX96) {
+            // Price above range - need currency1
+            liquidity = _getLiquidityForAmount1(sqrtRatioAX96, sqrtRatioBX96, tokenIsCurrency0 ? 0 : amount);
+        } else {
+            // Current price is within range - need both tokens
+            // Calculate liquidity based on the derivative token
+            if (tokenIsCurrency0) {
+                liquidity = _getLiquidityForAmount0(sqrtPriceX96, sqrtRatioBX96, amount);
+            } else {
+                liquidity = _getLiquidityForAmount1(sqrtRatioAX96, sqrtPriceX96, amount);
+            }
+        }
+
+        return liquidity;
+    }
+
+    function _getLiquidityForAmount0(uint160 sqrtRatioAX96, uint160 sqrtRatioBX96, uint256 amount0)
+        private
+        pure
+        returns (uint128 liquidity)
+    {
+        if (sqrtRatioAX96 > sqrtRatioBX96) (sqrtRatioAX96, sqrtRatioBX96) = (sqrtRatioBX96, sqrtRatioAX96);
+        uint256 intermediate = FullMath.mulDiv(sqrtRatioAX96, sqrtRatioBX96, FixedPoint96.Q96);
+        liquidity = uint128(FullMath.mulDiv(amount0, intermediate, sqrtRatioBX96 - sqrtRatioAX96));
+    }
+
+    function _getLiquidityForAmount1(uint160 sqrtRatioAX96, uint160 sqrtRatioBX96, uint256 amount1)
+        private
+        pure
+        returns (uint128 liquidity)
+    {
+        if (sqrtRatioAX96 > sqrtRatioBX96) (sqrtRatioAX96, sqrtRatioBX96) = (sqrtRatioBX96, sqrtRatioAX96);
+        liquidity = uint128(FullMath.mulDiv(amount1, FixedPoint96.Q96, sqrtRatioBX96 - sqrtRatioAX96));
     }
 
     function _settleCurrencyDelta(Currency currency, int128 amountDelta) private {
