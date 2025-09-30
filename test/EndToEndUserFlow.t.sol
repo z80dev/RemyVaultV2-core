@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
+import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
 import {MinterRemyVault} from "../src/MinterRemyVault.sol";
@@ -39,7 +40,7 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
  * 8. User deposits derivative NFTs back to vault
  * 9. User withdraws parent NFTs from parent vault
  */
-contract EndToEndUserFlowTest is Test {
+contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
     using StateLibrary for IPoolManager;
@@ -188,7 +189,7 @@ contract EndToEndUserFlowTest is Test {
         params.liquidity = 5 * 1e18;
         params.parentTokenContribution = 10 * 1e18; // Need both tokens for full range at tick 0
         params.derivativeTokenRecipient = protocolOwner;
-        params.salt = bytes32(uint256(1)); // Use salt 1 to ensure derivative is token1
+        params.salt = mineSaltForToken1(derivativeFactory, address(parentVault), params.vaultName, params.vaultSymbol, params.maxSupply);
 
         parentVault.approve(address(derivativeFactory), type(uint256).max);
         (address derivNftAddr, address derivVaultAddr, PoolId childId) = derivativeFactory.createDerivative(params);
@@ -455,7 +456,7 @@ contract EndToEndUserFlowTest is Test {
         params.tickUpper = 887220;
         params.liquidity = 5 * 1e18;
         params.parentTokenContribution = 10 * 1e18; // Need both tokens for full range at tick 0
-        params.salt = bytes32(uint256(1)); // Use salt 1 to ensure derivative is token1
+        params.salt = mineSaltForToken1(derivativeFactory, address(parentVault), params.vaultName, params.vaultSymbol, params.maxSupply);
 
         parentVault.approve(address(derivativeFactory), type(uint256).max);
         (address nftAddr, address derivVaultAddr, PoolId childId) = derivativeFactory.createDerivative(params);

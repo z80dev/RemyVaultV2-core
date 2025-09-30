@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {BaseTest} from "./BaseTest.t.sol";
+import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 import {console2 as console} from "forge-std/console2.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
@@ -25,7 +26,7 @@ import {BalanceDelta, BalanceDeltaLibrary} from "@uniswap/v4-core/src/types/Bala
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 
-contract MintOutSimulations is BaseTest {
+contract MintOutSimulations is BaseTest, DerivativeTestUtils {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
     using StateLibrary for IPoolManager;
@@ -236,7 +237,7 @@ contract MintOutSimulations is BaseTest {
         params.parentTokenContribution = config.parentContribution;
         params.derivativeTokenRecipient = address(1);
         params.parentTokenRefundRecipient = address(this);
-        params.salt = bytes32(0);
+        params.salt = mineSaltForToken1(factory, parentState.parentVault, params.vaultName, params.vaultSymbol, params.maxSupply);
 
         (, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
@@ -492,11 +493,13 @@ contract MintOutSimulations is BaseTest {
         string memory nftName,
         string memory vaultName,
         string memory vaultSymbol
-    ) internal returns (bool derivativeIsCurrency0, address predictedVault) {
-        uint256 factoryNonce = vm.getNonce(address(factory));
-        address predictedNft = vm.computeCreateAddress(address(factory), factoryNonce);
-        predictedVault = vaultFactory.predictDerivativeVaultAddress(predictedNft, vaultName, vaultSymbol, maxSupply, bytes32(0));
-        derivativeIsCurrency0 = predictedVault < parentVault;
+    ) internal view returns (bool derivativeIsCurrency0, address predictedVault) {
+        // Mine salt to ensure derivative is always token1 (currency1)
+        bytes32 salt = mineSaltForToken1(factory, parentVault, vaultName, vaultSymbol, maxSupply);
+        (address predictedNft, address predictedVaultAddr) = predictDerivativeAddresses(factory, vaultName, vaultSymbol, maxSupply, salt);
+        predictedVault = predictedVaultAddr;
+        // Derivative is always token1 (not currency0) after salt mining
+        derivativeIsCurrency0 = false;
     }
 
     function _scenarioTicks(ScenarioConfig memory config, bool derivativeIsCurrency0)

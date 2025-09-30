@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 import {Test, console} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
+import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
 import {MinterRemyVault} from "../src/MinterRemyVault.sol";
@@ -24,7 +25,7 @@ import {Ownable} from "solady/auth/Ownable.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {ERC721} from "solady/tokens/ERC721.sol";
 
-contract DerivativeFactoryTest is Test {
+contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
     using StateLibrary for IPoolManager;
@@ -185,7 +186,7 @@ contract DerivativeFactoryTest is Test {
         params.parentTokenContribution = availableParentTokens;
         params.derivativeTokenRecipient = derivativeTokenSink;
         params.parentTokenRefundRecipient = address(this);
-        params.salt = bytes32(0);
+        params.salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, params.maxSupply);
 
         // ============ LAUNCH METRICS LOGGING ============
         console.log("\n=== DERIVATIVE LAUNCH CONFIGURATION ===");
@@ -544,7 +545,7 @@ contract DerivativeFactoryTest is Test {
         params.liquidity = 1e3;
         params.parentTokenContribution = 100 * 1e18; // Provide more than needed
         params.parentTokenRefundRecipient = refundRecipient;
-        params.salt = bytes32(0);
+        params.salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, params.maxSupply);
 
         factory.createDerivative(params);
 
@@ -751,7 +752,7 @@ contract DerivativeFactoryTest is Test {
         params.parentTokenContribution = parentContribution;
         params.derivativeTokenRecipient = recipient;
         params.parentTokenRefundRecipient = address(this);
-        params.salt = bytes32(0);
+        params.salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, params.maxSupply);
 
         console.log("\n--- CONFIGURATION ---");
         console.log("Max Supply (NFTs):", maxSupply);

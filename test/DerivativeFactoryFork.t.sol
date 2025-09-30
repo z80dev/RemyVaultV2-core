@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {BaseTest} from "./BaseTest.t.sol";
+import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
 import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
@@ -18,7 +19,7 @@ import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 
-contract DerivativeFactoryForkTest is BaseTest {
+contract DerivativeFactoryForkTest is BaseTest, DerivativeTestUtils {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
     using StateLibrary for IPoolManager;
@@ -107,7 +108,7 @@ contract DerivativeFactoryForkTest is BaseTest {
         params.parentTokenContribution = 3 * 1e18;
         params.derivativeTokenRecipient = derivativeTokenRecipient;
         params.parentTokenRefundRecipient = address(this);
-        params.salt = bytes32(0);
+        params.salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, params.maxSupply);
 
         (address derivativeNft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
