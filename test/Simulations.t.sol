@@ -110,26 +110,31 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         parentCollection.setApprovalForAll(parentVault, true);
         RemyVault(parentVault).deposit(tokenIds, address(this));
 
-        // Create root pool with price = 0.01 ETH per parent token
-        // Parent is token1, ETH is token0
-        // Price = 100 parent per ETH = 100, sqrtPrice = sqrt(100) * 2^96 = 10 * 2^96
-        uint160 sqrtPrice001 = 792281625142643375935439503360;
-        PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, sqrtPrice001);
+        // Create root pool with price ≈ 0.01 ETH per parent token
+        // Initialize at exactly tick 46020 to enable single-sided liquidity
+        // tick 46020 => price = 1.0001^46020 ≈ 99.405 parent/ETH ≈ 0.01006 ETH/parent
+        uint160 sqrtPriceTick46020 = TickMath.getSqrtPriceAtTick(46020);
+        PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, sqrtPriceTick46020);
         PoolKey memory rootKey = _buildPoolKey(address(0), parentVault, 0x800000, 60);
 
-        // Add liquidity to root pool (current tick ≈ 46052)
-        // Range 1: 0.001-0.009 ETH per parent (price falls from 0.01)
-        // tick for 0.001 ETH/parent (1000 parent/ETH) ≈ 69078, for 0.009 (111 parent/ETH) ≈ 46964
-        // Round to tickSpacing of 60: 46920 to 69060
-        // Current tick < range, so liquidity is 100% in token0 (ETH)
-        vm.deal(address(this), 10 ether);
-        _addLiquidityToPool(rootKey, 46920, 69060, 0, 2 ether, address(this));
+        // Verify initialization
+        (uint160 actualSqrtPrice, int24 actualTick,,) = POOL_MANAGER.getSlot0(rootPoolId);
+        console.log("Initialized pool - tick:", actualTick);
+        console.log("Expected tick: 46020");
 
-        // Range 2: 0.011-0.1 ETH per parent (price rises from 0.01)
-        // tick for 0.011 ETH/parent (91 parent/ETH) ≈ 45074, for 0.1 (10 parent/ETH) ≈ 23027
-        // Round to tickSpacing of 60: 23040 to 45060
-        // Current tick > range, so liquidity is 100% in token1 (parent tokens)
-        _addLiquidityToPool(rootKey, 23040, 45060, 10e18, 0, address(this));
+        // Add liquidity to root pool (current tick = 46020 exactly)
+        // Ranges bracket the current tick with minimal gap
+
+        // Range 1: Parent tokens for selling as price rises (0.01006 → 0.1 ETH per parent)
+        // From tick 23040 (0.1 ETH/parent) to 46020 (current tick)
+        // Current tick = upper bound, so range just became inactive, 100% token1 (parent)
+        _addLiquidityToPool(rootKey, 23040, 46020, 10e18, 0, address(this));
+
+        // Range 2: ETH for buying parent as price falls (0.01006 → 0.001 ETH per parent)
+        // From tick 46020 (current tick) to 69060 (0.001 ETH/parent)
+        // Current tick = lower bound, so range is active, provides liquidity
+        vm.deal(address(this), 10 ether);
+        _addLiquidityToPool(rootKey, 46020, 69060, 0, 2 ether, address(this));
 
         // Quote: 0.1 ETH -> parent tokens (root pool)
         (uint256 parentTokensOut, uint256 ethGasEstimate) = QUOTER.quoteExactInputSingle(
