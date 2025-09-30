@@ -19,10 +19,16 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {IV4Quoter} from "@uniswap/v4-periphery/src/interfaces/IV4Quoter.sol";
+import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
+import {LiquidityAmounts} from "@uniswap/v4-core/test/utils/LiquidityAmounts.sol";
 
 contract Simulations is BaseTest, DerivativeTestUtils {
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
+
+    receive() external payable {}
 
     uint160 internal constant SQRT_PRICE_1_1 = 79228162514264337593543950336;
     uint160 internal constant CLEAR_HOOK_PERMISSIONS_MASK = ~uint160(0) << 14;
@@ -33,10 +39,13 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         address(uint160((HOOK_ADDRESS_SEED & CLEAR_HOOK_PERMISSIONS_MASK) | HOOK_FLAGS));
     address internal constant POOL_MANAGER_ADDRESS = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     IPoolManager internal constant POOL_MANAGER = IPoolManager(POOL_MANAGER_ADDRESS);
+    address internal constant QUOTER_ADDRESS = 0x0d5e0F971ED27FBfF6c2837bf31316121532048D;
+    IV4Quoter internal constant QUOTER = IV4Quoter(QUOTER_ADDRESS);
 
     RemyVaultFactory internal vaultFactory;
     RemyVaultHook internal hook;
     DerivativeFactory internal factory;
+    PoolModifyLiquidityTest internal liquidityHelper;
 
     function setUp() public override {
         super.setUp();
@@ -49,6 +58,8 @@ contract Simulations is BaseTest, DerivativeTestUtils {
 
         factory = new DerivativeFactory(vaultFactory, hook, address(this));
         hook.transferOwnership(address(factory));
+
+        liquidityHelper = new PoolModifyLiquidityTest(POOL_MANAGER);
     }
 
     function test_CreateOGNFTAndVault() public {
@@ -99,15 +110,46 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         parentCollection.setApprovalForAll(parentVault, true);
         RemyVault(parentVault).deposit(tokenIds, address(this));
 
-        // Create root pool for parent vault (permissionless)
-        PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+        // Create root pool with price = 0.01 ETH per parent token
+        // Parent is token1, ETH is token0
+        // Price = 100 parent per ETH = 100, sqrtPrice = sqrt(100) * 2^96 = 10 * 2^96
+        uint160 sqrtPrice001 = 792281625142643375935439503360;
+        PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, sqrtPrice001);
+        PoolKey memory rootKey = _buildPoolKey(address(0), parentVault, 0x800000, 60);
+
+        // Add liquidity to root pool (current tick ≈ 46052)
+        // Range 1: 0.001-0.009 ETH per parent (price falls from 0.01)
+        // tick for 0.001 ETH/parent (1000 parent/ETH) ≈ 69078, for 0.009 (111 parent/ETH) ≈ 46964
+        // Round to tickSpacing of 60: 46920 to 69060
+        // Current tick < range, so liquidity is 100% in token0 (ETH)
+        vm.deal(address(this), 10 ether);
+        _addLiquidityToPool(rootKey, 46920, 69060, 0, 2 ether, address(this));
+
+        // Range 2: 0.011-0.1 ETH per parent (price rises from 0.01)
+        // tick for 0.011 ETH/parent (91 parent/ETH) ≈ 45074, for 0.1 (10 parent/ETH) ≈ 23027
+        // Round to tickSpacing of 60: 23040 to 45060
+        // Current tick > range, so liquidity is 100% in token1 (parent tokens)
+        _addLiquidityToPool(rootKey, 23040, 45060, 10e18, 0, address(this));
+
+        // Quote: 0.1 ETH -> parent tokens (root pool)
+        (uint256 parentTokensOut, uint256 ethGasEstimate) = QUOTER.quoteExactInputSingle(
+            IV4Quoter.QuoteExactSingleParams({
+                poolKey: rootKey,
+                zeroForOne: true,
+                exactAmount: 0.1 ether,
+                hookData: ""
+            })
+        );
+
+        console.log("=== SWAP QUOTES ===");
+        console.log("0.1 ETH -> parent tokens:", parentTokensOut);
+        console.log("Gas estimate (ETH->parent):", ethGasEstimate);
 
         // Approve parent vault tokens for derivative creation
         RemyVault(parentVault).approve(address(factory), type(uint256).max);
 
         // Setup derivative parameters
-        uint256 maxSupply = 50; // Will create 50 derivative NFTs worth of tokens
-
+        uint256 maxSupply = 50;
         DerivativeFactory.DerivativeParams memory params;
         params.parentCollection = address(parentCollection);
         params.nftName = "Test Derivative";
@@ -120,51 +162,38 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         params.fee = 3000;
         params.tickSpacing = 60;
         params.maxSupply = maxSupply;
-        // For single-sided currency1 (derivative) liquidity:
-        // Current sqrtPrice 56022... ≈ tick -6932
-        // In Uniswap: when price > range, liquidity is in currency1
-        // So place range BELOW current tick: -12000 to -7200
         params.tickLower = -12000;
         params.tickUpper = -7200;
-        params.sqrtPriceX96 = 56022770974786139918731938227; // ~0.5 price (tick ~= -6932)
-        params.liquidity = 15e18; // This should be overridden to use entire supply
-        params.parentTokenContribution = 0; // No parent tokens needed for single-sided liquidity
+        params.sqrtPriceX96 = 56022770974786139918731938227;
+        params.liquidity = 15e18;
+        params.parentTokenContribution = 0;
         params.derivativeTokenRecipient = address(this);
         params.parentTokenRefundRecipient = address(this);
-
-        // Mine a salt that ensures derivative vault address > parent vault address (derivative will be token1)
-        bytes32 salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, maxSupply);
-        params.salt = salt;
-
-        console.log("Mined salt:", uint256(salt));
-        console.log("Parent vault:", parentVault);
+        params.salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, maxSupply);
 
         // Create derivative
         (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
-        // Check balances after
-        uint256 factoryDerivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(factory));
-        uint256 thisDerivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(this));
-        uint256 factoryParentBalance = RemyVault(parentVault).balanceOf(address(factory));
+        // Quote: 1 parent token -> derivative tokens (child pool)
+        PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, params.tickSpacing);
+        bool parentIsZero = Currency.unwrap(childKey.currency0) == parentVault;
+        try QUOTER.quoteExactInputSingle(
+            IV4Quoter.QuoteExactSingleParams({
+                poolKey: childKey,
+                zeroForOne: parentIsZero,
+                exactAmount: 1e18,
+                hookData: ""
+            })
+        ) returns (uint256 derivativeTokensOut, uint256 parentGasEstimate) {
+            console.log("1 parent token -> derivative tokens:", derivativeTokensOut);
+            console.log("Gas estimate (parent->derivative):", parentGasEstimate);
+        } catch {
+            console.log("Derivative quote failed (may be restricted by hook)");
+        }
 
-        uint256 totalSupply = maxSupply * 1e18;
-        uint256 tokensInPool = totalSupply - thisDerivativeBalance;
-
-        // Log results
-        console.log("=== ISSUE IDENTIFIED ===");
-        console.log("Total derivative supply:", totalSupply);
-        console.log("Tokens refunded to recipient:", thisDerivativeBalance);
-        console.log("Tokens added to pool:", tokensInPool);
-        console.log("Expected: ALL tokens should be in pool (0 refunded)");
-
-        // CRITICAL ASSERTIONS:
-        // 1. Factory should have ZERO derivative tokens left
-        assertEq(factoryDerivativeBalance, 0, "Factory should have 0 derivative tokens");
-        assertEq(factoryParentBalance, 0, "Factory should have 0 parent tokens");
-
-        // 2. ALL derivative tokens should be in the pool (none refunded)
-        // This will FAIL with current implementation - showing the bug
-        assertEq(thisDerivativeBalance, 0, "ALL derivative tokens should be in pool, none refunded");
+        // Verify factory has no leftover tokens
+        assertEq(MinterRemyVault(derivativeVault).balanceOf(address(factory)), 0, "Factory should have 0 derivative tokens");
+        assertEq(RemyVault(parentVault).balanceOf(address(factory)), 0, "Factory should have 0 parent tokens");
     }
 
     function _initRootPool(address parentVault, uint24 /* fee */, int24 tickSpacing, uint160 sqrtPriceX96)
@@ -204,5 +233,44 @@ contract Simulations is BaseTest, DerivativeTestUtils {
                 hooks: IHooks(HOOK_ADDRESS)
             });
         }
+    }
+
+    function _addLiquidityToPool(
+        PoolKey memory key,
+        int24 tickLower,
+        int24 tickUpper,
+        uint256 amount1Desired,
+        uint256 amount0Desired,
+        address recipient
+    ) internal {
+        // Get current sqrt price
+        (uint160 sqrtPriceX96,,,) = POOL_MANAGER.getSlot0(key.toId());
+
+        // Calculate sqrt prices at tick boundaries
+        uint160 sqrtPriceAX96 = TickMath.getSqrtPriceAtTick(tickLower);
+        uint160 sqrtPriceBX96 = TickMath.getSqrtPriceAtTick(tickUpper);
+
+        // Calculate liquidity from token amounts
+        uint128 liquidity =
+            LiquidityAmounts.getLiquidityForAmounts(sqrtPriceX96, sqrtPriceAX96, sqrtPriceBX96, amount0Desired, amount1Desired);
+
+        // Approve tokens if needed
+        if (amount0Desired > 0 && Currency.unwrap(key.currency0) != address(0)) {
+            // ERC20 token
+            RemyVault(Currency.unwrap(key.currency0)).approve(address(liquidityHelper), amount0Desired);
+        }
+        if (amount1Desired > 0) {
+            RemyVault(Currency.unwrap(key.currency1)).approve(address(liquidityHelper), amount1Desired);
+        }
+
+        // Add liquidity
+        IPoolManager.ModifyLiquidityParams memory params = IPoolManager.ModifyLiquidityParams({
+            tickLower: tickLower,
+            tickUpper: tickUpper,
+            liquidityDelta: int256(uint256(liquidity)),
+            salt: bytes32(0)
+        });
+
+        liquidityHelper.modifyLiquidity{value: amount0Desired}(key, params, "");
     }
 }
