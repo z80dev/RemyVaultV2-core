@@ -16,10 +16,9 @@ contract RemyVault is RemyVaultEIP712, IERCXX {
     error MetadataQueryFailed(address token);
     error ZeroCollectionAddress();
 
-    constructor(address erc721_) {
+    constructor(address erc721_) RemyVaultEIP712(_queryName(erc721_), _querySymbol(erc721_)) {
         if (erc721_ == address(0)) revert ZeroCollectionAddress();
         ERC721_TOKEN = IERC721(erc721_);
-        _initEIP712(_queryName(erc721_), _querySymbol(erc721_));
     }
 
     // -------------------------------------------------------------------------

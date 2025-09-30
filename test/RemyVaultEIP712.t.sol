@@ -294,14 +294,14 @@ contract RemyVaultEIP712Test is Test {
         assertNotEq(domainSeparator, bytes32(0), "domain separator should not be zero");
     }
 
-    function testEIP712Version() public {
-        // The vault should use version "1.0"
+    function testEIP712Version() public view {
+        // The vault should use version "1.0" and name from the NFT collection
         bytes32 domainSeparator = vault.DOMAIN_SEPARATOR();
 
         bytes32 expectedDomainSeparator = keccak256(
             abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
-                keccak256(bytes("RemyVault")),
+                keccak256(bytes(vault.name())),
                 keccak256(bytes("1.0")),
                 block.chainid,
                 address(vault)
