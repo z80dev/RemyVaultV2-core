@@ -501,6 +501,28 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         // PROGRESSIVE BUY QUOTES: Fixed ETH amounts using exact input
         console.log("\n=== PROGRESSIVE BUY QUOTES (Fixed ETH Amounts) ===");
 
+        // Prime both pools with tiny swaps to activate liquidity
+        console.log("Priming pools for quoter...");
+
+        // Prime root pool (ETH -> parent)
+        vm.deal(address(this), address(this).balance + 1 ether);
+        IPoolManager.SwapParams memory primeRootSwap = IPoolManager.SwapParams({
+            zeroForOne: true,
+            amountSpecified: -1, // Sell 1 wei of ETH
+            sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
+        });
+        swapRouter.swap{value: 1}(rootKey, primeRootSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+
+        // Prime child pool (parent -> derivative)
+        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
+        IPoolManager.SwapParams memory primeChildSwap = IPoolManager.SwapParams({
+            zeroForOne: parentIsZero,
+            amountSpecified: -1, // Sell 1 wei of parent
+            sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+        });
+        swapRouter.swap(childKey, primeChildSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        console.log("Pools primed successfully");
+
         // Test with progressively larger ETH amounts
         uint256[] memory ethAmounts = new uint256[](20);
         ethAmounts[0] = 0.01 ether;
@@ -759,6 +781,26 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         // PROGRESSIVE BUY QUOTES: Fixed ETH amounts using exact input
         console.log("\n=== PROGRESSIVE BUY QUOTES (Fixed ETH Amounts) ===");
 
+        // Prime both pools with tiny swaps to activate liquidity
+        console.log("Priming pools for quoter...");
+
+        vm.deal(address(this), address(this).balance + 1 ether);
+        IPoolManager.SwapParams memory primeRootSwap = IPoolManager.SwapParams({
+            zeroForOne: true,
+            amountSpecified: -1,
+            sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
+        });
+        swapRouter.swap{value: 1}(rootKey, primeRootSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+
+        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
+        IPoolManager.SwapParams memory primeChildSwap = IPoolManager.SwapParams({
+            zeroForOne: parentIsZero,
+            amountSpecified: -1,
+            sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+        });
+        swapRouter.swap(childKey, primeChildSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        console.log("Pools primed successfully");
+
         uint256[] memory ethAmounts = new uint256[](15);
         ethAmounts[0] = 0.01 ether;
         ethAmounts[1] = 0.05 ether;
@@ -1007,6 +1049,26 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
 
         // PROGRESSIVE BUY QUOTES: Fixed ETH amounts using exact input
         console.log("\n=== PROGRESSIVE BUY QUOTES (Fixed ETH Amounts) ===");
+
+        // Prime both pools with tiny swaps to activate liquidity
+        console.log("Priming pools for quoter...");
+
+        vm.deal(address(this), address(this).balance + 1 ether);
+        IPoolManager.SwapParams memory primeRootSwap = IPoolManager.SwapParams({
+            zeroForOne: true,
+            amountSpecified: -1,
+            sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
+        });
+        swapRouter.swap{value: 1}(rootKey, primeRootSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+
+        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
+        IPoolManager.SwapParams memory primeChildSwap = IPoolManager.SwapParams({
+            zeroForOne: parentIsZero,
+            amountSpecified: -1,
+            sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+        });
+        swapRouter.swap(childKey, primeChildSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        console.log("Pools primed successfully");
 
         uint256[] memory ethAmounts = new uint256[](25);
         ethAmounts[0] = 0.01 ether;

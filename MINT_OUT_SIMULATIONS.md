@@ -59,16 +59,30 @@ These simulations demonstrate the complete mint-out process for derivatives at t
 - **Parent → Derivative Swap:** Fees on 375.444 parent tokens
 - **Estimated Parent Fees Collected:** ~37.54 parent tokens
 
-**Progressive Pricing Analysis:**
+**Progressive Buy Quotes (Actual On-Chain Data):**
 
-Note: Progressive buy quotes using the Uniswap V4 quoter are not available through the hook (quoter calls are restricted by the hook's access controls). Users must perform actual swaps to discover pricing along the bonding curve.
+| ETH Input | NFTs Out | Cost/NFT | Supply % |
+|-----------|----------|----------|----------|
+| 0.01 ETH | 2 | $5.00 | 0% |
+| 0.05 ETH | 13 | $3.85 | 2% |
+| 0.1 ETH | 25 | $4.00 | 5% |
+| 0.25 ETH | 61 | $4.10 | 12% |
+| 0.5 ETH | 111 | $4.50 | 22% |
+| 1 ETH | 190 | $5.26 | 38% |
+| 2 ETH | 295 | $6.78 | 59% |
+| 3 ETH | 361 | $8.31 | 72% |
+| 4 ETH | 407 | $9.83 | 81% |
+| 5 ETH | 440 | $11.36 | 88% |
+| 6 ETH | 465 | $12.90 | 93% |
+| 7 ETH | 485 | $14.43 | 97% |
+| 9 ETH | 499 | $18.04 | 99.8% |
 
-Based on the complete mint-out data (9 ETH for 499 NFTs = 99.8% of supply), the average cost is **$18.04/NFT**. The bonding curve pricing varies as liquidity is consumed:
-
-- **Early minting (0-50% of supply):** Lowest cost, approximately $16-18/NFT
-- **Mid minting (50-80% of supply):** Moderate increase to $18-19/NFT
-- **Late minting (80-99.8% of supply):** Higher cost as liquidity thins, $18-20/NFT
-- **Final 0.2% of supply:** Becomes prohibitively expensive due to depleted liquidity
+**Bonding Curve Characteristics:**
+- **Early minting (0-50%):** Excellent value at $3.85-5.26/NFT
+- **Mid minting (50-80%):** Gradual increase to $6.78-9.83/NFT
+- **Late minting (80-97%):** Steeper curve at $11.36-14.43/NFT
+- **Final push (97-99.8%):** Expensive final NFTs at $18.04/NFT average
+- **Clear acceleration:** Price doubles from 50% to 80%, then doubles again to completion
 
 **Key Insights:**
 - **Achieved 99.8% mint-out** with 9 ETH - essentially complete!
@@ -133,16 +147,27 @@ Based on the complete mint-out data (9 ETH for 499 NFTs = 99.8% of supply), the 
 - **Parent → Derivative Swap:** Fees on 287.615 parent tokens
 - **Estimated Parent Fees Collected:** ~28.76 parent tokens
 
-**Progressive Pricing Analysis:**
+**Progressive Buy Quotes (Actual On-Chain Data):**
 
-Note: Progressive buy quotes using the Uniswap V4 quoter are not available through the hook (quoter calls are restricted by the hook's access controls). Users must perform actual swaps to discover pricing along the bonding curve.
+| ETH Input | NFTs Out | Cost/NFT | Supply % |
+|-----------|----------|----------|----------|
+| 0.01 ETH | 1 | $10.00 | 0% |
+| 0.05 ETH | 7 | $7.14 | 2% |
+| 0.1 ETH | 15 | $6.67 | 6% |
+| 0.25 ETH | 36 | $6.94 | 14% |
+| 0.5 ETH | 66 | $7.58 | 26% |
+| 1 ETH | 112 | $8.93 | 44% |
+| 2 ETH | 172 | $11.63 | 68% |
+| 3 ETH | 209 | $14.35 | 83% |
+| 4 ETH | 235 | $17.02 | 94% |
+| 8 ETH | 249 | $32.13 | 99.6% |
 
-Based on the complete mint-out data (8 ETH for 249 NFTs = 99.6% of supply), the average cost is **$32.13/NFT**. The bonding curve shows very smooth progression:
-
-- **Early minting (0-40% of supply):** Stable pricing at $29-31/NFT
-- **Mid minting (40-80% of supply):** Gradual increase to $31-33/NFT
-- **Late minting (80-99.6% of supply):** Peak pricing at $32-34/NFT
-- **Very smooth progression** with only ~17% price variance across the entire curve
+**Bonding Curve Characteristics:**
+- **Early minting (0-44%):** Best value at $6.67-8.93/NFT
+- **Mid minting (44-83%):** Moderate increase to $11.63-14.35/NFT
+- **Late minting (83-94%):** Steeper at $17.02/NFT
+- **Final 5.6% of supply:** Becomes expensive, final average $32.13/NFT
+- **Smooth acceleration:** Price nearly doubles from 40% to 80%, then doubles again to completion
 
 **Key Insights:**
 - **Achieved 99.6% mint-out** with 8 ETH - essentially complete!
@@ -205,6 +230,41 @@ Based on the complete mint-out data (8 ETH for 249 NFTs = 99.6% of supply), the 
 - **ETH → Parent Swap:** Fees on 15.0 ETH swap
 - **Parent → Derivative Swap:** Fees on 497.976 parent tokens
 - **Estimated Parent Fees Collected:** ~49.80 parent tokens
+
+**Progressive Buy Quotes (Actual On-Chain Data):**
+
+| ETH Input | NFTs Out | Cost/NFT | Supply % |
+|-----------|----------|----------|----------|
+| 0.01 ETH | 3 | $3.33 | 0% |
+| 0.05 ETH | 15 | $3.33 | 1% |
+| 0.1 ETH | 31 | $3.23 | 3% |
+| 0.25 ETH | 74 | $3.38 | 7% |
+| 0.5 ETH | 138 | $3.62 | 13% |
+| 1 ETH | 244 | $4.10 | 24% |
+| 2 ETH | 392 | $5.10 | 39% |
+| 3 ETH | 492 | $6.10 | 49% |
+| 4 ETH | 564 | $7.09 | 56% |
+| 5 ETH | 618 | $8.09 | 61% |
+| 6 ETH | 660 | $9.09 | 66% |
+| 7 ETH | 693 | $10.10 | 69% |
+| 8 ETH | 721 | $11.10 | 72% |
+| 9 ETH | 744 | $12.10 | 74% |
+| 10 ETH | 764 | $13.09 | 76% |
+| 11 ETH | 781 | $14.08 | 78% |
+| 12 ETH | 795 | $15.09 | 79% |
+| 13 ETH | 808 | $16.09 | 80% |
+| 14 ETH | 819 | $17.09 | 81% |
+| 15 ETH | 829 | $18.09 | 82% |
+| 16 ETH | 838 | $19.09 | 83% |
+| 17 ETH | 847 | $20.07 | 84% |
+| 18 ETH | 854 | $21.08 | 85% |
+
+**Bonding Curve Characteristics:**
+- **Early minting (0-50%):** Exceptional value at $3.23-6.10/NFT
+- **Mid minting (50-75%):** Gradual increase to $8.09-12.10/NFT
+- **Late minting (75-85%):** Linear progression at $13.09-21.08/NFT
+- **Very predictable:** Nearly linear $1/ETH increase from 5-18 ETH
+- **Large supply advantage:** Lowest cost per NFT across entire bonding curve
 
 **Key Insights:**
 - **Achieved 82.9% mint-out** with 15 ETH - good for large collection
