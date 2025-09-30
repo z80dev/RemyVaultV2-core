@@ -165,7 +165,7 @@ contract RemyVaultInvariantTest is StdInvariant, Test {
 
     function setUp() public {
         nft = IMockERC721(deployCode("MockERC721", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
-        vault = new RemyVault("RemyVault", "REMY", address(nft));
+        vault = new RemyVault(address(nft));
 
         Ownable(address(nft)).transfer_ownership(address(vault));
 
@@ -191,9 +191,7 @@ contract RemyVaultInvariantTest is StdInvariant, Test {
         uint256 tokenSupply = vault.totalSupply();
         uint256 expectedSupply = nftBalance * vault.UNIT();
 
-        assertEq(
-            tokenSupply, expectedSupply, "INVARIANT VIOLATED: Token supply must equal NFT balance * UNIT"
-        );
+        assertEq(tokenSupply, expectedSupply, "INVARIANT VIOLATED: Token supply must equal NFT balance * UNIT");
     }
 
     /// @dev Invariant: Sum of all user balances MUST equal total supply
@@ -209,11 +207,7 @@ contract RemyVaultInvariantTest is StdInvariant, Test {
         // Also check handler balance
         sumOfBalances += vault.balanceOf(address(handler));
 
-        assertEq(
-            sumOfBalances,
-            totalSupply,
-            "INVARIANT VIOLATED: Sum of balances must equal total supply"
-        );
+        assertEq(sumOfBalances, totalSupply, "INVARIANT VIOLATED: Sum of balances must equal total supply");
     }
 
     /// @dev Invariant: Vault MUST own all NFTs accounted for in token supply
@@ -234,9 +228,7 @@ contract RemyVaultInvariantTest is StdInvariant, Test {
             }
         }
 
-        assertEq(
-            nftBalance, actualNftCount, "INVARIANT VIOLATED: NFT balance must match actual ownership count"
-        );
+        assertEq(nftBalance, actualNftCount, "INVARIANT VIOLATED: NFT balance must match actual ownership count");
 
         assertEq(
             tokenSupply,
@@ -250,11 +242,7 @@ contract RemyVaultInvariantTest is StdInvariant, Test {
         uint256 netDeposits = handler.totalDeposited() - handler.totalWithdrawn();
         uint256 vaultNftBalance = nft.balanceOf(address(vault));
 
-        assertEq(
-            vaultNftBalance,
-            netDeposits,
-            "INVARIANT VIOLATED: Net deposits must equal vault NFT balance"
-        );
+        assertEq(vaultNftBalance, netDeposits, "INVARIANT VIOLATED: Net deposits must equal vault NFT balance");
     }
 
     /// @dev Invariant: No tokens should exist outside of tracked actors and handler
@@ -268,11 +256,7 @@ contract RemyVaultInvariantTest is StdInvariant, Test {
 
         trackedBalance += vault.balanceOf(address(handler));
 
-        assertEq(
-            trackedBalance,
-            totalSupply,
-            "INVARIANT VIOLATED: All tokens must be accounted for"
-        );
+        assertEq(trackedBalance, totalSupply, "INVARIANT VIOLATED: All tokens must be accounted for");
     }
 
     /// @dev Invariant: Allowances are non-negative and properly tracked
@@ -428,7 +412,7 @@ contract MinterRemyVaultInvariantTest is StdInvariant, Test {
 
     function setUp() public {
         nft = new RemyVaultNFT("Derivative", "DRV", "ipfs://", address(this));
-        vault = new MinterRemyVault("Derivative Token", "dDRV", address(nft), MAX_SUPPLY);
+        vault = new MinterRemyVault(address(nft), MAX_SUPPLY);
         nft.setMinter(address(vault), true);
 
         handler = new MinterRemyVaultInvariantHandler(vault, nft);
@@ -458,11 +442,7 @@ contract MinterRemyVaultInvariantTest is StdInvariant, Test {
 
         uint256 expectedSupply = (MAX_SUPPLY - mintedCount + vaultNftBalance) * vault.UNIT();
 
-        assertEq(
-            totalSupply,
-            expectedSupply,
-            "INVARIANT VIOLATED: Supply accounting mismatch"
-        );
+        assertEq(totalSupply, expectedSupply, "INVARIANT VIOLATED: Supply accounting mismatch");
     }
 
     /// @dev Invariant: Minted count never exceeds max supply
@@ -470,11 +450,7 @@ contract MinterRemyVaultInvariantTest is StdInvariant, Test {
         uint256 mintedCount = vault.mintedCount();
         uint256 maxSupply = vault.maxSupply();
 
-        assertLe(
-            mintedCount,
-            maxSupply,
-            "INVARIANT VIOLATED: Minted count exceeds max supply"
-        );
+        assertLe(mintedCount, maxSupply, "INVARIANT VIOLATED: Minted count exceeds max supply");
     }
 
     /// @dev Invariant: Total NFT supply equals minted count
@@ -482,11 +458,7 @@ contract MinterRemyVaultInvariantTest is StdInvariant, Test {
         uint256 nftTotalSupply = nft.totalSupply();
         uint256 mintedCount = vault.mintedCount();
 
-        assertEq(
-            nftTotalSupply,
-            mintedCount,
-            "INVARIANT VIOLATED: NFT total supply must equal minted count"
-        );
+        assertEq(nftTotalSupply, mintedCount, "INVARIANT VIOLATED: NFT total supply must equal minted count");
     }
 
     /// @dev Invariant: Sum of all balances equals total supply
@@ -501,11 +473,7 @@ contract MinterRemyVaultInvariantTest is StdInvariant, Test {
         sumOfBalances += vault.balanceOf(address(handler));
         sumOfBalances += vault.balanceOf(address(this));
 
-        assertEq(
-            sumOfBalances,
-            totalSupply,
-            "INVARIANT VIOLATED: Sum of balances must equal total supply"
-        );
+        assertEq(sumOfBalances, totalSupply, "INVARIANT VIOLATED: Sum of balances must equal total supply");
     }
 
     function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {

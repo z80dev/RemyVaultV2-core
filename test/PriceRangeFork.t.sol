@@ -11,6 +11,7 @@ import {RemyVaultHook} from "../src/RemyVaultHook.sol";
 import {RemyVaultNFT} from "../src/RemyVaultNFT.sol";
 import {RemyVault} from "../src/RemyVault.sol";
 import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
+import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
@@ -32,7 +33,7 @@ import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
  * 1. Parent/ETH pool: 0.01 to 0.5 ETH per parent token (ticks: 6900 to 46020)
  * 2. Derivative/Parent pool: 0.1 to 1.0 parent per derivative (ticks: -23040 to 0 or 0 to 22980)
  */
-contract PriceRangeForkTest is BaseTest {
+contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
     using StateLibrary for IPoolManager;
@@ -57,19 +58,19 @@ contract PriceRangeForkTest is BaseTest {
 
     // Price constants from tick calculations
     // Parent/ETH pool: parent costs 0.01 to 0.5 ETH
-    int24 internal constant PARENT_ETH_TICK_LOWER = 6900;   // ~2 parent per ETH (0.5 ETH per parent)
-    int24 internal constant PARENT_ETH_TICK_UPPER = 46020;  // ~100 parent per ETH (0.01 ETH per parent)
+    int24 internal constant PARENT_ETH_TICK_LOWER = 6900; // ~2 parent per ETH (0.5 ETH per parent)
+    int24 internal constant PARENT_ETH_TICK_UPPER = 46020; // ~100 parent per ETH (0.01 ETH per parent)
     uint160 internal constant PARENT_ETH_SQRT_PRICE = 792281625142643375935439503360; // 100 parent per ETH
 
     // Derivative/Parent pool: derivative costs 0.1 to 1.0 parent
     // If derivative < parent address:
     int24 internal constant DERIV_PARENT_TICK_LOWER_DERIV_LOW = -23040; // 0.1 parent per derivative
-    int24 internal constant DERIV_PARENT_TICK_UPPER_DERIV_LOW = 0;      // 1.0 parent per derivative
+    int24 internal constant DERIV_PARENT_TICK_UPPER_DERIV_LOW = 0; // 1.0 parent per derivative
     uint160 internal constant DERIV_PARENT_SQRT_PRICE_DERIV_LOW = 25054144837504793750611689472;
 
     // If parent < derivative address:
-    int24 internal constant DERIV_PARENT_TICK_LOWER_PARENT_LOW = 0;      // 1.0 parent per derivative
-    int24 internal constant DERIV_PARENT_TICK_UPPER_PARENT_LOW = 22980;  // 10 derivative per parent
+    int24 internal constant DERIV_PARENT_TICK_LOWER_PARENT_LOW = 0; // 1.0 parent per derivative
+    int24 internal constant DERIV_PARENT_TICK_UPPER_PARENT_LOW = 22980; // 10 derivative per parent
     uint160 internal constant DERIV_PARENT_SQRT_PRICE_PARENT_LOW = 250541448375047946302209916928;
 
     receive() external payable {}
@@ -93,7 +94,7 @@ contract PriceRangeForkTest is BaseTest {
     }
 
     // Helper to initialize a root pool directly (for testing the permissionless flow)
-    function _initRootPool(address parentVault, uint24 /* fee */, int24 tickSpacing, uint160 sqrtPriceX96)
+    function _initRootPool(address parentVault, uint24, /* fee */ int24 tickSpacing, uint160 sqrtPriceX96)
         internal
         returns (PoolId poolId)
     {
@@ -113,7 +114,7 @@ contract PriceRangeForkTest is BaseTest {
         console.log("Liquidity: 500 parent tokens + ~5 ETH");
 
         // Deploy parent vault and register root pool
-        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
+        address parentVault = vaultFactory.deployVault(address(parentCollection));
 
         // Register root pool with calculated parameters
         PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, PARENT_ETH_SQRT_PRICE);
@@ -160,11 +161,7 @@ contract PriceRangeForkTest is BaseTest {
 
         // Verify position exists
         (uint128 liquidity,,) = POOL_MANAGER.getPositionInfo(
-            rootPoolId,
-            address(liquidityRouter),
-            PARENT_ETH_TICK_LOWER,
-            PARENT_ETH_TICK_UPPER,
-            0
+            rootPoolId, address(liquidityRouter), PARENT_ETH_TICK_LOWER, PARENT_ETH_TICK_UPPER, 0
         );
         assertGt(liquidity, 0, "Liquidity should be added");
         console.log("Position liquidity:", liquidity);
@@ -207,7 +204,7 @@ contract PriceRangeForkTest is BaseTest {
         console.log("Start: 0.1 parent per derivative at mint");
 
         // Set up parent vault
-        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
+        address parentVault = vaultFactory.deployVault(address(parentCollection));
         PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -243,8 +240,6 @@ contract PriceRangeForkTest is BaseTest {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://derivative/";
         params.nftOwner = address(this);
-        params.vaultName = "Derivative Token";
-        params.vaultSymbol = "dDRV";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.maxSupply = 50;
@@ -257,6 +252,7 @@ contract PriceRangeForkTest is BaseTest {
         params.tickUpper = DERIV_PARENT_TICK_UPPER_DERIV_LOW;
         params.sqrtPriceX96 = DERIV_PARENT_SQRT_PRICE_DERIV_LOW;
         params.liquidity = 5e18;
+        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         console.log("Requested tickLower:", params.tickLower);
         console.log("Requested tickUpper:", params.tickUpper);
@@ -296,13 +292,8 @@ contract PriceRangeForkTest is BaseTest {
             actualTickUpper = -DERIV_PARENT_TICK_LOWER_DERIV_LOW;
         }
 
-        (uint128 liquidity,,) = POOL_MANAGER.getPositionInfo(
-            childPoolId,
-            address(factory),
-            actualTickLower,
-            actualTickUpper,
-            0
-        );
+        (uint128 liquidity,,) =
+            POOL_MANAGER.getPositionInfo(childPoolId, address(factory), actualTickLower, actualTickUpper, 0);
         console.log("Actual tickLower:", actualTickLower);
         console.log("Actual tickUpper:", actualTickUpper);
         console.log("Position liquidity:", liquidity);
@@ -369,7 +360,7 @@ contract PriceRangeForkTest is BaseTest {
         console.log("\n=== TESTING PRICE MOVEMENT TOWARD BOUNDARIES ===");
 
         // Set up pools
-        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
+        address parentVault = vaultFactory.deployVault(address(parentCollection));
         _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -404,8 +395,6 @@ contract PriceRangeForkTest is BaseTest {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
         params.nftOwner = address(this);
-        params.vaultName = "Derivative Token";
-        params.vaultSymbol = "dDRV";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.maxSupply = 100;
@@ -415,6 +404,7 @@ contract PriceRangeForkTest is BaseTest {
         params.liquidity = 10e18; // Higher liquidity for testing
         params.parentTokenContribution = 50 * 1e18;
         params.derivativeTokenRecipient = address(this);
+        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
@@ -463,7 +453,7 @@ contract PriceRangeForkTest is BaseTest {
 
         // Setup - completely fresh
         MockERC721Simple collection = new MockERC721Simple("Low Price Parent", "LPP");
-        address parentVault = vaultFactory.deployVault(address(collection), "Low Price Parent Token", "LPPT");
+        address parentVault = vaultFactory.deployVault(address(collection));
         _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -492,9 +482,9 @@ contract PriceRangeForkTest is BaseTest {
         _testPriceRangeWithTrading(
             parentVault,
             "Low Price Derivative",
-            -23040,  // 0.1 parent per derivative
-            0,       // 1.0 parent per derivative
-            25054144837504793750611689472,  // sqrtPrice for 0.1
+            -23040, // 0.1 parent per derivative
+            0, // 1.0 parent per derivative
+            25054144837504793750611689472, // sqrtPrice for 0.1
             40 * 1e18,
             80
         );
@@ -511,7 +501,7 @@ contract PriceRangeForkTest is BaseTest {
 
         // Setup - completely fresh
         MockERC721Simple collection = new MockERC721Simple("Medium Price Parent", "MPP");
-        address parentVault = vaultFactory.deployVault(address(collection), "Medium Price Parent Token", "MPPT");
+        address parentVault = vaultFactory.deployVault(address(collection));
         _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -540,9 +530,9 @@ contract PriceRangeForkTest is BaseTest {
         _testPriceRangeWithTrading(
             parentVault,
             "Medium Price Derivative",
-            -11520,  // 0.5 parent per derivative
-            11520,   // 2.0 parent per derivative
-            56022770974786139918731938227,  // sqrtPrice for 0.5
+            -11520, // 0.5 parent per derivative
+            11520, // 2.0 parent per derivative
+            56022770974786139918731938227, // sqrtPrice for 0.5
             40 * 1e18,
             80
         );
@@ -559,7 +549,7 @@ contract PriceRangeForkTest is BaseTest {
 
         // Setup - completely fresh
         MockERC721Simple collection = new MockERC721Simple("High Price Parent", "HPP");
-        address parentVault = vaultFactory.deployVault(address(collection), "High Price Parent Token", "HPPT");
+        address parentVault = vaultFactory.deployVault(address(collection));
         _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -588,9 +578,9 @@ contract PriceRangeForkTest is BaseTest {
         _testPriceRangeWithTrading(
             parentVault,
             "High Price Derivative",
-            0,       // 1.0 parent per derivative
-            23040,   // 10 parent per derivative
-            79228162514264337593543950336,  // sqrtPrice for 1.0 (SQRT_PRICE_1_1)
+            0, // 1.0 parent per derivative
+            23040, // 10 parent per derivative
+            79228162514264337593543950336, // sqrtPrice for 1.0 (SQRT_PRICE_1_1)
             40 * 1e18,
             80
         );
@@ -630,8 +620,6 @@ contract PriceRangeForkTest is BaseTest {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://test/";
         params.nftOwner = address(this);
-        params.vaultName = string.concat("Token ", name);
-        params.vaultSymbol = "dDRV";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.maxSupply = maxSupply;
@@ -641,6 +629,7 @@ contract PriceRangeForkTest is BaseTest {
         params.tickUpper = tickUpper;
         params.sqrtPriceX96 = sqrtPriceX96;
         params.liquidity = 10e18;
+        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         (, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
@@ -686,7 +675,7 @@ contract PriceRangeForkTest is BaseTest {
             uint256 parentBalBefore = RemyVault(parentVault).balanceOf(address(this));
 
             // Try to buy with a reasonable amount
-            uint256 buyAmount = 2 * 1e18;  // 2 parent tokens per attempt
+            uint256 buyAmount = 2 * 1e18; // 2 parent tokens per attempt
             if (parentBalBefore < buyAmount) {
                 buyAmount = parentBalBefore / 2;
             }
@@ -719,7 +708,7 @@ contract PriceRangeForkTest is BaseTest {
 
                 totalParentSpent += parentSpent;
                 totalDerivativesBought += derivReceived;
-                totalFees += (parentSpent * 1000) / 10000;  // 10% fee
+                totalFees += (parentSpent * 1000) / 10000; // 10% fee
                 swapCount++;
 
                 if (swapCount % 5 == 0 || swapCount <= 3) {
@@ -740,7 +729,9 @@ contract PriceRangeForkTest is BaseTest {
         console.log("\n--- MINT-OUT RESULTS ---");
         console.log("Total swaps:", swapCount);
         console.log("Total parent spent:", totalParentSpent / 1e18, ".", (totalParentSpent % 1e18) / 1e16);
-        console.log("Total derivatives bought:", totalDerivativesBought / 1e18, ".", (totalDerivativesBought % 1e18) / 1e16);
+        console.log(
+            "Total derivatives bought:", totalDerivativesBought / 1e18, ".", (totalDerivativesBought % 1e18) / 1e16
+        );
 
         if (totalDerivativesBought > 0 && targetToBuy > 0) {
             console.log("Mint-out %:", (totalDerivativesBought * 100) / targetToBuy);
@@ -781,7 +772,7 @@ contract PriceRangeForkTest is BaseTest {
         console.log("\n=== DETAILED PRICE IMPACT & FEE ANALYSIS ===\n");
 
         // Setup parent vault and root pool
-        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
+        address parentVault = vaultFactory.deployVault(address(parentCollection));
         _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -817,10 +808,8 @@ contract PriceRangeForkTest is BaseTest {
         params.nftSymbol = "ANLZ";
         params.nftBaseUri = "ipfs://analysis/";
         params.nftOwner = address(this);
-        params.initialMinter = address(this);  // Allow this test contract to mint
-        params.vaultName = "Analysis Token";
-        params.vaultSymbol = "ANLZ";
-        params.fee = 3000;  // 0.3% fee
+        params.initialMinter = address(this); // Allow this test contract to mint
+        params.fee = 3000; // 0.3% fee
         params.tickSpacing = 60;
         params.maxSupply = 100;
         params.parentTokenContribution = 50 * 1e18;
@@ -829,6 +818,7 @@ contract PriceRangeForkTest is BaseTest {
         params.tickUpper = 11520;
         params.sqrtPriceX96 = 56022770974786139918731938227;
         params.liquidity = 15e18;
+        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         console.log("--- Pre-Launch State ---");
         (uint160 parentEthPriceBefore,,,) = POOL_MANAGER.getSlot0(rootKey.toId());
@@ -860,11 +850,11 @@ contract PriceRangeForkTest is BaseTest {
 
         // Test various trade sizes
         uint256[] memory tradeSizes = new uint256[](5);
-        tradeSizes[0] = 1e17;   // 0.1 parent
-        tradeSizes[1] = 5e17;   // 0.5 parent
-        tradeSizes[2] = 1e18;   // 1 parent
-        tradeSizes[3] = 5e18;   // 5 parent
-        tradeSizes[4] = 10e18;  // 10 parent
+        tradeSizes[0] = 1e17; // 0.1 parent
+        tradeSizes[1] = 5e17; // 0.5 parent
+        tradeSizes[2] = 1e18; // 1 parent
+        tradeSizes[3] = 5e18; // 5 parent
+        tradeSizes[4] = 10e18; // 10 parent
 
         uint160 currentPrice = initialDerivPrice;
 
@@ -978,7 +968,9 @@ contract PriceRangeForkTest is BaseTest {
 
         int256 largePriceChange = int256(uint256(priceAfter) * 10000 / uint256(priceBefore)) - 10000;
         console.log("  Price impact (bps):", largePriceChange);
-        console.log("  Estimated fee:", (parentSpent * 30) / 10000 / 1e18, ".", ((parentSpent * 30) / 10000 % 1e18) / 1e16);
+        console.log(
+            "  Estimated fee:", (parentSpent * 30) / 10000 / 1e18, ".", ((parentSpent * 30) / 10000 % 1e18) / 1e16
+        );
 
         console.log("\n=====================================================");
         console.log("              ANALYSIS COMPLETE");

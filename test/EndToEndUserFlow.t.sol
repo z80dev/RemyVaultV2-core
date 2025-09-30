@@ -125,9 +125,8 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
         }
 
         // Protocol owner creates vault for the collection
-        (address parentVaultAddr, PoolId rootId) = derivativeFactory.createVaultForCollection(
-            address(nftCollection), "Crypto Punks Token", "CPUNK", 60, SQRT_PRICE_1_1
-        );
+        (address parentVaultAddr, PoolId rootId) =
+            derivativeFactory.createVaultForCollection(address(nftCollection), 60, SQRT_PRICE_1_1);
 
         parentVault = RemyVault(parentVaultAddr);
         rootPoolId = rootId;
@@ -174,8 +173,6 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
         params.nftSymbol = "MPUNK";
         params.nftBaseUri = "ipfs://minipunks/";
         params.nftOwner = protocolOwner;
-        params.vaultName = "Mini Punks Token";
-        params.vaultSymbol = "mPUNK";
         params.fee = 3000;
         params.tickSpacing = 60;
         // Initialize at price 1 (bottom of range) so all liquidity is derivative tokens
@@ -189,7 +186,7 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
         params.liquidity = 5 * 1e18;
         params.parentTokenContribution = 10 * 1e18; // Need both tokens for full range at tick 0
         params.derivativeTokenRecipient = protocolOwner;
-        params.salt = mineSaltForToken1(derivativeFactory, address(parentVault), params.vaultName, params.vaultSymbol, params.maxSupply);
+        params.salt = mineSaltForToken1(derivativeFactory, address(parentVault), params.maxSupply);
 
         parentVault.approve(address(derivativeFactory), type(uint256).max);
         (address derivNftAddr, address derivVaultAddr, PoolId childId) = derivativeFactory.createDerivative(params);
@@ -257,9 +254,7 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
         assertEq(mintedDerivativeIds.length, nftMintCount, "Should mint correct number of NFTs");
         assertEq(derivativeNft.balanceOf(alice), nftMintCount, "Alice should own derivative NFTs");
         assertEq(
-            derivativeVault.balanceOf(alice),
-            aliceDerivativeBalance - (nftMintCount * 1e18),
-            "Tokens should be burned"
+            derivativeVault.balanceOf(alice), aliceDerivativeBalance - (nftMintCount * 1e18), "Tokens should be burned"
         );
 
         console2.log("  Alice minted derivative NFTs\n");
@@ -379,9 +374,7 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
         bytes32 structHash =
             keccak256(abi.encode(PERMIT_TYPEHASH, aliceAddr, address(modifyRouter), value, nonce, deadline));
 
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", parentVault.DOMAIN_SEPARATOR(), structHash)
-        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", parentVault.DOMAIN_SEPARATOR(), structHash));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(alicePrivateKey, digest);
 
@@ -408,9 +401,8 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
 
         nftCollection.setApprovalForAll(address(vaultFactory), true);
 
-        (address setupVaultAddr, PoolId rootId) = derivativeFactory.createVaultForCollection(
-            address(nftCollection), "Test Token", "TTKN", 60, SQRT_PRICE_1_1
-        );
+        (address setupVaultAddr, PoolId rootId) =
+            derivativeFactory.createVaultForCollection(address(nftCollection), 60, SQRT_PRICE_1_1);
 
         parentVault = RemyVault(setupVaultAddr);
         rootPoolId = rootId;
@@ -443,8 +435,6 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
         params.nftSymbol = "DERIV";
         params.nftBaseUri = "ipfs://deriv/";
         params.nftOwner = protocolOwner;
-        params.vaultName = "Derivative Token";
-        params.vaultSymbol = "dTKN";
         params.fee = 3000;
         params.tickSpacing = 60;
         // Initialize at price 1 (bottom of range) for single-sided derivative liquidity
@@ -456,7 +446,7 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
         params.tickUpper = 887220;
         params.liquidity = 5 * 1e18;
         params.parentTokenContribution = 10 * 1e18; // Need both tokens for full range at tick 0
-        params.salt = mineSaltForToken1(derivativeFactory, address(parentVault), params.vaultName, params.vaultSymbol, params.maxSupply);
+        params.salt = mineSaltForToken1(derivativeFactory, address(parentVault), params.maxSupply);
 
         parentVault.approve(address(derivativeFactory), type(uint256).max);
         (address nftAddr, address derivVaultAddr, PoolId childId) = derivativeFactory.createDerivative(params);

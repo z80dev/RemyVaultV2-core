@@ -21,16 +21,13 @@ contract RemyVaultFactory {
 
     /// @notice Deploy a new vault for `collection` using `CREATE2` salt derived from the collection address.
     /// @dev Reverts if the collection already has an associated vault or the collection address is zero.
-    function deployVault(address collection, string calldata name_, string calldata symbol_)
-        external
-        returns (address vault)
-    {
+    function deployVault(address collection) external returns (address vault) {
         if (collection == address(0)) revert CollectionAddressZero();
         if (vaultFor[collection] != address(0)) revert CollectionAlreadyDeployed(collection);
         if (isVault[collection]) revert CollectionIsVault(collection);
 
         bytes32 salt = _salt(collection);
-        vault = address(new RemyVault{salt: salt}(name_, symbol_, collection));
+        vault = address(new RemyVault{salt: salt}(collection));
 
         vaultFor[collection] = vault;
         isVault[vault] = true;
@@ -38,18 +35,15 @@ contract RemyVaultFactory {
     }
 
     /// @notice Deploy a derivative vault that pre-mints its full token supply to the caller.
-    function deployDerivativeVault(
-        address collection,
-        string calldata name_,
-        string calldata symbol_,
-        uint256 maxSupply,
-        bytes32 salt
-    ) external returns (address vault) {
+    function deployDerivativeVault(address collection, uint256 maxSupply, bytes32 salt)
+        external
+        returns (address vault)
+    {
         if (collection == address(0)) revert CollectionAddressZero();
         if (vaultFor[collection] != address(0)) revert CollectionAlreadyDeployed(collection);
         if (isVault[collection]) revert CollectionIsVault(collection);
 
-        vault = address(new MinterRemyVault{salt: salt}(name_, symbol_, collection, maxSupply));
+        vault = address(new MinterRemyVault{salt: salt}(collection, maxSupply));
 
         uint256 mintedSupply = MinterRemyVault(vault).balanceOf(address(this));
         if (mintedSupply != 0) {
@@ -62,7 +56,16 @@ contract RemyVaultFactory {
     }
 
     /// @notice Predict the vault address for the provided constructor arguments without deploying.
-    function predictVaultAddress(address collection, string calldata name_, string calldata symbol_)
+    function predictVaultAddress(address collection) external view returns (address) {
+        if (collection == address(0)) revert CollectionAddressZero();
+        if (isVault[collection]) revert CollectionIsVault(collection);
+
+        bytes32 bytecodeHash = keccak256(abi.encodePacked(type(RemyVault).creationCode, abi.encode(collection)));
+        return _computeCreate2Address(_salt(collection), bytecodeHash);
+    }
+
+    /// @notice Predict the address for a derivative vault without deploying.
+    function predictDerivativeVaultAddress(address collection, uint256 maxSupply, bytes32 salt)
         external
         view
         returns (address)
@@ -71,24 +74,7 @@ contract RemyVaultFactory {
         if (isVault[collection]) revert CollectionIsVault(collection);
 
         bytes32 bytecodeHash =
-            keccak256(abi.encodePacked(type(RemyVault).creationCode, abi.encode(name_, symbol_, collection)));
-        return _computeCreate2Address(_salt(collection), bytecodeHash);
-    }
-
-    /// @notice Predict the address for a derivative vault without deploying.
-    function predictDerivativeVaultAddress(
-        address collection,
-        string calldata name_,
-        string calldata symbol_,
-        uint256 maxSupply,
-        bytes32 salt
-    ) external view returns (address) {
-        if (collection == address(0)) revert CollectionAddressZero();
-        if (isVault[collection]) revert CollectionIsVault(collection);
-
-        bytes32 bytecodeHash = keccak256(
-            abi.encodePacked(type(MinterRemyVault).creationCode, abi.encode(name_, symbol_, collection, maxSupply))
-        );
+            keccak256(abi.encodePacked(type(MinterRemyVault).creationCode, abi.encode(collection, maxSupply)));
         return _computeCreate2Address(salt, bytecodeHash);
     }
 

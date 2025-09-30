@@ -10,6 +10,7 @@ import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
 import {RemyVaultHook} from "../src/RemyVaultHook.sol";
 import {RemyVault} from "../src/RemyVault.sol";
 import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
+import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
@@ -32,7 +33,7 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
  * 3. Tracks all fees collected by child pool and parent pool
  * 4. Measures parent collection price impact throughout
  */
-contract DerivativeMintOutSimulation is BaseTest {
+contract DerivativeMintOutSimulation is BaseTest, DerivativeTestUtils {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
     using StateLibrary for IPoolManager;
@@ -48,9 +49,9 @@ contract DerivativeMintOutSimulation is BaseTest {
     IPoolManager internal constant POOL_MANAGER = IPoolManager(POOL_MANAGER_ADDRESS);
 
     // Fee structure: 10% total, 7.5% to child, 2.5% to parent
-    uint256 internal constant TOTAL_FEE_BPS = 1000;  // 10%
-    uint256 internal constant CHILD_FEE_BPS = 750;   // 7.5%
-    uint256 internal constant PARENT_FEE_BPS = 250;  // 2.5%
+    uint256 internal constant TOTAL_FEE_BPS = 1000; // 10%
+    uint256 internal constant CHILD_FEE_BPS = 750; // 7.5%
+    uint256 internal constant PARENT_FEE_BPS = 250; // 2.5%
 
     RemyVaultFactory internal vaultFactory;
     RemyVaultHook internal hook;
@@ -80,7 +81,7 @@ contract DerivativeMintOutSimulation is BaseTest {
     }
 
     // Helper to initialize a root pool directly (for testing the permissionless flow)
-    function _initRootPool(address parentVault, uint24 /* fee */, int24 tickSpacing, uint160 sqrtPriceX96)
+    function _initRootPool(address parentVault, uint24, /* fee */ int24 tickSpacing, uint160 sqrtPriceX96)
         internal
         returns (PoolId poolId)
     {
@@ -102,12 +103,12 @@ contract DerivativeMintOutSimulation is BaseTest {
 
         _runMintOutSimulation(
             "Low Price Derivative",
-            -23040,  // 0.1 parent per derivative
-            0,       // 1.0 parent per derivative
-            25054144837504793750611689472,  // sqrtPrice for 0.1
-            100,     // max supply
-            50 * 1e18,  // parent contribution
-            20e18    // liquidity
+            -23040, // 0.1 parent per derivative
+            0, // 1.0 parent per derivative
+            25054144837504793750611689472, // sqrtPrice for 0.1
+            100, // max supply
+            50 * 1e18, // parent contribution
+            20e18 // liquidity
         );
     }
 
@@ -120,12 +121,12 @@ contract DerivativeMintOutSimulation is BaseTest {
 
         _runMintOutSimulation(
             "Medium Price Derivative",
-            -11520,  // 0.5 parent per derivative
-            11520,   // 2.0 parent per derivative
-            56022770974786139918731938227,  // sqrtPrice for 0.5
-            100,     // max supply
-            50 * 1e18,  // parent contribution
-            20e18    // liquidity
+            -11520, // 0.5 parent per derivative
+            11520, // 2.0 parent per derivative
+            56022770974786139918731938227, // sqrtPrice for 0.5
+            100, // max supply
+            50 * 1e18, // parent contribution
+            20e18 // liquidity
         );
     }
 
@@ -138,12 +139,12 @@ contract DerivativeMintOutSimulation is BaseTest {
 
         _runMintOutSimulation(
             "High Price Derivative",
-            0,       // 1.0 parent per derivative
-            23040,   // 10 parent per derivative
-            79228162514264337593543950336,  // sqrtPrice for 1.0
-            100,     // max supply
-            100 * 1e18,  // parent contribution
-            20e18    // liquidity
+            0, // 1.0 parent per derivative
+            23040, // 10 parent per derivative
+            79228162514264337593543950336, // sqrtPrice for 1.0
+            100, // max supply
+            100 * 1e18, // parent contribution
+            20e18 // liquidity
         );
     }
 
@@ -157,7 +158,7 @@ contract DerivativeMintOutSimulation is BaseTest {
         uint128 liquidity
     ) internal {
         // Setup parent vault and root pool
-        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
+        address parentVault = vaultFactory.deployVault(address(parentCollection));
         PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -194,8 +195,6 @@ contract DerivativeMintOutSimulation is BaseTest {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://test/";
         params.nftOwner = address(this);
-        params.vaultName = string.concat("Token ", name);
-        params.vaultSymbol = "dDRV";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.maxSupply = maxSupply;
@@ -205,6 +204,7 @@ contract DerivativeMintOutSimulation is BaseTest {
         params.liquidity = liquidity;
         params.parentTokenContribution = parentContribution;
         params.derivativeTokenRecipient = address(this);
+        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         (, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
@@ -237,11 +237,11 @@ contract DerivativeMintOutSimulation is BaseTest {
 
         // Try to buy all available derivatives in chunks
         uint256 derivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(this));
-        uint256 targetToBuy = derivativeSupply - derivativeBalance;  // Buy what we don't have
+        uint256 targetToBuy = derivativeSupply - derivativeBalance; // Buy what we don't have
 
         // Attempt swaps until we've bought most of the supply or hit limits
-        uint256 chunkSize = 10 * 1e18;  // Buy in 10 parent token chunks
-        uint256 maxSwaps = 20;  // Limit number of swaps to prevent infinite loops
+        uint256 chunkSize = 10 * 1e18; // Buy in 10 parent token chunks
+        uint256 maxSwaps = 20; // Limit number of swaps to prevent infinite loops
 
         while (swapCount < maxSwaps) {
             uint256 parentBalBefore = RemyVault(parentVault).balanceOf(address(this));
@@ -250,10 +250,10 @@ contract DerivativeMintOutSimulation is BaseTest {
             // Adjust chunk size if we're running low on parent tokens
             uint256 actualChunkSize = chunkSize;
             if (parentBalBefore < chunkSize) {
-                actualChunkSize = parentBalBefore / 2;  // Use half of remaining
+                actualChunkSize = parentBalBefore / 2; // Use half of remaining
             }
 
-            if (actualChunkSize < 0.1e18) break;  // Stop if less than 0.1 parent left
+            if (actualChunkSize < 0.1e18) break; // Stop if less than 0.1 parent left
 
             IPoolManager.SwapParams memory swapParams = IPoolManager.SwapParams({
                 zeroForOne: parentIsCurrency0,
@@ -268,19 +268,21 @@ contract DerivativeMintOutSimulation is BaseTest {
                 uint256 parentSpent = parentBalBefore - parentBalAfter;
                 uint256 derivReceived = derivBalAfter - derivBalBefore;
 
-                if (derivReceived == 0) break;  // No more to buy
+                if (derivReceived == 0) break; // No more to buy
 
                 totalParentSpent += parentSpent;
                 totalDerivativeReceived += derivReceived;
                 swapCount++;
             } catch {
-                break;  // Swap failed, we've hit a limit
+                break; // Swap failed, we've hit a limit
             }
         }
 
         console.log("Total swaps executed:", swapCount);
         console.log("Total parent spent:", totalParentSpent / 1e18, ".", (totalParentSpent % 1e18) / 1e16);
-        console.log("Total derivative received:", totalDerivativeReceived / 1e18, ".", (totalDerivativeReceived % 1e18) / 1e16);
+        console.log(
+            "Total derivative received:", totalDerivativeReceived / 1e18, ".", (totalDerivativeReceived % 1e18) / 1e16
+        );
 
         if (totalDerivativeReceived > 0) {
             uint256 avgPrice = (totalParentSpent * 1e18) / totalDerivativeReceived;

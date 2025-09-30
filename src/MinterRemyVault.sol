@@ -21,9 +21,7 @@ contract MinterRemyVault is RemyVault {
 
     event DerivativeMint(address indexed account, uint256 count, uint256[] tokenIds);
 
-    constructor(string memory name_, string memory symbol_, address erc721_, uint256 maxSupply_)
-        RemyVault(name_, symbol_, erc721_)
-    {
+    constructor(address erc721_, uint256 maxSupply_) RemyVault(erc721_) {
         DERIVATIVE_NFT = RemyVaultNFT(erc721_);
         maxSupply = maxSupply_;
 

@@ -41,7 +41,7 @@ contract RemyVaultHookIntegrationTest is Test {
     }
 
     function testDeployVaultTokenAndInitializeHookedPool() public {
-        address vaultAddr = factory.deployVault(address(collection), "Remy Token", "REMYT");
+        address vaultAddr = factory.deployVault(address(collection));
         RemyVault vault = RemyVault(vaultAddr);
 
         uint256 depositCount = 50;

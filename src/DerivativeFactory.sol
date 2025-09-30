@@ -36,8 +36,6 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         string nftBaseUri;
         address nftOwner;
         address initialMinter;
-        string vaultName;
-        string vaultSymbol;
         uint24 fee;
         int24 tickSpacing;
         uint160 sqrtPriceX96;
@@ -117,14 +115,13 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         _initializeOwner(owner_);
     }
 
-    function createVaultForCollection(
-        address collection,
-        string calldata vaultName,
-        string calldata vaultSymbol,
-        int24 tickSpacing,
-        uint160 sqrtPriceX96
-    ) external onlyOwner requiresHookOwnership returns (address vault, PoolId poolId) {
-        vault = VAULT_FACTORY.deployVault(collection, vaultName, vaultSymbol);
+    function createVaultForCollection(address collection, int24 tickSpacing, uint160 sqrtPriceX96)
+        external
+        onlyOwner
+        requiresHookOwnership
+        returns (address vault, PoolId poolId)
+    {
+        vault = VAULT_FACTORY.deployVault(collection);
 
         // Initialize the root pool with dynamic fee flag
         if (sqrtPriceX96 == 0) revert InvalidSqrtPrice();
@@ -170,7 +167,7 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
             new RemyVaultNFT(params.nftName, params.nftSymbol, params.nftBaseUri, address(this));
 
         nft = address(derivativeNft);
-        vault = VAULT_FACTORY.deployDerivativeVault(nft, params.vaultName, params.vaultSymbol, params.maxSupply, params.salt);
+        vault = VAULT_FACTORY.deployDerivativeVault(nft, params.maxSupply, params.salt);
 
         // Enforce that derivative vault address > parent vault address (derivative will be token1)
         if (vault <= parentVault) {
@@ -206,11 +203,7 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
 
         // Calculate liquidity needed to consume all derivative tokens
         uint128 calculatedLiquidity = _calculateLiquidityForAmount(
-            derivativeIsCurrency0,
-            normalizedSqrtPrice,
-            normalizedLower,
-            normalizedUpper,
-            totalDerivativeSupply
+            derivativeIsCurrency0, normalizedSqrtPrice, normalizedLower, normalizedUpper, totalDerivativeSupply
         );
 
         // Use calculated liquidity to ensure all derivative tokens are consumed
@@ -258,19 +251,15 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
 
     /// @notice Predict the derivative vault address for the given parameters without deploying
     /// @param nftAddress The address of the derivative NFT collection
-    /// @param vaultName The name for the derivative vault token
-    /// @param vaultSymbol The symbol for the derivative vault token
     /// @param maxSupply The maximum supply of derivative NFTs
     /// @param salt The salt for CREATE2 deployment
     /// @return The predicted address of the derivative vault
-    function predictDerivativeVaultAddress(
-        address nftAddress,
-        string calldata vaultName,
-        string calldata vaultSymbol,
-        uint256 maxSupply,
-        bytes32 salt
-    ) external view returns (address) {
-        return VAULT_FACTORY.predictDerivativeVaultAddress(nftAddress, vaultName, vaultSymbol, maxSupply, salt);
+    function predictDerivativeVaultAddress(address nftAddress, uint256 maxSupply, bytes32 salt)
+        external
+        view
+        returns (address)
+    {
+        return VAULT_FACTORY.predictDerivativeVaultAddress(nftAddress, maxSupply, salt);
     }
 
     modifier requiresHookOwnership() {

@@ -5,17 +5,15 @@ import {Test} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
 import {RemyVault} from "../src/RemyVault.sol";
+import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
 
 contract RemyVaultFactoryInvariantTest is Test {
-    string internal constant DEPLOY_NAME = "Remy Vault Token";
-    string internal constant DEPLOY_SYMBOL = "REMY";
-
     RemyVaultFactory internal factory;
     FactoryHandler internal handler;
 
     function setUp() public {
         factory = new RemyVaultFactory();
-        handler = new FactoryHandler(factory, DEPLOY_NAME, DEPLOY_SYMBOL);
+        handler = new FactoryHandler(factory);
 
         targetContract(address(handler));
         bytes4[] memory selectors = new bytes4[](1);
@@ -25,8 +23,6 @@ contract RemyVaultFactoryInvariantTest is Test {
 
     function invariant_registryConsistency() public view {
         uint256 count = handler.trackedCount();
-        string memory name_ = handler.deploymentName();
-        string memory symbol_ = handler.deploymentSymbol();
 
         for (uint256 i; i < count; ++i) {
             address collection = handler.collectionAt(i);
@@ -38,7 +34,7 @@ contract RemyVaultFactoryInvariantTest is Test {
             assertEq(factory.vaultFor(vault), address(0), "vault address reused as collection");
             assertEq(RemyVault(vault).erc721(), collection, "vault erc721 target mismatch");
 
-            address predicted = factory.predictVaultAddress(collection, name_, symbol_);
+            address predicted = factory.predictVaultAddress(collection);
             assertEq(predicted, vault, "predictVaultAddress no longer deterministic");
         }
     }
@@ -48,25 +44,25 @@ contract FactoryHandler {
     uint256 internal constant MAX_TRACKED = 32;
 
     RemyVaultFactory internal immutable factory;
-    string internal name_;
-    string internal symbol_;
 
     address[] internal collections;
     address[] internal vaults;
+    mapping(uint160 => address) internal knownCollections;
 
-    constructor(RemyVaultFactory factory_, string memory name, string memory symbol) {
+    constructor(RemyVaultFactory factory_) {
         factory = factory_;
-        name_ = name;
-        symbol_ = symbol;
     }
 
     function deployVault(uint160 seed) external {
-        address collection = address(uint160(seed));
-        if (collection == address(0)) return;
+        address collection = knownCollections[seed];
+        if (collection == address(0)) {
+            collection = address(new MockERC721Simple("Invariant NFT", "INVT"));
+            knownCollections[seed] = collection;
+        }
         if (factory.isVault(collection)) return;
         if (factory.vaultFor(collection) != address(0)) return;
 
-        try factory.deployVault(collection, name_, symbol_) returns (address vault) {
+        try factory.deployVault(collection) returns (address vault) {
             if (collections.length < MAX_TRACKED) {
                 collections.push(collection);
                 vaults.push(vault);
@@ -84,13 +80,5 @@ contract FactoryHandler {
 
     function vaultAt(uint256 index) external view returns (address) {
         return vaults[index];
-    }
-
-    function deploymentName() external view returns (string memory) {
-        return name_;
-    }
-
-    function deploymentSymbol() external view returns (string memory) {
-        return symbol_;
     }
 }

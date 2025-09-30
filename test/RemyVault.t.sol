@@ -72,7 +72,7 @@ contract RemyVaultTest is Test {
         nft = IMockERC721(deployCode("MockERC721", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
 
         // Deploy the vault (which manages its own ERC20 supply)
-        RemyVault deployedVault = new RemyVault("MOCK", "MOCK", address(nft));
+        RemyVault deployedVault = new RemyVault(address(nft));
         vault = IRemyVault(address(deployedVault));
         UNIT = deployedVault.quoteDeposit(1);
 

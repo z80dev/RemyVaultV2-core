@@ -2,7 +2,6 @@
 pragma solidity ^0.8.24;
 
 import {BaseTest} from "./BaseTest.t.sol";
-import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
 import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
@@ -19,7 +18,7 @@ import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 
-contract DerivativeFactoryForkTest is BaseTest, DerivativeTestUtils {
+contract DerivativeFactoryForkTest is BaseTest {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
     using StateLibrary for IPoolManager;
@@ -56,7 +55,7 @@ contract DerivativeFactoryForkTest is BaseTest, DerivativeTestUtils {
     }
 
     // Helper to initialize a root pool directly (for testing the permissionless flow)
-    function _initRootPool(address parentVault, uint24, /* fee */ int24 tickSpacing, uint160 sqrtPriceX96)
+    function _initRootPool(address parentVault, uint24 /* fee */, int24 tickSpacing, uint160 sqrtPriceX96)
         internal
         returns (PoolId poolId)
     {
@@ -70,7 +69,7 @@ contract DerivativeFactoryForkTest is BaseTest, DerivativeTestUtils {
     }
 
     function testCreateDerivative_OnBaseFork_ConfiguresPools() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
 
         PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
@@ -96,6 +95,8 @@ contract DerivativeFactoryForkTest is BaseTest, DerivativeTestUtils {
         params.nftBaseUri = "ipfs://derivative/";
         params.nftOwner = nftOwner;
         params.initialMinter = saleMinter;
+        params.vaultName = "Derivative Token";
+        params.vaultSymbol = "dDRV";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
@@ -106,7 +107,6 @@ contract DerivativeFactoryForkTest is BaseTest, DerivativeTestUtils {
         params.parentTokenContribution = 3 * 1e18;
         params.derivativeTokenRecipient = derivativeTokenRecipient;
         params.parentTokenRefundRecipient = address(this);
-        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         (address derivativeNft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 

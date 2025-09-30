@@ -54,7 +54,7 @@ contract RemyVaultEIP712Test is Test {
 
         // Deploy contracts
         nft = IMockERC721(deployCode("MockERC721", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
-        vault = new RemyVault("RemyVault", "REMY", address(nft));
+        vault = new RemyVault(address(nft));
 
         // Transfer NFT ownership to vault for minting
         Ownable(address(nft)).transfer_ownership(address(vault));
@@ -83,14 +83,7 @@ contract RemyVaultEIP712Test is Test {
         uint256 deadline = block.timestamp + 1 hours;
         uint256 nonce = vault.nonces(owner);
 
-        bytes32 structHash = keccak256(abi.encode(
-            PERMIT_TYPEHASH,
-            owner,
-            spender,
-            value,
-            nonce,
-            deadline
-        ));
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonce, deadline));
 
         bytes32 digest = _getDigest(structHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, digest);
@@ -111,14 +104,7 @@ contract RemyVaultEIP712Test is Test {
         uint256 deadline = block.timestamp + 1 hours;
         uint256 nonce = vault.nonces(owner);
 
-        bytes32 structHash = keccak256(abi.encode(
-            PERMIT_TYPEHASH,
-            owner,
-            spender,
-            value,
-            nonce,
-            deadline
-        ));
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonce, deadline));
 
         bytes32 digest = _getDigest(structHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, digest);
@@ -133,14 +119,7 @@ contract RemyVaultEIP712Test is Test {
         uint256 deadline = block.timestamp - 1; // Already expired
         uint256 nonce = vault.nonces(owner);
 
-        bytes32 structHash = keccak256(abi.encode(
-            PERMIT_TYPEHASH,
-            owner,
-            spender,
-            value,
-            nonce,
-            deadline
-        ));
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonce, deadline));
 
         bytes32 digest = _getDigest(structHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, digest);
@@ -155,14 +134,7 @@ contract RemyVaultEIP712Test is Test {
         uint256 deadline = block.timestamp + 1 hours;
         uint256 nonce = vault.nonces(owner);
 
-        bytes32 structHash = keccak256(abi.encode(
-            PERMIT_TYPEHASH,
-            owner,
-            spender,
-            value,
-            nonce,
-            deadline
-        ));
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonce, deadline));
 
         bytes32 digest = _getDigest(structHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, digest);
@@ -181,14 +153,7 @@ contract RemyVaultEIP712Test is Test {
         uint256 deadline = block.timestamp + 1 hours;
         uint256 nonce = vault.nonces(owner);
 
-        bytes32 structHash = keccak256(abi.encode(
-            PERMIT_TYPEHASH,
-            owner,
-            spender,
-            value,
-            nonce,
-            deadline
-        ));
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonce, deadline));
 
         bytes32 digest = _getDigest(structHash);
 
@@ -206,14 +171,7 @@ contract RemyVaultEIP712Test is Test {
         uint256 deadline = block.timestamp + 1 hours;
         uint256 wrongNonce = vault.nonces(owner) + 1; // Use wrong nonce
 
-        bytes32 structHash = keccak256(abi.encode(
-            PERMIT_TYPEHASH,
-            owner,
-            spender,
-            value,
-            wrongNonce,
-            deadline
-        ));
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, wrongNonce, deadline));
 
         bytes32 digest = _getDigest(structHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, digest);
@@ -229,14 +187,7 @@ contract RemyVaultEIP712Test is Test {
         uint256 deadline = block.timestamp + 1 hours;
         uint256 nonce = vault.nonces(owner);
 
-        bytes32 structHash = keccak256(abi.encode(
-            PERMIT_TYPEHASH,
-            owner,
-            spender,
-            signedValue,
-            nonce,
-            deadline
-        ));
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, signedValue, nonce, deadline));
 
         bytes32 digest = _getDigest(structHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, digest);
@@ -252,14 +203,7 @@ contract RemyVaultEIP712Test is Test {
         uint256 nonce = vault.nonces(owner);
         address wrongSpender = makeAddr("wrongSpender");
 
-        bytes32 structHash = keccak256(abi.encode(
-            PERMIT_TYPEHASH,
-            owner,
-            spender,
-            value,
-            nonce,
-            deadline
-        ));
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonce, deadline));
 
         bytes32 digest = _getDigest(structHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, digest);
@@ -274,14 +218,7 @@ contract RemyVaultEIP712Test is Test {
         uint256 deadline = block.timestamp + 1 hours;
         uint256 nonce = vault.nonces(owner);
 
-        bytes32 structHash = keccak256(abi.encode(
-            PERMIT_TYPEHASH,
-            owner,
-            spender,
-            value,
-            nonce,
-            deadline
-        ));
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonce, deadline));
 
         bytes32 digest = _getDigest(structHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, digest);
@@ -301,14 +238,7 @@ contract RemyVaultEIP712Test is Test {
 
             address currentSpender = makeAddr(string(abi.encodePacked("spender", i)));
 
-            bytes32 structHash = keccak256(abi.encode(
-                PERMIT_TYPEHASH,
-                owner,
-                currentSpender,
-                value,
-                nonce,
-                deadline
-            ));
+            bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, currentSpender, value, nonce, deadline));
 
             bytes32 digest = _getDigest(structHash);
             (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, digest);
@@ -325,14 +255,7 @@ contract RemyVaultEIP712Test is Test {
         uint256 deadline = block.timestamp + 1 hours;
         uint256 nonce = vault.nonces(owner);
 
-        bytes32 structHash = keccak256(abi.encode(
-            PERMIT_TYPEHASH,
-            owner,
-            spender,
-            value,
-            nonce,
-            deadline
-        ));
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonce, deadline));
 
         bytes32 digest = _getDigest(structHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, digest);
@@ -356,14 +279,7 @@ contract RemyVaultEIP712Test is Test {
         uint256 deadline = block.timestamp + timeOffset;
         uint256 nonce = vault.nonces(owner);
 
-        bytes32 structHash = keccak256(abi.encode(
-            PERMIT_TYPEHASH,
-            owner,
-            spender,
-            value,
-            nonce,
-            deadline
-        ));
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonce, deadline));
 
         bytes32 digest = _getDigest(structHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, digest);
@@ -382,23 +298,21 @@ contract RemyVaultEIP712Test is Test {
         // The vault should use version "1.0"
         bytes32 domainSeparator = vault.DOMAIN_SEPARATOR();
 
-        bytes32 expectedDomainSeparator = keccak256(abi.encode(
-            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
-            keccak256(bytes("RemyVault")),
-            keccak256(bytes("1.0")),
-            block.chainid,
-            address(vault)
-        ));
+        bytes32 expectedDomainSeparator = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes("RemyVault")),
+                keccak256(bytes("1.0")),
+                block.chainid,
+                address(vault)
+            )
+        );
 
         assertEq(domainSeparator, expectedDomainSeparator, "domain separator mismatch");
     }
 
     // Helper function to compute EIP712 digest
     function _getDigest(bytes32 structHash) internal view returns (bytes32) {
-        return keccak256(abi.encodePacked(
-            "\x19\x01",
-            vault.DOMAIN_SEPARATOR(),
-            structHash
-        ));
+        return keccak256(abi.encodePacked("\x19\x01", vault.DOMAIN_SEPARATOR(), structHash));
     }
 }

@@ -10,6 +10,7 @@ import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
 import {RemyVaultHook} from "../src/RemyVaultHook.sol";
 import {RemyVault} from "../src/RemyVault.sol";
 import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
+import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
@@ -34,7 +35,7 @@ import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
  * 4. Track parent token price impact throughout all three mint-outs
  * 5. Report cumulative fees collected from all swapping activity
  */
-contract MultiDerivativePriceImpact is BaseTest {
+contract MultiDerivativePriceImpact is BaseTest, DerivativeTestUtils {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
     using StateLibrary for IPoolManager;
@@ -52,9 +53,9 @@ contract MultiDerivativePriceImpact is BaseTest {
     IPoolManager internal constant POOL_MANAGER = IPoolManager(POOL_MANAGER_ADDRESS);
 
     // Fee structure: 10% total, 7.5% to child, 2.5% to parent
-    uint256 internal constant TOTAL_FEE_BPS = 1000;  // 10%
-    uint256 internal constant CHILD_FEE_BPS = 750;   // 7.5%
-    uint256 internal constant PARENT_FEE_BPS = 250;  // 2.5%
+    uint256 internal constant TOTAL_FEE_BPS = 1000; // 10%
+    uint256 internal constant CHILD_FEE_BPS = 750; // 7.5%
+    uint256 internal constant PARENT_FEE_BPS = 250; // 2.5%
 
     RemyVaultFactory internal vaultFactory;
     RemyVaultHook internal hook;
@@ -90,7 +91,7 @@ contract MultiDerivativePriceImpact is BaseTest {
     }
 
     // Helper to initialize a root pool directly (for testing the permissionless flow)
-    function _initRootPool(address parentVault, uint24 /* fee */, int24 tickSpacing, uint160 sqrtPriceX96)
+    function _initRootPool(address parentVault, uint24, /* fee */ int24 tickSpacing, uint160 sqrtPriceX96)
         internal
         returns (PoolId poolId)
     {
@@ -113,7 +114,7 @@ contract MultiDerivativePriceImpact is BaseTest {
         console.log("====================================================================\n");
 
         // Setup parent vault and pool at 1:1 ETH per parent
-        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
+        address parentVault = vaultFactory.deployVault(address(parentCollection));
         PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent NFTs and deposit - need enough for liquidity + derivatives
@@ -152,24 +153,24 @@ contract MultiDerivativePriceImpact is BaseTest {
         // Create and mint out three derivative collections
         string[3] memory names = ["Alpha Collection", "Beta Collection", "Gamma Collection"];
 
-        for (uint256 i = 0; i < 3; i++) {  // Three derivatives
+        for (uint256 i = 0; i < 3; i++) {
+            // Three derivatives
             console.log("\n");
             console.log("====================================================================");
             console.log("  DERIVATIVE #", i + 1, ":", names[i]);
             console.log("====================================================================");
 
-            (, uint256 ethSpent, uint256 derivativesReceived, uint256 feesCollected) =
-                _createAndMintOutDerivative(
-                    parentVault,
-                    rootPoolId,
-                    names[i],
-                    1000,  // maxSupply
-                    -887220,  // tickLower - full range
-                    887220,   // tickUpper - full range
-                    SQRT_PRICE_1_1,  // sqrtPrice 1:1
-                    100 * 1e18,  // liquidity
-                    100 * 1e18  // parent contribution
-                );
+            (, uint256 ethSpent, uint256 derivativesReceived, uint256 feesCollected) = _createAndMintOutDerivative(
+                parentVault,
+                rootPoolId,
+                names[i],
+                1000, // maxSupply
+                -887220, // tickLower - full range
+                887220, // tickUpper - full range
+                SQRT_PRICE_1_1, // sqrtPrice 1:1
+                100 * 1e18, // liquidity
+                100 * 1e18 // parent contribution
+            );
 
             totalETHSpent += ethSpent;
             totalDerivativesReceived += derivativesReceived;
@@ -241,12 +242,10 @@ contract MultiDerivativePriceImpact is BaseTest {
         uint160 sqrtPriceX96,
         uint128 liquidity,
         uint256 parentContribution
-    ) internal returns (
-        address derivativeVault,
-        uint256 ethSpent,
-        uint256 derivativesReceived,
-        uint256 feesCollected
-    ) {
+    )
+        internal
+        returns (address derivativeVault, uint256 ethSpent, uint256 derivativesReceived, uint256 feesCollected)
+    {
         // Create derivative
         DerivativeFactory.DerivativeParams memory params;
         params.parentCollection = RemyVault(parentVault).erc721();
@@ -254,8 +253,6 @@ contract MultiDerivativePriceImpact is BaseTest {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://test/";
         params.nftOwner = address(this);
-        params.vaultName = string.concat("Token ", name);
-        params.vaultSymbol = "dDRV";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.maxSupply = maxSupply;
@@ -264,7 +261,8 @@ contract MultiDerivativePriceImpact is BaseTest {
         params.sqrtPriceX96 = sqrtPriceX96;
         params.liquidity = liquidity;
         params.parentTokenContribution = parentContribution;
-        params.derivativeTokenRecipient = address(1);  // Send leftover to dead address so they can't interfere
+        params.derivativeTokenRecipient = address(1); // Send leftover to dead address so they can't interfere
+        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         (, derivativeVault,) = factory.createDerivative(params);
 
@@ -278,11 +276,11 @@ contract MultiDerivativePriceImpact is BaseTest {
         console.log("\n--- MINTING OUT VIA ETH -> PARENT -> DERIVATIVE ---");
 
         uint256 derivativeSupply = MinterRemyVault(derivativeVault).totalSupply();
-        uint256 targetToBuy = derivativeSupply;  // Try to buy entire supply
+        uint256 targetToBuy = derivativeSupply; // Try to buy entire supply
         uint256 totalDerivativesObtained = 0;
         uint256 totalETHUsed = 0;
         uint256 swapCount = 0;
-        uint256 maxSwaps = 50;  // Limit swaps
+        uint256 maxSwaps = 50; // Limit swaps
 
         (PoolKey memory rootKey,) = factory.rootPool(parentVault);
         PoolKey memory childKey = _buildChildKey(derivativeVault, parentVault, 3000, 60);
@@ -302,13 +300,13 @@ contract MultiDerivativePriceImpact is BaseTest {
 
         // Execute swaps in chunks: ETH -> Parent, then Parent -> Derivative
         while (swapCount < maxSwaps && totalDerivativesObtained < targetToBuy * 95 / 100) {
-            uint256 ethChunk = 1 ether;  // 1 ETH per swap
+            uint256 ethChunk = 1 ether; // 1 ETH per swap
 
             uint256 parentBalBefore = RemyVault(parentVault).balanceOf(address(this));
 
             // Step 1: Swap ETH -> Parent
             IPoolManager.SwapParams memory swapToParent = IPoolManager.SwapParams({
-                zeroForOne: true,  // ETH (currency0) -> Parent (currency1)
+                zeroForOne: true, // ETH (currency0) -> Parent (currency1)
                 amountSpecified: -int256(ethChunk),
                 sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
             });
@@ -370,7 +368,6 @@ contract MultiDerivativePriceImpact is BaseTest {
         derivativesReceived = totalDerivativesObtained;
         feesCollected = estimatedFees;
     }
-
 
     function _buildChildKey(address tokenA, address tokenB, uint24 fee, int24 spacing)
         internal

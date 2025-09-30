@@ -3,7 +3,6 @@ pragma solidity ^0.8.26;
 
 import {Test, console} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
-import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
 import {MinterRemyVault} from "../src/MinterRemyVault.sol";
@@ -25,7 +24,7 @@ import {Ownable} from "solady/auth/Ownable.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {ERC721} from "solady/tokens/ERC721.sol";
 
-contract DerivativeFactoryTest is Test, DerivativeTestUtils {
+contract DerivativeFactoryTest is Test {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
     using StateLibrary for IPoolManager;
@@ -63,7 +62,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     // Helper to initialize a root pool directly (for testing the permissionless flow)
-    function _initializeRootPool(address parentVault, uint24, /* fee */ int24 tickSpacing, uint160 sqrtPriceX96)
+    function _initializeRootPool(address parentVault, uint24 /* fee */, int24 tickSpacing, uint160 sqrtPriceX96)
         internal
         returns (PoolId poolId)
     {
@@ -82,7 +81,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function skip_testRegisterRootPoolSetsHookConfig() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
 
         PoolKey memory expectedRootKey = _buildKey(address(0), parentVault, 3000, 60);
         PoolId expectedRootId = expectedRootKey.toId();
@@ -111,7 +110,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateVaultForCollectionDeploysVaultAndRootPool() public {
-        address predictedVault = vaultFactory.predictVaultAddress(address(parentCollection));
+        address predictedVault = vaultFactory.predictVaultAddress(address(parentCollection), "Parent Token", "PRMT");
         PoolKey memory expectedRootKey = _buildKey(address(0), predictedVault, 3000, 60);
         PoolId expectedRootId = expectedRootKey.toId();
 
@@ -121,13 +120,14 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         vm.expectEmit(true, true, true, false, address(factory));
         emit DerivativeFactory.ParentVaultRegistered(address(parentCollection), predictedVault, expectedRootId);
 
-        (address parentVault, PoolId rootPoolId) =
-            factory.createVaultForCollection(address(parentCollection), 60, SQRT_PRICE_1_1);
+        (address parentVault, PoolId rootPoolId) = factory.createVaultForCollection(
+            address(parentCollection), "Parent Token", "PRMT", 60, SQRT_PRICE_1_1
+        );
 
         assertEq(vaultFactory.vaultFor(address(parentCollection)), parentVault, "vault mapping mismatch");
         RemyVault vaultToken = RemyVault(parentVault);
-        assertEq(vaultToken.name(), parentCollection.name(), "vault name mismatch");
-        assertEq(vaultToken.symbol(), parentCollection.symbol(), "vault symbol mismatch");
+        assertEq(vaultToken.name(), "Parent Token", "vault name mismatch");
+        assertEq(vaultToken.symbol(), "PRMT", "vault symbol mismatch");
 
         (PoolKey memory storedKey, PoolId storedId) = factory.rootPool(parentVault);
         assertEq(PoolId.unwrap(storedId), PoolId.unwrap(rootPoolId), "root pool id mismatch");
@@ -146,7 +146,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeDeploysArtifacts() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
         PoolId parentPoolId = _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Seed the parent vault with inventory so the factory can provide liquidity.
@@ -173,6 +173,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftBaseUri = "ipfs://deriv/";
         params.nftOwner = nftOwner;
         params.initialMinter = saleMinter;
+        params.vaultName = "Derivative Token";
+        params.vaultSymbol = "dDRV";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
@@ -183,7 +185,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.parentTokenContribution = availableParentTokens;
         params.derivativeTokenRecipient = derivativeTokenSink;
         params.parentTokenRefundRecipient = address(this);
-        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         // ============ LAUNCH METRICS LOGGING ============
         console.log("\n=== DERIVATIVE LAUNCH CONFIGURATION ===");
@@ -219,18 +220,13 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         console.log("Parent Utilization %:", (parentBalanceConsumed * 100) / params.parentTokenContribution);
         console.log("Derivative Total Supply:", derivativeTotalSupply / 1e18);
         console.log("Derivative to Recipient:", derivativeBalanceRecipient / 1e18);
-        console.log(
-            "Derivative Retained in Pool %:",
-            ((derivativeTotalSupply - derivativeBalanceRecipient) * 100) / derivativeTotalSupply
-        );
+        console.log("Derivative Retained in Pool %:", ((derivativeTotalSupply - derivativeBalanceRecipient) * 100) / derivativeTotalSupply);
 
         // ============ POOL LIQUIDITY METRICS ============
         (uint160 childSqrtPrice,,,) = manager.getSlot0(childPoolId);
-        bool derivativeIsCurrency0 =
-            Currency.unwrap(_buildKey(derivativeVault, parentVault, 3000, 60).currency0) == derivativeVault;
+        bool derivativeIsCurrency0 = Currency.unwrap(_buildKey(derivativeVault, parentVault, 3000, 60).currency0) == derivativeVault;
         // Factory passes ticks as-is, so we check position with original ticks
-        (uint128 liquidity,,) =
-            manager.getPositionInfo(childPoolId, address(factory), params.tickLower, params.tickUpper, bytes32(0));
+        (uint128 liquidity,,) = manager.getPositionInfo(childPoolId, address(factory), params.tickLower, params.tickUpper, bytes32(0));
 
         console.log("\n=== POOL LIQUIDITY STATE ===");
         console.log("Actual Liquidity Added:", liquidity);
@@ -340,6 +336,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftName = "Derivative";
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
+        params.vaultName = "Token";
+        params.vaultSymbol = "TT";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
@@ -348,27 +346,25 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.tickUpper = 60;
         params.liquidity = 1;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(DerivativeFactory.ParentCollectionHasNoVault.selector, params.parentCollection)
-        );
+        vm.expectRevert(abi.encodeWithSelector(DerivativeFactory.ParentCollectionHasNoVault.selector, params.parentCollection));
         factory.createDerivative(params);
     }
 
     function skip_testRegisterRootPoolRequiresFactoryVault() public {
-        address randomToken = address(new RemyVault(address(parentCollection)));
+        address randomToken = address(new RemyVault("Mock", "MOCK", address(parentCollection)));
         vm.expectRevert(abi.encodeWithSelector(DerivativeFactory.ParentVaultNotFromFactory.selector, randomToken));
         _initializeRootPool(randomToken, 3000, 60, SQRT_PRICE_1_1);
     }
 
     function skip_testRegisterRootPoolWithZeroSqrtPrice() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
 
         vm.expectRevert(DerivativeFactory.InvalidSqrtPrice.selector);
         _initializeRootPool(parentVault, 3000, 60, 0);
     }
 
     function skip_testRegisterRootPoolTwiceReverts() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
 
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
@@ -377,7 +373,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeWithZeroSqrtPrice() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         DerivativeFactory.DerivativeParams memory params;
@@ -385,6 +381,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftName = "Derivative";
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
+        params.vaultName = "Token";
+        params.vaultSymbol = "TT";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.sqrtPriceX96 = 0; // Invalid
@@ -398,7 +396,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeWithInvalidTickRange() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         DerivativeFactory.DerivativeParams memory params;
@@ -406,6 +404,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftName = "Derivative";
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
+        params.vaultName = "Token";
+        params.vaultSymbol = "TT";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
@@ -419,7 +419,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeWithZeroLiquidity() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         DerivativeFactory.DerivativeParams memory params;
@@ -427,6 +427,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftName = "Derivative";
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
+        params.vaultName = "Token";
+        params.vaultSymbol = "TT";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
@@ -440,7 +442,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeWithNoParentTokenApproval() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens but don't approve factory
@@ -458,6 +460,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftName = "Derivative";
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
+        params.vaultName = "Token";
+        params.vaultSymbol = "TT";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
@@ -472,7 +476,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeWithZeroMaxSupply() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -490,6 +494,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftName = "Derivative";
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
+        params.vaultName = "Token";
+        params.vaultSymbol = "TT";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
@@ -505,7 +511,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testParentTokenRefundWhenNotFullyConsumed() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -526,6 +532,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftName = "Derivative";
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
+        params.vaultName = "Token";
+        params.vaultSymbol = "TT";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
@@ -535,7 +543,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.liquidity = 1e3;
         params.parentTokenContribution = 100 * 1e18; // Provide more than needed
         params.parentTokenRefundRecipient = refundRecipient;
-        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         factory.createDerivative(params);
 
@@ -549,7 +556,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testDerivativeTokenRecipientReceivesTokens() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -569,6 +576,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftName = "Derivative";
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
+        params.vaultName = "Token";
+        params.vaultSymbol = "TT";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
@@ -578,7 +587,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.liquidity = 1e3;
         params.parentTokenContribution = 100 * 1e18;
         params.derivativeTokenRecipient = derivativeRecipient;
-        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         (, address derivativeVault,) = factory.createDerivative(params);
 
@@ -589,7 +597,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeDefaultsToNftOwnerWhenNoRecipient() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -610,6 +618,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
         params.nftOwner = nftOwner;
+        params.vaultName = "Token";
+        params.vaultSymbol = "TT";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
@@ -619,7 +629,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.liquidity = 1e3;
         params.parentTokenContribution = 50 * 1e18;
         // Don't set derivativeTokenRecipient - should default to nftOwner
-        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         (, address derivativeVault,) = factory.createDerivative(params);
 
@@ -629,7 +638,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function skip_testRootPoolQuery() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
 
         // Should revert before registration
         vm.expectRevert(abi.encodeWithSelector(DerivativeFactory.ParentVaultNotRegistered.selector, parentVault));
@@ -650,7 +659,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         address attacker = makeAddr("attacker");
         vm.prank(attacker);
         vm.expectRevert(Ownable.Unauthorized.selector);
-        factory.createVaultForCollection(address(parentCollection), 60, SQRT_PRICE_1_1);
+        factory.createVaultForCollection(address(parentCollection), "Parent Token", "PRMT", 60, SQRT_PRICE_1_1);
     }
 
     function skip_testHookOwnershipRequired() public {
@@ -658,7 +667,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         vm.prank(address(factory));
         hook.transferOwnership(address(this));
 
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
 
         vm.expectRevert(DerivativeFactory.HookOwnershipMissing.selector);
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
@@ -666,7 +675,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
 
     /// @notice Comprehensive test exploring various price ranges and liquidity amounts for derivative launches
     function testDerivativeLaunchScenarios() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRMT");
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint large inventory for parent vault
@@ -728,6 +737,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://test/";
         params.nftOwner = recipient;
+        params.vaultName = string.concat("Token ", name);
+        params.vaultSymbol = "dDRV";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
@@ -738,7 +749,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.parentTokenContribution = parentContribution;
         params.derivativeTokenRecipient = recipient;
         params.parentTokenRefundRecipient = address(this);
-        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         console.log("\n--- CONFIGURATION ---");
         console.log("Max Supply (NFTs):", maxSupply);
@@ -752,8 +762,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
 
         MinterRemyVault derivativeToken = MinterRemyVault(derivativeVault);
         uint256 parentBalanceAfter = RemyVault(parentVault).balanceOf(address(this));
-        uint256 parentBalanceRefunded =
-            RemyVault(parentVault).balanceOf(address(this)) - (parentBalanceBefore - parentContribution);
+        uint256 parentBalanceRefunded = RemyVault(parentVault).balanceOf(address(this)) - (parentBalanceBefore - parentContribution);
         uint256 parentConsumed = parentContribution - parentBalanceRefunded;
         uint256 derivativeToRecipient = derivativeToken.balanceOf(recipient);
         uint256 derivativeTotalSupply = derivativeToken.totalSupply();
@@ -766,8 +775,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         console.log("Derivative to Recipient (tokens):", derivativeToRecipient / 1e18);
         console.log("Derivative in Pool (tokens):", (derivativeTotalSupply - derivativeToRecipient) / 1e18);
 
-        bool derivativeIsCurrency0 =
-            Currency.unwrap(_buildKey(derivativeVault, parentVault, 3000, 60).currency0) == derivativeVault;
+        bool derivativeIsCurrency0 = Currency.unwrap(_buildKey(derivativeVault, parentVault, 3000, 60).currency0) == derivativeVault;
 
         console.log("\n--- LIQUIDITY POSITION DEBUG ---");
         console.log("Requested Tick Lower:", tickLower);
@@ -775,8 +783,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         console.log("Derivative is Currency0:", derivativeIsCurrency0);
 
         // The factory now passes ticks as-is, so we check the position with the original ticks
-        (uint128 actualLiquidity,,) =
-            manager.getPositionInfo(childPoolId, address(factory), tickLower, tickUpper, bytes32(0));
+        (uint128 actualLiquidity,,) = manager.getPositionInfo(childPoolId, address(factory), tickLower, tickUpper, bytes32(0));
         (uint160 poolSqrtPrice,,,) = manager.getSlot0(childPoolId);
 
         // Check if range includes current price

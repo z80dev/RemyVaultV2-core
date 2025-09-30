@@ -16,7 +16,7 @@ contract MinterRemyVaultTest is Test {
         alice = makeAddr("alice");
         bob = makeAddr("bob");
         nft = new RemyVaultNFT("Derivative", "DRV", "ipfs://", address(this));
-        vault = new MinterRemyVault("Derivative Token", "dDRV", address(nft), 10);
+        vault = new MinterRemyVault(address(nft), 10);
         nft.setMinter(address(vault), true);
     }
 
@@ -29,11 +29,13 @@ contract MinterRemyVaultTest is Test {
         assertEq(vault.totalSupply(), expectedSupply, "total supply mismatch");
         assertEq(vault.balanceOf(address(this)), expectedSupply, "creator balance mismatch");
         assertEq(vault.maxSupply(), 10, "max supply mismatch");
+        assertEq(vault.name(), nft.name(), "vault should mirror NFT name");
+        assertEq(vault.symbol(), nft.symbol(), "vault should mirror NFT symbol");
     }
 
     function testConstructorWithZeroMaxSupply() public {
         RemyVaultNFT zeroNft = new RemyVaultNFT("Zero", "ZERO", "ipfs://", address(this));
-        MinterRemyVault zeroVault = new MinterRemyVault("Zero Token", "ZERO", address(zeroNft), 0);
+        MinterRemyVault zeroVault = new MinterRemyVault(address(zeroNft), 0);
 
         assertEq(zeroVault.totalSupply(), 0, "should have zero supply");
         assertEq(zeroVault.maxSupply(), 0, "should have zero max supply");
@@ -47,7 +49,7 @@ contract MinterRemyVaultTest is Test {
         uint256 overflowSupply = type(uint256).max / vault.UNIT() + 1;
 
         vm.expectRevert(MinterRemyVault.SupplyOverflow.selector);
-        new MinterRemyVault("Overflow Token", "OVR", address(overflowNft), overflowSupply);
+        new MinterRemyVault(address(overflowNft), overflowSupply);
     }
 
     function testMintBurnsAndIssuesNfts() public {

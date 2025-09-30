@@ -90,7 +90,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         }
 
         // Create parent vault
-        parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Vault", "PVAL");
+        parentVault = vaultFactory.deployVault(address(parentCollection));
 
         // Deposit NFTs into parent vault
         uint256[] memory tokenIds = new uint256[](700);
@@ -146,7 +146,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
 
         // Create RemyVault for the OG NFT collection
         vm.prank(userA);
-        address vaultAddress = vaultFactory.deployVault(address(ogNFT), "OG Vault", "OGV");
+        address vaultAddress = vaultFactory.deployVault(address(ogNFT));
         RemyVault vault = RemyVault(vaultAddress);
 
         // Verify the vault was created correctly
@@ -168,8 +168,6 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         params.nftBaseUri = "ipfs://test/";
         params.nftOwner = address(this);
         params.initialMinter = address(0);
-        params.vaultName = "Test Derivative Token";
-        params.vaultSymbol = "tDRV";
         params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
         params.tickSpacing = 60;
         params.maxSupply = maxSupply;
@@ -180,7 +178,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         params.parentTokenContribution = 0;
         params.derivativeTokenRecipient = address(this);
         params.parentTokenRefundRecipient = address(this);
-        params.salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, maxSupply);
+        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         // Create derivative
         (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
@@ -223,11 +221,13 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         }
 
         // Verify factory has no leftover tokens
-        assertEq(MinterRemyVault(derivativeVault).balanceOf(address(factory)), 0, "Factory should have 0 derivative tokens");
+        assertEq(
+            MinterRemyVault(derivativeVault).balanceOf(address(factory)), 0, "Factory should have 0 derivative tokens"
+        );
         assertEq(RemyVault(parentVault).balanceOf(address(factory)), 0, "Factory should have 0 parent tokens");
     }
 
-    function _initRootPool(address vault, uint24 /* fee */, int24 tickSpacing, uint160 sqrtPriceX96)
+    function _initRootPool(address vault, uint24, /* fee */ int24 tickSpacing, uint160 sqrtPriceX96)
         internal
         returns (PoolId poolId)
     {
@@ -279,8 +279,6 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         params.nftBaseUri = "ipfs://500/";
         params.nftOwner = address(this);
         params.initialMinter = address(0);
-        params.vaultName = "500 Derivative Token";
-        params.vaultSymbol = "500DRV";
         params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
         params.tickSpacing = 60;
         params.maxSupply = maxSupply;
@@ -303,7 +301,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         params.parentTokenContribution = 0;
         params.derivativeTokenRecipient = address(this);
         params.parentTokenRefundRecipient = address(this);
-        params.salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, maxSupply);
+        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         console.log("=== CREATING DERIVATIVE ==");
         (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
@@ -326,7 +324,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             amountSpecified: -1, // Sell 1 wei of parent token
             sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
         });
-        swapRouter.swap(childKey, swapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        swapRouter.swap(
+            childKey, swapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
+        );
         console.log("Pool primed successfully");
 
         // Try to quote swaps (may fail due to hook restrictions)
@@ -399,7 +399,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         }
 
         // Verify factory has no leftover tokens
-        assertEq(MinterRemyVault(derivativeVault).balanceOf(address(factory)), 0, "Factory should have 0 derivative tokens");
+        assertEq(
+            MinterRemyVault(derivativeVault).balanceOf(address(factory)), 0, "Factory should have 0 derivative tokens"
+        );
         assertEq(RemyVault(parentVault).balanceOf(address(factory)), 0, "Factory should have 0 parent tokens");
     }
 
@@ -419,8 +421,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         uint160 sqrtPriceBX96 = TickMath.getSqrtPriceAtTick(tickUpper);
 
         // Calculate liquidity from token amounts
-        uint128 liquidity =
-            LiquidityAmounts.getLiquidityForAmounts(sqrtPriceX96, sqrtPriceAX96, sqrtPriceBX96, amount0Desired, amount1Desired);
+        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96, sqrtPriceAX96, sqrtPriceBX96, amount0Desired, amount1Desired
+        );
 
         // Approve tokens if needed
         if (amount0Desired > 0 && Currency.unwrap(key.currency0) != address(0)) {
@@ -459,16 +462,14 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         params.nftBaseUri = "ipfs://low/";
         params.nftOwner = address(this);
         params.initialMinter = address(0);
-        params.vaultName = "LOW Price Token";
-        params.vaultSymbol = "LOWDRV";
         params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
         params.tickSpacing = 60;
         params.maxSupply = maxSupply;
 
         // Price range: 0.3 to 1.5 parent per derivative (5x range)
         // In pool terms (derivative/parent): price = 0.667 to 3.333
-        params.tickLower = -4080;   // tick -4080 ≈ 1.5 parent per derivative
-        params.tickUpper = 12060;   // tick 12060 ≈ 0.3 parent per derivative
+        params.tickLower = -4080; // tick -4080 ≈ 1.5 parent per derivative
+        params.tickUpper = 12060; // tick 12060 ≈ 0.3 parent per derivative
 
         // Initialize at tick 12060 (at upper boundary) for single-sided derivative liquidity
         params.sqrtPriceX96 = TickMath.getSqrtPriceAtTick(12060);
@@ -477,7 +478,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         params.parentTokenContribution = 0;
         params.derivativeTokenRecipient = address(this);
         params.parentTokenRefundRecipient = address(this);
-        params.salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, maxSupply);
+        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         console.log("\n=== CREATING DERIVATIVE ===");
         (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
@@ -511,7 +512,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             amountSpecified: -1, // Sell 1 wei of ETH
             sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
         });
-        swapRouter.swap{value: 1}(rootKey, primeRootSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        swapRouter.swap{value: 1}(
+            rootKey, primeRootSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
+        );
 
         // Prime child pool (parent -> derivative)
         RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
@@ -520,7 +523,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             amountSpecified: -1, // Sell 1 wei of parent
             sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
         });
-        swapRouter.swap(childKey, primeChildSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        swapRouter.swap(
+            childKey, primeChildSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
+        );
         console.log("Pools primed successfully");
 
         // Test with progressively larger ETH amounts
@@ -599,10 +604,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         });
 
         swapRouter.swap{value: ethToSpend}(
-            rootKey,
-            ethSwapParams,
-            PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
-            ""
+            rootKey, ethSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
         );
 
         uint256 parentTokensAcquired = RemyVault(parentVault).balanceOf(address(this)) - parentBalanceBeforeEthSwap;
@@ -635,7 +637,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
         });
 
-        swapRouter.swap(childKey, derivSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        swapRouter.swap(
+            childKey, derivSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
+        );
 
         uint256 derivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(this));
         uint256 parentSpent = parentBalanceBeforeDerivSwap - RemyVault(parentVault).balanceOf(address(this));
@@ -648,7 +652,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         (uint160 finalSqrtPrice, int24 finalTick,,) = POOL_MANAGER.getSlot0(childPoolId);
         console.log("Final pool tick:", finalTick);
         console.log("Tick movement:", int256(finalTick) - int256(initialTick));
-        console.log("Derivative tokens remaining in pool:", MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER)));
+        console.log(
+            "Derivative tokens remaining in pool:", MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER))
+        );
 
         // STEP 3: Mint NFTs from derivative tokens
         console.log("\n=== STEP 3: MINT NFTs FROM DERIVATIVE TOKENS ===");
@@ -670,11 +676,11 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         // Get actual quotes by doing small test swaps and reverting
         console.log("\n=== PARENT TOKEN SELL QUOTES (Parent -> ETH) ===");
         uint256[] memory sellAmounts = new uint256[](5);
-        sellAmounts[0] = 1e18;   // 1 parent token
-        sellAmounts[1] = 5e18;   // 5 parent tokens
-        sellAmounts[2] = 10e18;  // 10 parent tokens
-        sellAmounts[3] = 25e18;  // 25 parent tokens
-        sellAmounts[4] = 50e18;  // 50 parent tokens
+        sellAmounts[0] = 1e18; // 1 parent token
+        sellAmounts[1] = 5e18; // 5 parent tokens
+        sellAmounts[2] = 10e18; // 10 parent tokens
+        sellAmounts[3] = 25e18; // 25 parent tokens
+        sellAmounts[4] = 50e18; // 50 parent tokens
 
         for (uint256 i = 0; i < sellAmounts.length; i++) {
             uint256 sellAmount = sellAmounts[i];
@@ -692,7 +698,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
                 sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
             });
 
-            swapRouter.swap(rootKey, sellParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+            swapRouter.swap(
+                rootKey, sellParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
+            );
             uint256 ethReceived = address(this).balance - ethBefore;
 
             console.log("  Parent tokens sold:", sellAmount);
@@ -737,8 +745,6 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         params.nftBaseUri = "ipfs://medium/";
         params.nftOwner = address(this);
         params.initialMinter = address(0);
-        params.vaultName = "MEDIUM Price Token";
-        params.vaultSymbol = "MEDDRV";
         params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
         params.tickSpacing = 60;
         params.maxSupply = maxSupply;
@@ -747,8 +753,8 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         // In pool terms (derivative/parent): price = 0.5 to 2
         // tick -6932 ≈ price 0.5 (2.0 parent per derivative)
         // tick 6931 ≈ price 2 (0.5 parent per derivative)
-        params.tickLower = -6960;  // Adjusted to nearest valid tick for spacing 60
-        params.tickUpper = 6960;   // Adjusted to nearest valid tick for spacing 60
+        params.tickLower = -6960; // Adjusted to nearest valid tick for spacing 60
+        params.tickUpper = 6960; // Adjusted to nearest valid tick for spacing 60
 
         // Initialize at tick 6960 (at upper boundary) for single-sided derivative liquidity
         params.sqrtPriceX96 = TickMath.getSqrtPriceAtTick(6960);
@@ -757,7 +763,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         params.parentTokenContribution = 0;
         params.derivativeTokenRecipient = address(this);
         params.parentTokenRefundRecipient = address(this);
-        params.salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, maxSupply);
+        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         console.log("\n=== CREATING DERIVATIVE ===");
         (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
@@ -790,7 +796,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             amountSpecified: -1,
             sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
         });
-        swapRouter.swap{value: 1}(rootKey, primeRootSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        swapRouter.swap{value: 1}(
+            rootKey, primeRootSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
+        );
 
         RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
         IPoolManager.SwapParams memory primeChildSwap = IPoolManager.SwapParams({
@@ -798,7 +806,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             amountSpecified: -1,
             sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
         });
-        swapRouter.swap(childKey, primeChildSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        swapRouter.swap(
+            childKey, primeChildSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
+        );
         console.log("Pools primed successfully");
 
         uint256[] memory ethAmounts = new uint256[](15);
@@ -870,10 +880,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         });
 
         swapRouter.swap{value: ethToSpend}(
-            rootKey,
-            ethSwapParams,
-            PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
-            ""
+            rootKey, ethSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
         );
 
         uint256 parentTokensAcquired = RemyVault(parentVault).balanceOf(address(this)) - parentBalanceBeforeEthSwap;
@@ -906,7 +913,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
         });
 
-        swapRouter.swap(childKey, derivSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        swapRouter.swap(
+            childKey, derivSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
+        );
 
         uint256 derivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(this));
         uint256 parentSpent = parentBalanceBeforeDerivSwap - RemyVault(parentVault).balanceOf(address(this));
@@ -919,7 +928,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         (uint160 finalSqrtPrice, int24 finalTick,,) = POOL_MANAGER.getSlot0(childPoolId);
         console.log("Final pool tick:", finalTick);
         console.log("Tick movement:", int256(finalTick) - int256(initialTick));
-        console.log("Derivative tokens remaining in pool:", MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER)));
+        console.log(
+            "Derivative tokens remaining in pool:", MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER))
+        );
 
         // STEP 3: Mint NFTs from derivative tokens
         console.log("\n=== STEP 3: MINT NFTs FROM DERIVATIVE TOKENS ===");
@@ -941,11 +952,11 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         // Get actual quotes by doing small test swaps and reverting
         console.log("\n=== PARENT TOKEN SELL QUOTES (Parent -> ETH) ===");
         uint256[] memory sellAmounts = new uint256[](5);
-        sellAmounts[0] = 1e18;   // 1 parent token
-        sellAmounts[1] = 5e18;   // 5 parent tokens
-        sellAmounts[2] = 10e18;  // 10 parent tokens
-        sellAmounts[3] = 25e18;  // 25 parent tokens
-        sellAmounts[4] = 50e18;  // 50 parent tokens
+        sellAmounts[0] = 1e18; // 1 parent token
+        sellAmounts[1] = 5e18; // 5 parent tokens
+        sellAmounts[2] = 10e18; // 10 parent tokens
+        sellAmounts[3] = 25e18; // 25 parent tokens
+        sellAmounts[4] = 50e18; // 50 parent tokens
 
         for (uint256 i = 0; i < sellAmounts.length; i++) {
             uint256 sellAmount = sellAmounts[i];
@@ -963,7 +974,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
                 sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
             });
 
-            swapRouter.swap(rootKey, sellParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+            swapRouter.swap(
+                rootKey, sellParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
+            );
             uint256 ethReceived = address(this).balance - ethBefore;
 
             console.log("  Parent tokens sold:", sellAmount);
@@ -1008,16 +1021,14 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         params.nftBaseUri = "ipfs://high/";
         params.nftOwner = address(this);
         params.initialMinter = address(0);
-        params.vaultName = "HIGH Supply Token";
-        params.vaultSymbol = "HIDRV";
         params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
         params.tickSpacing = 60;
         params.maxSupply = maxSupply;
 
         // Price range: 0.25 to 2.0 parent per derivative (8x range)
         // In pool terms (derivative/parent): price = 0.5 to 4.0
-        params.tickLower = -6960;   // tick -6960 ≈ 2.0 parent per derivative
-        params.tickUpper = 13860;   // tick 13860 ≈ 0.25 parent per derivative
+        params.tickLower = -6960; // tick -6960 ≈ 2.0 parent per derivative
+        params.tickUpper = 13860; // tick 13860 ≈ 0.25 parent per derivative
 
         // Initialize at tick 13860 (at upper boundary) for single-sided derivative liquidity
         params.sqrtPriceX96 = TickMath.getSqrtPriceAtTick(13860);
@@ -1026,7 +1037,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         params.parentTokenContribution = 0;
         params.derivativeTokenRecipient = address(this);
         params.parentTokenRefundRecipient = address(this);
-        params.salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, maxSupply);
+        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         console.log("\n=== CREATING DERIVATIVE ===");
         (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
@@ -1059,7 +1070,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             amountSpecified: -1,
             sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
         });
-        swapRouter.swap{value: 1}(rootKey, primeRootSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        swapRouter.swap{value: 1}(
+            rootKey, primeRootSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
+        );
 
         RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
         IPoolManager.SwapParams memory primeChildSwap = IPoolManager.SwapParams({
@@ -1067,7 +1080,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             amountSpecified: -1,
             sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
         });
-        swapRouter.swap(childKey, primeChildSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        swapRouter.swap(
+            childKey, primeChildSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
+        );
         console.log("Pools primed successfully");
 
         uint256[] memory ethAmounts = new uint256[](25);
@@ -1148,10 +1163,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         });
 
         swapRouter.swap{value: ethToSpend}(
-            rootKey,
-            ethSwapParams,
-            PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
-            ""
+            rootKey, ethSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
         );
 
         uint256 parentTokensAcquired = RemyVault(parentVault).balanceOf(address(this)) - parentBalanceBeforeEthSwap;
@@ -1184,7 +1196,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             sqrtPriceLimitX96: parentIsZero ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
         });
 
-        swapRouter.swap(childKey, derivSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+        swapRouter.swap(
+            childKey, derivSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
+        );
 
         uint256 derivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(this));
         uint256 parentSpent = parentBalanceBeforeDerivSwap - RemyVault(parentVault).balanceOf(address(this));
@@ -1197,7 +1211,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         (uint160 finalSqrtPrice, int24 finalTick,,) = POOL_MANAGER.getSlot0(childPoolId);
         console.log("Final pool tick:", finalTick);
         console.log("Tick movement:", int256(finalTick) - int256(initialTick));
-        console.log("Derivative tokens remaining in pool:", MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER)));
+        console.log(
+            "Derivative tokens remaining in pool:", MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER))
+        );
 
         // STEP 3: Mint NFTs from derivative tokens
         console.log("\n=== STEP 3: MINT NFTs FROM DERIVATIVE TOKENS ===");
@@ -1219,11 +1235,11 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         // Get actual quotes by doing small test swaps and reverting
         console.log("\n=== PARENT TOKEN SELL QUOTES (Parent -> ETH) ===");
         uint256[] memory sellAmounts = new uint256[](5);
-        sellAmounts[0] = 1e18;   // 1 parent token
-        sellAmounts[1] = 5e18;   // 5 parent tokens
-        sellAmounts[2] = 10e18;  // 10 parent tokens
-        sellAmounts[3] = 25e18;  // 25 parent tokens
-        sellAmounts[4] = 50e18;  // 50 parent tokens
+        sellAmounts[0] = 1e18; // 1 parent token
+        sellAmounts[1] = 5e18; // 5 parent tokens
+        sellAmounts[2] = 10e18; // 10 parent tokens
+        sellAmounts[3] = 25e18; // 25 parent tokens
+        sellAmounts[4] = 50e18; // 50 parent tokens
 
         for (uint256 i = 0; i < sellAmounts.length; i++) {
             uint256 sellAmount = sellAmounts[i];
@@ -1241,7 +1257,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
                 sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
             });
 
-            swapRouter.swap(rootKey, sellParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
+            swapRouter.swap(
+                rootKey, sellParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
+            );
             uint256 ethReceived = address(this).balance - ethBefore;
 
             console.log("  Parent tokens sold:", sellAmount);

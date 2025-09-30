@@ -36,7 +36,7 @@ contract RemyVaultAccountInvariantTest is Test {
 
     function setUp() public {
         nft = IMockERC721(deployCode("MockERC721", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
-        vault = new RemyVault("MOCK", "MOCK", address(nft));
+        vault = new RemyVault(address(nft));
         unit = vault.quoteDeposit(1);
 
         token = IERC20(address(vault));

@@ -6,7 +6,7 @@ import {EIP712} from "solady/utils/EIP712.sol";
 
 abstract contract RemyVaultEIP712 is ERC20, EIP712 {
     /// @dev Cached keccak256 hash of the token name for the permit domain separator.
-    bytes32 private immutable NAME_HASH;
+    bytes32 private NAME_HASH;
 
     /// @dev ERC20 metadata storage for the vault token.
     string internal _name;
@@ -16,7 +16,8 @@ abstract contract RemyVaultEIP712 is ERC20, EIP712 {
     string internal constant EIP712_VERSION = "1.0";
     bytes32 private constant VERSION_HASH = keccak256(bytes(EIP712_VERSION));
 
-    constructor(string memory name_, string memory symbol_) EIP712() {
+    /// @dev Initialize EIP712 metadata. Must be called from derived contract constructor.
+    function _initEIP712(string memory name_, string memory symbol_) internal {
         _name = name_;
         _symbol = symbol_;
         NAME_HASH = keccak256(bytes(name_));

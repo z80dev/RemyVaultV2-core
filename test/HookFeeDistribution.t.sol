@@ -10,6 +10,7 @@ import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
 import {RemyVaultHook} from "../src/RemyVaultHook.sol";
 import {RemyVault} from "../src/RemyVault.sol";
 import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
+import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
@@ -34,7 +35,7 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
  * - For root pools (parent/ETH):
  *   - Root keeps: 10% (all)
  */
-contract HookFeeDistributionTest is BaseTest {
+contract HookFeeDistributionTest is BaseTest, DerivativeTestUtils {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
     using StateLibrary for IPoolManager;
@@ -77,7 +78,7 @@ contract HookFeeDistributionTest is BaseTest {
     }
 
     // Helper to initialize a root pool directly (for testing the permissionless flow)
-    function _initRootPool(address parentVault, uint24 /* fee */, int24 tickSpacing, uint160 sqrtPriceX96)
+    function _initRootPool(address parentVault, uint24, /* fee */ int24 tickSpacing, uint160 sqrtPriceX96)
         internal
         returns (PoolId poolId)
     {
@@ -94,7 +95,7 @@ contract HookFeeDistributionTest is BaseTest {
         console.log("\n=== TESTING FEE DISTRIBUTION: CHILD -> PARENT ===\n");
 
         // Setup parent vault and root pool
-        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
+        address parentVault = vaultFactory.deployVault(address(parentCollection));
         PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -120,13 +121,8 @@ contract HookFeeDistributionTest is BaseTest {
         liquidityRouter.modifyLiquidity{value: 30 ether}(rootKey, rootLiqParams, bytes(""));
 
         // Get initial liquidity of root pool
-        (uint128 initialRootLiquidity,,) = POOL_MANAGER.getPositionInfo(
-            rootPoolId,
-            address(liquidityRouter),
-            -887220,
-            887220,
-            0
-        );
+        (uint128 initialRootLiquidity,,) =
+            POOL_MANAGER.getPositionInfo(rootPoolId, address(liquidityRouter), -887220, 887220, 0);
 
         console.log("--- Initial State ---");
         console.log("Root pool liquidity:", initialRootLiquidity);
@@ -139,8 +135,6 @@ contract HookFeeDistributionTest is BaseTest {
         params.nftBaseUri = "ipfs://test/";
         params.nftOwner = address(this);
         params.initialMinter = address(this);
-        params.vaultName = "Derivative Token";
-        params.vaultSymbol = "dDRV";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.maxSupply = 100;
@@ -150,6 +144,7 @@ contract HookFeeDistributionTest is BaseTest {
         params.liquidity = 20e18;
         params.parentTokenContribution = 80 * 1e18;
         params.derivativeTokenRecipient = address(this);
+        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         (, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
@@ -157,13 +152,8 @@ contract HookFeeDistributionTest is BaseTest {
         bool parentIsCurrency0 = Currency.unwrap(childKey.currency0) == parentVault;
 
         // Get initial liquidity of child pool
-        (uint128 initialChildLiquidity,,) = POOL_MANAGER.getPositionInfo(
-            childPoolId,
-            address(factory),
-            params.tickLower,
-            params.tickUpper,
-            0
-        );
+        (uint128 initialChildLiquidity,,) =
+            POOL_MANAGER.getPositionInfo(childPoolId, address(factory), params.tickLower, params.tickUpper, 0);
 
         console.log("Child pool created");
         console.log("Child pool liquidity:", initialChildLiquidity);
@@ -179,7 +169,7 @@ contract HookFeeDistributionTest is BaseTest {
         // Execute swap on child pool
         IPoolManager.SwapParams memory swapParams = IPoolManager.SwapParams({
             zeroForOne: parentIsCurrency0,
-            amountSpecified: -int256(10 * 1e18),  // Spend 10 parent tokens
+            amountSpecified: -int256(10 * 1e18), // Spend 10 parent tokens
             sqrtPriceLimitX96: parentIsCurrency0 ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
         });
 
@@ -196,9 +186,9 @@ contract HookFeeDistributionTest is BaseTest {
         // Parent receives = 1 * 25% = 0.25 parent tokens
 
         uint256 swapAmount = 10 * 1e18;
-        uint256 expectedTotalFee = swapAmount * 1000 / 10000;  // 10%
-        uint256 expectedChildFee = expectedTotalFee * 750 / 1000;  // 75% of total
-        uint256 expectedParentFee = expectedTotalFee - expectedChildFee;  // 25% of total
+        uint256 expectedTotalFee = swapAmount * 1000 / 10000; // 10%
+        uint256 expectedChildFee = expectedTotalFee * 750 / 1000; // 75% of total
+        uint256 expectedParentFee = expectedTotalFee - expectedChildFee; // 25% of total
 
         console.log("Expected total fee:", expectedTotalFee / 1e18, ".", (expectedTotalFee % 1e18) / 1e16);
         console.log("Expected child fee (7.5%):", expectedChildFee / 1e18, ".", (expectedChildFee % 1e18) / 1e16);
@@ -216,7 +206,7 @@ contract HookFeeDistributionTest is BaseTest {
         console.log("\n=== TESTING ROOT POOL FEE RETENTION ===\n");
 
         // Setup parent vault and root pool
-        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
+        address parentVault = vaultFactory.deployVault(address(parentCollection));
         PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -250,7 +240,7 @@ contract HookFeeDistributionTest is BaseTest {
         console.log("Swapping 5 parent tokens for ETH");
 
         IPoolManager.SwapParams memory swapParams = IPoolManager.SwapParams({
-            zeroForOne: false,  // Parent -> ETH (parent is currency1)
+            zeroForOne: false, // Parent -> ETH (parent is currency1)
             amountSpecified: -int256(5 * 1e18),
             sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
         });
@@ -263,7 +253,7 @@ contract HookFeeDistributionTest is BaseTest {
         console.log("\n--- Fee Distribution Analysis ---");
 
         uint256 swapAmount = 5 * 1e18;
-        uint256 expectedTotalFee = swapAmount * 1000 / 10000;  // 10%
+        uint256 expectedTotalFee = swapAmount * 1000 / 10000; // 10%
 
         console.log("Expected total fee:", expectedTotalFee / 1e18, ".", (expectedTotalFee % 1e18) / 1e16);
         console.log("Expected to root pool:", expectedTotalFee / 1e18, ".", (expectedTotalFee % 1e18) / 1e16);
@@ -276,7 +266,7 @@ contract HookFeeDistributionTest is BaseTest {
         console.log("\n=== TESTING CUMULATIVE FEES FROM MULTIPLE SWAPS ===\n");
 
         // Setup
-        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
+        address parentVault = vaultFactory.deployVault(address(parentCollection));
         _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         uint256[] memory tokenIds = new uint256[](500);
@@ -306,8 +296,6 @@ contract HookFeeDistributionTest is BaseTest {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://test/";
         params.nftOwner = address(this);
-        params.vaultName = "Derivative Token";
-        params.vaultSymbol = "dDRV";
         params.fee = 3000;
         params.tickSpacing = 60;
         params.maxSupply = 100;
@@ -317,6 +305,7 @@ contract HookFeeDistributionTest is BaseTest {
         params.liquidity = 30e18;
         params.parentTokenContribution = 100 * 1e18;
         params.derivativeTokenRecipient = address(this);
+        params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
 
         (, address derivativeVault,) = factory.createDerivative(params);
 
@@ -362,9 +351,9 @@ contract HookFeeDistributionTest is BaseTest {
         console.log("\n--- Cumulative Fee Analysis ---");
         console.log("Total parent tokens swapped:", totalSwapped / 1e18);
 
-        uint256 totalFees = totalSwapped * 1000 / 10000;  // 10% total
-        uint256 totalToChild = totalFees * 750 / 1000;     // 75% to child
-        uint256 totalToParent = totalFees - totalToChild;  // 25% to parent
+        uint256 totalFees = totalSwapped * 1000 / 10000; // 10% total
+        uint256 totalToChild = totalFees * 750 / 1000; // 75% to child
+        uint256 totalToParent = totalFees - totalToChild; // 25% to parent
 
         console.log("Total fees collected:", totalFees / 1e18, ".", (totalFees % 1e18) / 1e16);
         console.log("Total to child pool:", totalToChild / 1e18, ".", (totalToChild % 1e18) / 1e16);
