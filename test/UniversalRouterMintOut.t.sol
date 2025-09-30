@@ -96,6 +96,10 @@ contract UniversalRouterMintOut is BaseTest, DerivativeTestUtils {
         vm.prank(address(factory));
         hook.addChild(key, false, emptyKey);
         POOL_MANAGER.initialize(key, sqrtPriceX96);
+
+        // Register the root pool with the factory
+        factory.registerRootPool(parentVault, fee, tickSpacing);
+
         return key.toId();
     }
 
@@ -122,7 +126,7 @@ contract UniversalRouterMintOut is BaseTest, DerivativeTestUtils {
         PathKey[] memory path = new PathKey[](2);
         path[0] = PathKey({
             intermediateCurrency: Currency.wrap(parentVault),
-            fee: 3000,
+            fee: 0x800000, // DYNAMIC_FEE_FLAG for root pool
             tickSpacing: 60,
             hooks: IHooks(HOOK_ADDRESS),
             hookData: bytes("")

@@ -241,6 +241,37 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         poolId = root.id;
     }
 
+    /// @notice Register a root pool for a parent vault (permissionless)
+    /// @param parentVault The parent vault address
+    /// @param fee The pool fee (must use DYNAMIC_FEE_FLAG for permissionless pools)
+    /// @param tickSpacing The tick spacing for the pool
+    /// @dev Anyone can call this to register an existing initialized pool
+    /// @dev Verifies that: 1) vault is from factory, 2) pool is initialized, 3) pool uses correct hook
+    function registerRootPool(address parentVault, uint24 fee, int24 tickSpacing) external {
+        // Verify vault is from the factory
+        if (!VAULT_FACTORY.isVault(parentVault)) revert ParentVaultNotFromFactory(parentVault);
+
+        // Verify not already registered
+        if (_rootPools[parentVault].exists) revert ParentVaultAlreadyInitialized(parentVault);
+
+        // Build the pool key (ETH/parentVault pool)
+        PoolKey memory key = _buildPoolKey(address(0), parentVault, fee, tickSpacing);
+        PoolId poolId = key.toId();
+
+        // Verify pool is initialized
+        (uint160 sqrtPriceX96,,,) = POOL_MANAGER.getSlot0(poolId);
+        if (sqrtPriceX96 == 0) revert ParentCollectionHasNoPool(RemyVault(parentVault).erc721(), parentVault);
+
+        // Verify the hook matches
+        if (address(key.hooks) != address(HOOK)) revert ParentCollectionHasNoPool(RemyVault(parentVault).erc721(), parentVault);
+
+        // Cache the pool
+        RootPool storage root = _rootPools[parentVault];
+        root.exists = true;
+        root.key = key;
+        root.id = poolId;
+    }
+
     /// @notice Compute the derivative vault address for the given parameters without deploying
     /// @param nftAddress The address of the derivative NFT collection
     /// @param maxSupply The maximum supply of derivative NFTs
