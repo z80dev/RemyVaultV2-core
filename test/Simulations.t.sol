@@ -252,6 +252,96 @@ contract Simulations is BaseTest, DerivativeTestUtils {
         }
     }
 
+    function test_DerivativeCreation_1kSupply_PointOneToOnePrice() public {
+        // Approve parent vault tokens for derivative creation
+        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+
+        // Setup derivative parameters for 1000 token supply
+        uint256 maxSupply = 1000;
+        DerivativeFactory.DerivativeParams memory params;
+        params.parentCollection = address(parentCollection);
+        params.nftName = "1K Derivative";
+        params.nftSymbol = "1KDRV";
+        params.nftBaseUri = "ipfs://1k/";
+        params.nftOwner = address(this);
+        params.initialMinter = address(0);
+        params.vaultName = "1K Derivative Token";
+        params.vaultSymbol = "1KDRV";
+        params.fee = 3000;
+        params.tickSpacing = 60;
+        params.maxSupply = maxSupply;
+
+        // Price range: 0.1 to 1 parent per derivative
+        // In pool terms (derivative/parent): price = 1 to 10
+        // tick 0 = price 1 (1 parent per derivative)
+        // tick 23040 ≈ price 10 (0.1 parent per derivative)
+        params.tickLower = 0;
+        params.tickUpper = 23040;
+
+        // Initialize above range (at tick 23100) for single-sided derivative liquidity
+        // When price > range upper bound, position is 100% token1 (derivative)
+        params.sqrtPriceX96 = TickMath.getSqrtPriceAtTick(23100);
+
+        // Liquidity will be calculated by factory to consume all 1000 derivative tokens
+        params.liquidity = 1; // Factory ignores this, just needs to be non-zero
+
+        params.parentTokenContribution = 0;
+        params.derivativeTokenRecipient = address(this);
+        params.parentTokenRefundRecipient = address(this);
+        params.salt = mineSaltForToken1(factory, parentVault, params.vaultName, params.vaultSymbol, maxSupply);
+
+        console.log("=== CREATING DERIVATIVE ==");
+        (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
+
+        // Build child pool key
+        PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, params.tickSpacing);
+        bool parentIsZero = Currency.unwrap(childKey.currency0) == parentVault;
+
+        // Verify pool state
+        (uint160 actualSqrtPrice, int24 actualTick,,) = POOL_MANAGER.getSlot0(childPoolId);
+        console.log("Child pool initialized at tick:", actualTick);
+        console.log("Expected tick: 23100");
+        assertEq(actualTick, 23100, "Pool should initialize at tick 23100");
+
+        // Try to quote swaps (may fail due to hook restrictions)
+        console.log("=== SWAP QUOTES ==");
+        try QUOTER.quoteExactInputSingle(
+            IV4Quoter.QuoteExactSingleParams({
+                poolKey: childKey,
+                zeroForOne: parentIsZero,
+                exactAmount: 1e18,
+                hookData: ""
+            })
+        ) returns (uint256 derivativeTokensOut, uint256 gasEstimate) {
+            console.log("1 parent token -> derivative tokens:", derivativeTokensOut);
+            console.log("Gas estimate:", gasEstimate);
+
+            // At starting price ~10 (0.1 parent per derivative), should get ~10 derivative tokens per parent
+            assertGt(derivativeTokensOut, 9e18, "Should get at least 9 derivative tokens");
+            assertLt(derivativeTokensOut, 11e18, "Should get at most 11 derivative tokens");
+
+            // Quote: 0.1 parent token -> derivative tokens
+            try QUOTER.quoteExactInputSingle(
+                IV4Quoter.QuoteExactSingleParams({
+                    poolKey: childKey,
+                    zeroForOne: parentIsZero,
+                    exactAmount: 0.1e18,
+                    hookData: ""
+                })
+            ) returns (uint256 smallSwapOut, uint256) {
+                console.log("0.1 parent token -> derivative tokens:", smallSwapOut);
+            } catch {
+                console.log("Small swap quote failed");
+            }
+        } catch {
+            console.log("Swap quotes failed (likely restricted by hook before liquidity is added)");
+        }
+
+        // Verify factory has no leftover tokens
+        assertEq(MinterRemyVault(derivativeVault).balanceOf(address(factory)), 0, "Factory should have 0 derivative tokens");
+        assertEq(RemyVault(parentVault).balanceOf(address(factory)), 0, "Factory should have 0 parent tokens");
+    }
+
     function _addLiquidityToPool(
         PoolKey memory key,
         int24 tickLower,

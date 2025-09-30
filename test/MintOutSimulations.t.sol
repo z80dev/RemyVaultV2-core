@@ -120,20 +120,6 @@ contract MintOutSimulations is BaseTest, DerivativeTestUtils {
         vm.deal(trader, 5_000 ether);
     }
 
-    // Helper to initialize a root pool directly (for testing the permissionless flow)
-    function _initRootPool(address parentVault, uint24 /* fee */, int24 tickSpacing, uint160 sqrtPriceX96)
-        internal
-        returns (PoolId poolId)
-    {
-        uint24 fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG
-        PoolKey memory key = _buildChildKey(address(0), parentVault, fee, tickSpacing);
-        PoolKey memory emptyKey;
-        vm.prank(address(factory));
-        hook.addChild(key, false, emptyKey);
-        POOL_MANAGER.initialize(key, sqrtPriceX96);
-        return key.toId();
-    }
-
     function test_LowPriceDerivativeMintOut() public {
         ScenarioConfig memory config = _lowScenario();
         _runScenario(config);
@@ -432,9 +418,7 @@ contract MintOutSimulations is BaseTest, DerivativeTestUtils {
     // ---------------------------------------------------------------------
 
     function _setupParentPool() internal returns (ParentPoolState memory state) {
-        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
-        state.parentVault = parentVault;
-
+        // Mint NFTs first
         uint256 nftCount = 1500;
         uint256[] memory tokenIds = new uint256[](nftCount);
         for (uint256 i; i < nftCount; ++i) {
@@ -442,15 +426,25 @@ contract MintOutSimulations is BaseTest, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
 
+        // Use factory's method to properly create vault and register root pool
+        uint160 parentSqrtPrice = TickMath.getSqrtPriceAtTick(PARENT_INITIAL_TICK);
+        (address parentVault, PoolId rootPoolId) = factory.createVaultForCollection(
+            address(parentCollection),
+            "Parent Token",
+            "PRNT",
+            POOL_TICK_SPACING,
+            parentSqrtPrice
+        );
+
+        state.parentVault = parentVault;
+        state.rootPoolId = rootPoolId;
+
+        // Deposit NFTs into the vault
         parentCollection.setApprovalForAll(parentVault, true);
         RemyVault(parentVault).deposit(tokenIds, address(this));
 
         RemyVault(parentVault).approve(address(factory), type(uint256).max);
         RemyVault(parentVault).approve(address(liquidityRouter), type(uint256).max);
-
-        uint160 parentSqrtPrice = TickMath.getSqrtPriceAtTick(PARENT_INITIAL_TICK);
-        PoolId rootPoolId = _initRootPool(parentVault, POOL_FEE, POOL_TICK_SPACING, parentSqrtPrice);
-        state.rootPoolId = rootPoolId;
 
         (PoolKey memory rootKey,) = factory.rootPool(parentVault);
         state.rootKey = rootKey;
@@ -522,8 +516,10 @@ contract MintOutSimulations is BaseTest, DerivativeTestUtils {
     }
 
     function _priceFromSqrt(uint160 sqrtPriceX96) internal pure returns (uint256 priceE18) {
-        uint256 numerator = uint256(sqrtPriceX96) * uint256(sqrtPriceX96) * 1e18;
-        priceE18 = numerator >> 192;
+        // Avoid overflow: compute (sqrtPrice^2 * 1e18) / 2^192 safely
+        // = (sqrtPrice^2 / 2^96) * (1e18 / 2^96)
+        uint256 price96 = FullMath.mulDiv(sqrtPriceX96, sqrtPriceX96, 2**96);
+        priceE18 = FullMath.mulDiv(price96, 1e18, 2**96);
     }
 
     function _buildChildKey(address tokenA, address tokenB, uint24 fee, int24 spacing)
