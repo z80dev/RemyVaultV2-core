@@ -498,58 +498,67 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("\n=== PARENT POOL STATE BEFORE DERIVATIVE MINT ===");
         console.log("Parent pool tick:", parentPoolTickBefore);
 
-        // PROGRESSIVE COST ANALYSIS: Use quoter for exact output
-        console.log("\n=== PROGRESSIVE BUY QUOTES (ETH Cost Per NFT Quantity) ===");
+        // PROGRESSIVE BUY QUOTES: Fixed ETH amounts using exact input
+        console.log("\n=== PROGRESSIVE BUY QUOTES (Fixed ETH Amounts) ===");
 
-        uint256[] memory targetQuantities = new uint256[](13);
-        targetQuantities[0] = 1;
-        targetQuantities[1] = 5;
-        targetQuantities[2] = 10;
-        targetQuantities[3] = 25;
-        targetQuantities[4] = 50;
-        targetQuantities[5] = 100;
-        targetQuantities[6] = 150;
-        targetQuantities[7] = 200;
-        targetQuantities[8] = 250;
-        targetQuantities[9] = 300;
-        targetQuantities[10] = 350;
-        targetQuantities[11] = 400;
-        targetQuantities[12] = 450;
+        // Test with progressively larger ETH amounts
+        uint256[] memory ethAmounts = new uint256[](20);
+        ethAmounts[0] = 0.01 ether;
+        ethAmounts[1] = 0.05 ether;
+        ethAmounts[2] = 0.1 ether;
+        ethAmounts[3] = 0.25 ether;
+        ethAmounts[4] = 0.5 ether;
+        ethAmounts[5] = 1 ether;
+        ethAmounts[6] = 2 ether;
+        ethAmounts[7] = 3 ether;
+        ethAmounts[8] = 4 ether;
+        ethAmounts[9] = 5 ether;
+        ethAmounts[10] = 6 ether;
+        ethAmounts[11] = 7 ether;
+        ethAmounts[12] = 8 ether;
+        ethAmounts[13] = 9 ether;
+        ethAmounts[14] = 10 ether;
+        ethAmounts[15] = 11 ether;
+        ethAmounts[16] = 12 ether;
+        ethAmounts[17] = 13 ether;
+        ethAmounts[18] = 14 ether;
+        ethAmounts[19] = 15 ether;
 
-        for (uint256 i = 0; i < targetQuantities.length; i++) {
-            uint256 targetNFTs = targetQuantities[i];
-            if (targetNFTs >= maxSupply) continue;
+        for (uint256 i = 0; i < ethAmounts.length; i++) {
+            uint256 ethAmount = ethAmounts[i];
 
-            // Multi-hop exact output: want exact derivative tokens, quote ETH needed
+            // Multi-hop exact input: ETH -> parent -> derivative
             IV4Quoter.QuoteExactParams memory quoteParams;
-            quoteParams.exactCurrency = Currency.wrap(derivativeVault); // End with derivative
-            quoteParams.exactAmount = uint128(targetNFTs * 1e18);
+            quoteParams.exactCurrency = Currency.wrap(address(0)); // Start with ETH
+            quoteParams.exactAmount = uint128(ethAmount);
 
             quoteParams.path = new PathKey[](2);
-            // Path goes backwards for exact output: start currency -> intermediate -> exact currency
             quoteParams.path[0] = PathKey({
                 intermediateCurrency: Currency.wrap(parentVault),
-                fee: params.fee,
-                tickSpacing: params.tickSpacing,
-                hooks: IHooks(HOOK_ADDRESS),
-                hookData: ""
-            });
-            quoteParams.path[1] = PathKey({
-                intermediateCurrency: Currency.wrap(address(0)), // ETH
                 fee: 0x800000,
                 tickSpacing: 60,
                 hooks: IHooks(HOOK_ADDRESS),
                 hookData: ""
             });
+            quoteParams.path[1] = PathKey({
+                intermediateCurrency: Currency.wrap(derivativeVault),
+                fee: params.fee,
+                tickSpacing: params.tickSpacing,
+                hooks: IHooks(HOOK_ADDRESS),
+                hookData: ""
+            });
 
-            try QUOTER.quoteExactOutput(quoteParams) returns (uint256 ethNeeded, uint256) {
+            try QUOTER.quoteExactInput(quoteParams) returns (uint256 derivTokensOut, uint256) {
+                uint256 nftsOut = derivTokensOut / 1e18;
                 console.log("---");
-                console.log("Quote for buying", targetNFTs, "NFTs:");
-                console.log("  ETH needed:", ethNeeded);
-                console.log("  ETH per NFT:", ethNeeded / targetNFTs);
-                console.log("  Supply %:", (targetNFTs * 100) / maxSupply);
+                console.log("ETH input:", ethAmount);
+                console.log("  Derivative tokens out:", derivTokensOut);
+                console.log("  NFTs out:", nftsOut);
+                console.log("  ETH per NFT:", nftsOut > 0 ? ethAmount / nftsOut : 0);
+                console.log("  Supply %:", (nftsOut * 100) / maxSupply);
             } catch {
-                // Quote failed, skip
+                // Quote failed (likely no liquidity left), stop
+                break;
             }
         }
         console.log("---");
@@ -747,52 +756,59 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("\n=== PARENT POOL STATE BEFORE DERIVATIVE MINT ===");
         console.log("Parent pool tick:", parentPoolTickBefore);
 
-        // PROGRESSIVE COST ANALYSIS: Use quoter for exact output
-        console.log("\n=== PROGRESSIVE BUY QUOTES (ETH Cost Per NFT Quantity) ===");
+        // PROGRESSIVE BUY QUOTES: Fixed ETH amounts using exact input
+        console.log("\n=== PROGRESSIVE BUY QUOTES (Fixed ETH Amounts) ===");
 
-        uint256[] memory targetQuantities = new uint256[](9);
-        targetQuantities[0] = 1;
-        targetQuantities[1] = 5;
-        targetQuantities[2] = 10;
-        targetQuantities[3] = 25;
-        targetQuantities[4] = 50;
-        targetQuantities[5] = 100;
-        targetQuantities[6] = 150;
-        targetQuantities[7] = 200;
-        targetQuantities[8] = 249;
+        uint256[] memory ethAmounts = new uint256[](15);
+        ethAmounts[0] = 0.01 ether;
+        ethAmounts[1] = 0.05 ether;
+        ethAmounts[2] = 0.1 ether;
+        ethAmounts[3] = 0.25 ether;
+        ethAmounts[4] = 0.5 ether;
+        ethAmounts[5] = 1 ether;
+        ethAmounts[6] = 2 ether;
+        ethAmounts[7] = 3 ether;
+        ethAmounts[8] = 4 ether;
+        ethAmounts[9] = 5 ether;
+        ethAmounts[10] = 6 ether;
+        ethAmounts[11] = 7 ether;
+        ethAmounts[12] = 8 ether;
+        ethAmounts[13] = 9 ether;
+        ethAmounts[14] = 10 ether;
 
-        for (uint256 i = 0; i < targetQuantities.length; i++) {
-            uint256 targetNFTs = targetQuantities[i];
-            if (targetNFTs >= maxSupply) continue;
+        for (uint256 i = 0; i < ethAmounts.length; i++) {
+            uint256 ethAmount = ethAmounts[i];
 
             IV4Quoter.QuoteExactParams memory quoteParams;
-            quoteParams.exactCurrency = Currency.wrap(derivativeVault);
-            quoteParams.exactAmount = uint128(targetNFTs * 1e18);
+            quoteParams.exactCurrency = Currency.wrap(address(0));
+            quoteParams.exactAmount = uint128(ethAmount);
 
             quoteParams.path = new PathKey[](2);
             quoteParams.path[0] = PathKey({
                 intermediateCurrency: Currency.wrap(parentVault),
-                fee: params.fee,
-                tickSpacing: params.tickSpacing,
-                hooks: IHooks(HOOK_ADDRESS),
-                hookData: ""
-            });
-            quoteParams.path[1] = PathKey({
-                intermediateCurrency: Currency.wrap(address(0)),
                 fee: 0x800000,
                 tickSpacing: 60,
                 hooks: IHooks(HOOK_ADDRESS),
                 hookData: ""
             });
+            quoteParams.path[1] = PathKey({
+                intermediateCurrency: Currency.wrap(derivativeVault),
+                fee: params.fee,
+                tickSpacing: params.tickSpacing,
+                hooks: IHooks(HOOK_ADDRESS),
+                hookData: ""
+            });
 
-            try QUOTER.quoteExactOutput(quoteParams) returns (uint256 ethNeeded, uint256) {
+            try QUOTER.quoteExactInput(quoteParams) returns (uint256 derivTokensOut, uint256) {
+                uint256 nftsOut = derivTokensOut / 1e18;
                 console.log("---");
-                console.log("Quote for buying", targetNFTs, "NFTs:");
-                console.log("  ETH needed:", ethNeeded);
-                console.log("  ETH per NFT:", ethNeeded / targetNFTs);
-                console.log("  Supply %:", (targetNFTs * 100) / maxSupply);
+                console.log("ETH input:", ethAmount);
+                console.log("  Derivative tokens out:", derivTokensOut);
+                console.log("  NFTs out:", nftsOut);
+                console.log("  ETH per NFT:", nftsOut > 0 ? ethAmount / nftsOut : 0);
+                console.log("  Supply %:", (nftsOut * 100) / maxSupply);
             } catch {
-                // Quote failed, skip
+                break;
             }
         }
         console.log("---");
@@ -989,58 +1005,69 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("\n=== PARENT POOL STATE BEFORE DERIVATIVE MINT ===");
         console.log("Parent pool tick:", parentPoolTickBefore);
 
-        // PROGRESSIVE COST ANALYSIS: Use quoter for exact output
-        console.log("\n=== PROGRESSIVE BUY QUOTES (ETH Cost Per NFT Quantity) ===");
+        // PROGRESSIVE BUY QUOTES: Fixed ETH amounts using exact input
+        console.log("\n=== PROGRESSIVE BUY QUOTES (Fixed ETH Amounts) ===");
 
-        uint256[] memory targetQuantities = new uint256[](15);
-        targetQuantities[0] = 1;
-        targetQuantities[1] = 5;
-        targetQuantities[2] = 10;
-        targetQuantities[3] = 25;
-        targetQuantities[4] = 50;
-        targetQuantities[5] = 100;
-        targetQuantities[6] = 150;
-        targetQuantities[7] = 200;
-        targetQuantities[8] = 250;
-        targetQuantities[9] = 300;
-        targetQuantities[10] = 400;
-        targetQuantities[11] = 500;
-        targetQuantities[12] = 600;
-        targetQuantities[13] = 700;
-        targetQuantities[14] = 800;
+        uint256[] memory ethAmounts = new uint256[](25);
+        ethAmounts[0] = 0.01 ether;
+        ethAmounts[1] = 0.05 ether;
+        ethAmounts[2] = 0.1 ether;
+        ethAmounts[3] = 0.25 ether;
+        ethAmounts[4] = 0.5 ether;
+        ethAmounts[5] = 1 ether;
+        ethAmounts[6] = 2 ether;
+        ethAmounts[7] = 3 ether;
+        ethAmounts[8] = 4 ether;
+        ethAmounts[9] = 5 ether;
+        ethAmounts[10] = 6 ether;
+        ethAmounts[11] = 7 ether;
+        ethAmounts[12] = 8 ether;
+        ethAmounts[13] = 9 ether;
+        ethAmounts[14] = 10 ether;
+        ethAmounts[15] = 11 ether;
+        ethAmounts[16] = 12 ether;
+        ethAmounts[17] = 13 ether;
+        ethAmounts[18] = 14 ether;
+        ethAmounts[19] = 15 ether;
+        ethAmounts[20] = 16 ether;
+        ethAmounts[21] = 17 ether;
+        ethAmounts[22] = 18 ether;
+        ethAmounts[23] = 19 ether;
+        ethAmounts[24] = 20 ether;
 
-        for (uint256 i = 0; i < targetQuantities.length; i++) {
-            uint256 targetNFTs = targetQuantities[i];
-            if (targetNFTs >= maxSupply) continue;
+        for (uint256 i = 0; i < ethAmounts.length; i++) {
+            uint256 ethAmount = ethAmounts[i];
 
             IV4Quoter.QuoteExactParams memory quoteParams;
-            quoteParams.exactCurrency = Currency.wrap(derivativeVault);
-            quoteParams.exactAmount = uint128(targetNFTs * 1e18);
+            quoteParams.exactCurrency = Currency.wrap(address(0));
+            quoteParams.exactAmount = uint128(ethAmount);
 
             quoteParams.path = new PathKey[](2);
             quoteParams.path[0] = PathKey({
                 intermediateCurrency: Currency.wrap(parentVault),
-                fee: params.fee,
-                tickSpacing: params.tickSpacing,
-                hooks: IHooks(HOOK_ADDRESS),
-                hookData: ""
-            });
-            quoteParams.path[1] = PathKey({
-                intermediateCurrency: Currency.wrap(address(0)),
                 fee: 0x800000,
                 tickSpacing: 60,
                 hooks: IHooks(HOOK_ADDRESS),
                 hookData: ""
             });
+            quoteParams.path[1] = PathKey({
+                intermediateCurrency: Currency.wrap(derivativeVault),
+                fee: params.fee,
+                tickSpacing: params.tickSpacing,
+                hooks: IHooks(HOOK_ADDRESS),
+                hookData: ""
+            });
 
-            try QUOTER.quoteExactOutput(quoteParams) returns (uint256 ethNeeded, uint256) {
+            try QUOTER.quoteExactInput(quoteParams) returns (uint256 derivTokensOut, uint256) {
+                uint256 nftsOut = derivTokensOut / 1e18;
                 console.log("---");
-                console.log("Quote for buying", targetNFTs, "NFTs:");
-                console.log("  ETH needed:", ethNeeded);
-                console.log("  ETH per NFT:", ethNeeded / targetNFTs);
-                console.log("  Supply %:", (targetNFTs * 100) / maxSupply);
+                console.log("ETH input:", ethAmount);
+                console.log("  Derivative tokens out:", derivTokensOut);
+                console.log("  NFTs out:", nftsOut);
+                console.log("  ETH per NFT:", nftsOut > 0 ? ethAmount / nftsOut : 0);
+                console.log("  Supply %:", (nftsOut * 100) / maxSupply);
             } catch {
-                // Quote failed, skip
+                break;
             }
         }
         console.log("---");
