@@ -442,20 +442,23 @@ contract PriceRangeForkTest is BaseTest {
         console.log("\n=== BOUNDARY MOVEMENT TEST PASSED ===\n");
     }
 
-    function test_DerivativePriceRangesWithTrading() public {
-        console.log("\n=== TESTING LOW, MEDIUM, HIGH DERIVATIVE PRICE RANGES WITH TRADING ===");
+    function test_LowPriceRangeWithTrading() public {
+        console.log("\n=====================================================");
+        console.log("  ISOLATED TEST: LOW PRICE (0.1 parent/derivative)");
+        console.log("=====================================================");
 
-        // Setup parent vault and root pool
-        address parentVault = vaultFactory.deployVault(address(parentCollection), "Parent Token", "PRNT");
+        // Setup - completely fresh
+        MockERC721Simple collection = new MockERC721Simple("Low Price Parent", "LPP");
+        address parentVault = vaultFactory.deployVault(address(collection), "Low Price Parent Token", "LPPT");
         factory.registerRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](500);
         for (uint256 i = 0; i < 500; i++) {
-            parentCollection.mint(address(this), i + 1);
+            collection.mint(address(this), i + 1);
             tokenIds[i] = i + 1;
         }
-        parentCollection.setApprovalForAll(parentVault, true);
+        collection.setApprovalForAll(parentVault, true);
         RemyVault(parentVault).deposit(tokenIds, address(this));
         RemyVault(parentVault).approve(address(factory), type(uint256).max);
 
@@ -471,10 +474,7 @@ contract PriceRangeForkTest is BaseTest {
         });
         liquidityRouter.modifyLiquidity{value: 20 ether}(rootKey, rootLiqParams, bytes(""));
 
-        // Test LOW price range (0.1 parent per derivative - cheap derivative)
-        console.log("\n\n=====================================================");
-        console.log("       LOW PRICE RANGE (0.1 parent/derivative)");
-        console.log("=====================================================");
+        // Test LOW price range (0.1 parent per derivative)
         _testPriceRangeWithTrading(
             parentVault,
             "Low Price Derivative",
@@ -485,10 +485,44 @@ contract PriceRangeForkTest is BaseTest {
             80
         );
 
-        // Test MEDIUM price range (0.5 parent per derivative - medium derivative)
-        console.log("\n\n=====================================================");
-        console.log("      MEDIUM PRICE RANGE (0.5 parent/derivative)");
+        console.log("\n=====================================================");
+        console.log("  LOW PRICE RANGE TEST COMPLETE");
+        console.log("=====================================================\n");
+    }
+
+    function test_MediumPriceRangeWithTrading() public {
+        console.log("\n=====================================================");
+        console.log("  ISOLATED TEST: MEDIUM PRICE (0.5 parent/derivative)");
         console.log("=====================================================");
+
+        // Setup - completely fresh
+        MockERC721Simple collection = new MockERC721Simple("Medium Price Parent", "MPP");
+        address parentVault = vaultFactory.deployVault(address(collection), "Medium Price Parent Token", "MPPT");
+        factory.registerRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+
+        // Mint parent tokens
+        uint256[] memory tokenIds = new uint256[](500);
+        for (uint256 i = 0; i < 500; i++) {
+            collection.mint(address(this), i + 1);
+            tokenIds[i] = i + 1;
+        }
+        collection.setApprovalForAll(parentVault, true);
+        RemyVault(parentVault).deposit(tokenIds, address(this));
+        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+
+        // Add liquidity to root pool
+        (PoolKey memory rootKey,) = factory.rootPool(parentVault);
+        RemyVault(parentVault).approve(address(liquidityRouter), type(uint256).max);
+
+        IPoolManager.ModifyLiquidityParams memory rootLiqParams = IPoolManager.ModifyLiquidityParams({
+            tickLower: -887220,
+            tickUpper: 887220,
+            liquidityDelta: int256(20 * 1e18),
+            salt: 0
+        });
+        liquidityRouter.modifyLiquidity{value: 20 ether}(rootKey, rootLiqParams, bytes(""));
+
+        // Test MEDIUM price range (0.5 parent per derivative)
         _testPriceRangeWithTrading(
             parentVault,
             "Medium Price Derivative",
@@ -499,10 +533,44 @@ contract PriceRangeForkTest is BaseTest {
             80
         );
 
-        // Test HIGH price range (1.0 parent per derivative - expensive derivative)
-        console.log("\n\n=====================================================");
-        console.log("       HIGH PRICE RANGE (1.0 parent/derivative)");
+        console.log("\n=====================================================");
+        console.log("  MEDIUM PRICE RANGE TEST COMPLETE");
+        console.log("=====================================================\n");
+    }
+
+    function test_HighPriceRangeWithTrading() public {
+        console.log("\n=====================================================");
+        console.log("  ISOLATED TEST: HIGH PRICE (1.0 parent/derivative)");
         console.log("=====================================================");
+
+        // Setup - completely fresh
+        MockERC721Simple collection = new MockERC721Simple("High Price Parent", "HPP");
+        address parentVault = vaultFactory.deployVault(address(collection), "High Price Parent Token", "HPPT");
+        factory.registerRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+
+        // Mint parent tokens
+        uint256[] memory tokenIds = new uint256[](500);
+        for (uint256 i = 0; i < 500; i++) {
+            collection.mint(address(this), i + 1);
+            tokenIds[i] = i + 1;
+        }
+        collection.setApprovalForAll(parentVault, true);
+        RemyVault(parentVault).deposit(tokenIds, address(this));
+        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+
+        // Add liquidity to root pool
+        (PoolKey memory rootKey,) = factory.rootPool(parentVault);
+        RemyVault(parentVault).approve(address(liquidityRouter), type(uint256).max);
+
+        IPoolManager.ModifyLiquidityParams memory rootLiqParams = IPoolManager.ModifyLiquidityParams({
+            tickLower: -887220,
+            tickUpper: 887220,
+            liquidityDelta: int256(20 * 1e18),
+            salt: 0
+        });
+        liquidityRouter.modifyLiquidity{value: 20 ether}(rootKey, rootLiqParams, bytes(""));
+
+        // Test HIGH price range (1.0 parent per derivative)
         _testPriceRangeWithTrading(
             parentVault,
             "High Price Derivative",
@@ -514,7 +582,7 @@ contract PriceRangeForkTest is BaseTest {
         );
 
         console.log("\n=====================================================");
-        console.log("            ALL PRICE RANGE TESTS PASSED");
+        console.log("  HIGH PRICE RANGE TEST COMPLETE");
         console.log("=====================================================\n");
     }
 
