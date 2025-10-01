@@ -29,8 +29,8 @@ contract MinterRemyVaultTest is Test {
         assertEq(vault.totalSupply(), expectedSupply, "total supply mismatch");
         assertEq(vault.balanceOf(address(this)), expectedSupply, "creator balance mismatch");
         assertEq(vault.maxSupply(), 10, "max supply mismatch");
-        assertEq(vault.name(), nft.name(), "vault should mirror NFT name");
-        assertEq(vault.symbol(), nft.symbol(), "vault should mirror NFT symbol");
+        assertEq(vault.name(), string.concat("Wrapped ", nft.name()), "vault should mirror NFT name");
+        assertEq(vault.symbol(), string.concat("w", nft.symbol()), "vault should mirror NFT symbol");
     }
 
     function testConstructorWithZeroMaxSupply() public {

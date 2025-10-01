@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {ERC20} from "solady/tokens/ERC20.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
+import {LibString} from "solady/utils/LibString.sol";
 import {IERC721Metadata} from "./interfaces/IERC721Metadata.sol";
 
 abstract contract wNFTEIP712 is ERC20, EIP712 {
@@ -20,8 +21,8 @@ abstract contract wNFTEIP712 is ERC20, EIP712 {
     error MetadataQueryFailed(address token);
 
     constructor(address erc721_) {
-        _name = _queryName(erc721_);
-        _symbol = _querySymbol(erc721_);
+        _name = LibString.concat("Wrapped ", _queryName(erc721_));
+        _symbol = LibString.concat("w", _querySymbol(erc721_));
         NAME_HASH = keccak256(bytes(_name));
     }
 

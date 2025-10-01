@@ -127,8 +127,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
 
         assertEq(vaultFactory.vaultFor(address(parentCollection)), parentVault, "vault mapping mismatch");
         wNFT vaultToken = wNFT(parentVault);
-        assertEq(vaultToken.name(), parentCollection.name(), "vault name mismatch");
-        assertEq(vaultToken.symbol(), parentCollection.symbol(), "vault symbol mismatch");
+        assertEq(vaultToken.name(), string.concat("Wrapped ", parentCollection.name()), "vault name mismatch");
+        assertEq(vaultToken.symbol(), string.concat("w", parentCollection.symbol()), "vault symbol mismatch");
 
         (PoolKey memory storedKey, PoolId storedId) = factory.rootPool(parentVault);
         assertEq(PoolId.unwrap(storedId), PoolId.unwrap(rootPoolId), "root pool id mismatch");

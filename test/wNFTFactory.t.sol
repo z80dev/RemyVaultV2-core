@@ -24,8 +24,8 @@ contract RemyVaultFactoryTest is Test {
         assertTrue(factory.isVault(firstVault));
         assertEq(collection.name(), "wNFT");
         assertEq(collection.symbol(), "REM");
-        assertEq(wNFT(firstVault).name(), collection.name(), "vault should mirror collection name");
-        assertEq(wNFT(firstVault).symbol(), collection.symbol(), "vault should mirror collection symbol");
+        assertEq(wNFT(firstVault).name(), string.concat("Wrapped ", collection.name()), "vault should mirror collection name");
+        assertEq(wNFT(firstVault).symbol(), string.concat("w", collection.symbol()), "vault should mirror collection symbol");
 
         vm.expectRevert(
             abi.encodeWithSelector(wNFTFactory.CollectionAlreadyDeployed.selector, address(collection))
