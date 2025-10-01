@@ -9,6 +9,7 @@ import {IERC20} from "../src/interfaces/IERC20.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {ReentrancyAttacker} from "./helpers/ReentrancyAttacker.sol";
 import {RemyVault} from "../src/RemyVault.sol";
+import {RemyVaultEIP712} from "../src/RemyVaultEIP712.sol";
 
 interface IMockERC721 is IERC721 {
     function mint(address to, uint256 tokenId) external;
@@ -617,7 +618,55 @@ contract RemyVaultTest is Test {
         assertEq(totalSupply, expectedSupply, "Invariant broken: token supply != NFT balance * UNIT");
     }
 
+    function testSafeTransferToVault() public {
+        // Mint a token to this contract
+        vm.prank(address(vault));
+        nft.mint(address(this), 42);
+
+        // Verify initial state
+        assertEq(nft.ownerOf(42), address(this));
+        assertEq(nft.balanceOf(address(vault)), 0);
+
+        // Safe transfer the NFT to the vault
+        nft.safeTransferFrom(address(this), address(vault), 42);
+
+        // Verify the vault received the NFT
+        assertEq(nft.ownerOf(42), address(vault));
+        assertEq(nft.balanceOf(address(vault)), 1);
+
+        // Verify we didn't get any tokens (since we bypassed deposit)
+        assertEq(token.balanceOf(address(this)), 0);
+    }
+
+    function testNonCompliantNFTDeploymentFails() public {
+        // Deploy a contract that doesn't implement ERC721Metadata
+        NonCompliantNFT nonCompliant = new NonCompliantNFT();
+
+        // Attempt to deploy a vault for this non-compliant NFT should fail
+        vm.expectRevert(
+            abi.encodeWithSelector(RemyVaultEIP712.MetadataQueryFailed.selector, address(nonCompliant))
+        );
+        new RemyVault(address(nonCompliant));
+    }
+
     function onERC721Received(address, address, uint256, bytes memory) public pure returns (bytes4) {
         return this.onERC721Received.selector;
     }
+}
+
+/**
+ * @title NonCompliantNFT
+ * @dev A minimal contract that implements basic ERC721 functions but NOT the metadata interface
+ * Used to test that vault deployment fails for non-compliant NFTs
+ */
+contract NonCompliantNFT {
+    function balanceOf(address) external pure returns (uint256) {
+        return 0;
+    }
+
+    function ownerOf(uint256) external pure returns (address) {
+        return address(0);
+    }
+
+    // Deliberately does NOT implement name() and symbol()
 }

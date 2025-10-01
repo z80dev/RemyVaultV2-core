@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import {IERC721} from "./interfaces/IERC721.sol";
-import {IERC721Metadata} from "./interfaces/IERC721Metadata.sol";
 import {IERCXX} from "./interfaces/IERCXX.sol";
 import {RemyVaultEIP712} from "./RemyVaultEIP712.sol";
 
@@ -13,10 +12,9 @@ contract RemyVault is RemyVaultEIP712, IERCXX {
     /// @notice The ERC721 collection held by the vault (unused until deposit logic is ported).
     IERC721 private immutable ERC721_TOKEN;
 
-    error MetadataQueryFailed(address token);
     error ZeroCollectionAddress();
 
-    constructor(address erc721_) RemyVaultEIP712(_queryName(erc721_), _querySymbol(erc721_)) {
+    constructor(address erc721_) RemyVaultEIP712(erc721_) {
         if (erc721_ == address(0)) revert ZeroCollectionAddress();
         ERC721_TOKEN = IERC721(erc721_);
     }
@@ -93,19 +91,5 @@ contract RemyVault is RemyVaultEIP712, IERCXX {
 
     function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
         return this.onERC721Received.selector;
-    }
-
-    function _queryName(address token) private view returns (string memory name_) {
-        name_ = _staticcallString(token, IERC721Metadata.name.selector);
-    }
-
-    function _querySymbol(address token) private view returns (string memory symbol_) {
-        symbol_ = _staticcallString(token, IERC721Metadata.symbol.selector);
-    }
-
-    function _staticcallString(address token, bytes4 selector) private view returns (string memory value) {
-        (bool success, bytes memory data) = token.staticcall(abi.encodeWithSelector(selector));
-        if (!success || data.length == 0) revert MetadataQueryFailed(token);
-        value = abi.decode(data, (string));
     }
 }
