@@ -3,11 +3,11 @@ pragma solidity ^0.8.24;
 
 import {Ownable} from "solady/auth/Ownable.sol";
 
-import {MinterRemyVault} from "./MinterRemyVault.sol";
-import {RemyVaultFactory} from "./RemyVaultFactory.sol";
-import {RemyVaultHook} from "./RemyVaultHook.sol";
-import {RemyVaultNFT} from "./RemyVaultNFT.sol";
-import {RemyVault} from "./RemyVault.sol";
+import {wNFTMinter} from "./wNFTMinter.sol";
+import {wNFTFactory} from "./wNFTFactory.sol";
+import {wNFTHook} from "./wNFTHook.sol";
+import {wNFTNFT} from "./wNFTNFT.sol";
+import {wNFT} from "./wNFT.sol";
 
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {BalanceDelta, BalanceDeltaLibrary} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
@@ -89,14 +89,14 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
     error TransferFailed();
     error DerivativeVaultMustBeToken1(address derivativeVault, address parentVault);
 
-    RemyVaultFactory public immutable VAULT_FACTORY;
-    RemyVaultHook public immutable HOOK;
+    wNFTFactory public immutable VAULT_FACTORY;
+    wNFTHook public immutable HOOK;
     IPoolManager public immutable POOL_MANAGER;
 
     mapping(address => DerivativeInfo) public derivativeForVault;
     mapping(address => address) public vaultForNft;
 
-    constructor(RemyVaultFactory vaultFactory_, RemyVaultHook hook_, address owner_) {
+    constructor(wNFTFactory vaultFactory_, wNFTHook hook_, address owner_) {
         if (address(vaultFactory_) == address(0) || address(hook_) == address(0) || owner_ == address(0)) {
             revert ZeroAddress();
         }
@@ -148,8 +148,8 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         if (params.tickLower >= params.tickUpper) revert InvalidTickRange();
         if (params.liquidity == 0) revert ZeroLiquidity();
 
-        RemyVaultNFT derivativeNft =
-            new RemyVaultNFT(params.nftName, params.nftSymbol, params.nftBaseUri, address(this));
+        wNFTNFT derivativeNft =
+            new wNFTNFT(params.nftName, params.nftSymbol, params.nftBaseUri, address(this));
 
         nft = address(derivativeNft);
         vault = VAULT_FACTORY.deployDerivativeVault(nft, params.maxSupply, params.salt);
@@ -176,8 +176,8 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         HOOK.addChild(childKey, true, rootKey);
         POOL_MANAGER.initialize(childKey, normalizedSqrtPrice);
 
-        MinterRemyVault derivativeToken = MinterRemyVault(vault);
-        RemyVault parentToken = RemyVault(parentVault);
+        wNFTMinter derivativeToken = wNFTMinter(vault);
+        wNFT parentToken = wNFT(parentVault);
 
         if (params.parentTokenContribution != 0) {
             parentToken.transferFrom(msg.sender, address(this), params.parentTokenContribution);

@@ -3,18 +3,18 @@ pragma solidity ^0.8.20;
 
 import {IERC721} from "./interfaces/IERC721.sol";
 import {IERCXX} from "./interfaces/IERCXX.sol";
-import {RemyVaultEIP712} from "./RemyVaultEIP712.sol";
+import {wNFTEIP712} from "./wNFTEIP712.sol";
 
-contract RemyVault is RemyVaultEIP712, IERCXX {
+contract wNFT is wNFTEIP712, IERCXX {
     /// @notice Number of ERC20 tokens minted per deposited NFT.
     uint256 public constant UNIT = 1e18;
 
-    /// @notice The ERC721 collection held by the vault (unused until deposit logic is ported).
+    /// @notice The ERC721 collection held by the vault 
     IERC721 private immutable ERC721_TOKEN;
 
     error ZeroCollectionAddress();
 
-    constructor(address erc721_) RemyVaultEIP712(erc721_) {
+    constructor(address erc721_) wNFTEIP712(erc721_) {
         if (erc721_ == address(0)) revert ZeroCollectionAddress();
         ERC721_TOKEN = IERC721(erc721_);
     }

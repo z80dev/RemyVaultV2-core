@@ -3,7 +3,7 @@ pragma solidity >=0.8.7 <0.9.0;
 
 /**
  * @title ReentrancyAttacker
- * @dev A contract designed to test reentrancy protection in RemyVault contracts
+ * @dev A contract designed to test reentrancy protection in wNFT contracts
  *
  * This contract attempts to exploit potential reentrancy vulnerabilities by invoking
  * additional vault functions during callback hooks (like onERC721Received). It can be

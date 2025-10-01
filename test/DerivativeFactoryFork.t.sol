@@ -5,10 +5,10 @@ import {BaseTest} from "./BaseTest.t.sol";
 import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
-import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
-import {RemyVaultHook} from "../src/RemyVaultHook.sol";
-import {RemyVaultNFT} from "../src/RemyVaultNFT.sol";
-import {RemyVault} from "../src/RemyVault.sol";
+import {wNFTFactory} from "../src/wNFTFactory.sol";
+import {wNFTHook} from "../src/wNFTHook.sol";
+import {wNFTNFT} from "../src/wNFTNFT.sol";
+import {wNFT} from "../src/wNFT.sol";
 import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
@@ -35,8 +35,8 @@ contract DerivativeFactoryForkTest is BaseTest, DerivativeTestUtils {
     address internal constant POOL_MANAGER_ADDRESS = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     IPoolManager internal constant POOL_MANAGER = IPoolManager(POOL_MANAGER_ADDRESS);
 
-    RemyVaultFactory internal vaultFactory;
-    RemyVaultHook internal hook;
+    wNFTFactory internal vaultFactory;
+    wNFTHook internal hook;
     DerivativeFactory internal factory;
     MockERC721Simple internal parentCollection;
 
@@ -44,12 +44,12 @@ contract DerivativeFactoryForkTest is BaseTest, DerivativeTestUtils {
         super.setUp();
         vm.deal(address(this), 1_000_000 ether);
 
-        vaultFactory = new RemyVaultFactory();
+        vaultFactory = new wNFTFactory();
         parentCollection = new MockERC721Simple("Parent Collection", "PRNT");
 
         vm.etch(HOOK_ADDRESS, hex"");
-        deployCodeTo("RemyVaultHook.sol:RemyVaultHook", abi.encode(POOL_MANAGER, address(this)), HOOK_ADDRESS);
-        hook = RemyVaultHook(HOOK_ADDRESS);
+        deployCodeTo("wNFTHook.sol:wNFTHook", abi.encode(POOL_MANAGER, address(this)), HOOK_ADDRESS);
+        hook = wNFTHook(HOOK_ADDRESS);
 
         factory = new DerivativeFactory(vaultFactory, hook, address(this));
         hook.transferOwnership(address(factory));
@@ -86,11 +86,11 @@ contract DerivativeFactoryForkTest is BaseTest, DerivativeTestUtils {
             tokenIds[i] = tokenId;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         DerivativeFactory.DerivativeParams memory params;
-        params.parentCollection = RemyVault(parentVault).erc721();
+        params.parentCollection = wNFT(parentVault).erc721();
         params.nftName = "Derivative Collection";
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://derivative/";
@@ -117,7 +117,7 @@ contract DerivativeFactoryForkTest is BaseTest, DerivativeTestUtils {
         assertEq(infoParent, parentVault, "derivative info parent mismatch");
         assertEq(PoolId.unwrap(infoPoolId), PoolId.unwrap(childPoolId), "derivative info pool mismatch");
 
-        RemyVaultNFT nft = RemyVaultNFT(derivativeNft);
+        wNFTNFT nft = wNFTNFT(derivativeNft);
         assertEq(nft.owner(), nftOwner, "nft owner mismatch");
         assertEq(nft.baseUri(), "ipfs://derivative/", "nft base URI mismatch");
         assertTrue(nft.isMinter(saleMinter), "minter not configured");

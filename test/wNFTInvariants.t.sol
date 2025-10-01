@@ -3,9 +3,9 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
-import {RemyVault} from "../src/RemyVault.sol";
-import {MinterRemyVault} from "../src/MinterRemyVault.sol";
-import {RemyVaultNFT} from "../src/RemyVaultNFT.sol";
+import {wNFT} from "../src/wNFT.sol";
+import {wNFTMinter} from "../src/wNFTMinter.sol";
+import {wNFTNFT} from "../src/wNFTNFT.sol";
 import {IERC721} from "../src/interfaces/IERC721.sol";
 import {IERC20} from "../src/interfaces/IERC20.sol";
 
@@ -25,7 +25,7 @@ interface Ownable {
  * @dev Handler contract for invariant testing that performs random operations
  */
 contract RemyVaultInvariantHandler is Test {
-    RemyVault public vault;
+    wNFT public vault;
     IMockERC721 public nft;
 
     address[] public actors;
@@ -36,7 +36,7 @@ contract RemyVaultInvariantHandler is Test {
     uint256 public depositCount;
     uint256 public withdrawCount;
 
-    constructor(RemyVault _vault, IMockERC721 _nft) {
+    constructor(wNFT _vault, IMockERC721 _nft) {
         vault = _vault;
         nft = _nft;
 
@@ -156,16 +156,16 @@ contract RemyVaultInvariantHandler is Test {
 
 /**
  * @title RemyVaultInvariantTest
- * @dev Property-based invariant tests for RemyVault
+ * @dev Property-based invariant tests for wNFT
  */
 contract RemyVaultInvariantTest is StdInvariant, Test {
-    RemyVault public vault;
+    wNFT public vault;
     IMockERC721 public nft;
     RemyVaultInvariantHandler public handler;
 
     function setUp() public {
         nft = IMockERC721(deployCode("MockERC721", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
-        vault = new RemyVault(address(nft));
+        vault = new wNFT(address(nft));
 
         Ownable(address(nft)).transfer_ownership(address(vault));
 
@@ -277,18 +277,18 @@ contract RemyVaultInvariantTest is StdInvariant, Test {
 
 /**
  * @title MinterRemyVaultInvariantHandler
- * @dev Handler for MinterRemyVault invariant testing
+ * @dev Handler for wNFTMinter invariant testing
  */
 contract MinterRemyVaultInvariantHandler is Test {
-    MinterRemyVault public vault;
-    RemyVaultNFT public nft;
+    wNFTMinter public vault;
+    wNFTNFT public nft;
 
     address[] public actors;
     uint256 public totalMinted;
     uint256 public totalDeposited;
     uint256 public totalWithdrawn;
 
-    constructor(MinterRemyVault _vault, RemyVaultNFT _nft) {
+    constructor(wNFTMinter _vault, wNFTNFT _nft) {
         vault = _vault;
         nft = _nft;
 
@@ -401,18 +401,18 @@ contract MinterRemyVaultInvariantHandler is Test {
 
 /**
  * @title MinterRemyVaultInvariantTest
- * @dev Property-based invariant tests for MinterRemyVault
+ * @dev Property-based invariant tests for wNFTMinter
  */
 contract MinterRemyVaultInvariantTest is StdInvariant, Test {
-    MinterRemyVault public vault;
-    RemyVaultNFT public nft;
+    wNFTMinter public vault;
+    wNFTNFT public nft;
     MinterRemyVaultInvariantHandler public handler;
 
     uint256 constant MAX_SUPPLY = 20;
 
     function setUp() public {
-        nft = new RemyVaultNFT("Derivative", "DRV", "ipfs://", address(this));
-        vault = new MinterRemyVault(address(nft), MAX_SUPPLY);
+        nft = new wNFTNFT("Derivative", "DRV", "ipfs://", address(this));
+        vault = new wNFTMinter(address(nft), MAX_SUPPLY);
         nft.setMinter(address(vault), true);
 
         handler = new MinterRemyVaultInvariantHandler(vault, nft);

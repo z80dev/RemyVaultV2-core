@@ -1,14 +1,14 @@
-# RemyVaultV2 Test Suite
+# wNFTV2 Test Suite
 
-This directory contains the comprehensive test suite for the RemyVault protocol.
+This directory contains the comprehensive test suite for the wNFT protocol.
 
 ## Overview
 
-The RemyVault protocol is a vault system allowing users to deposit ERC721 tokens (NFTs) and receive ERC20 tokens in return at a fixed exchange rate. The core invariant of the system is that the total ERC20 token supply always equals the number of NFTs held by the vault multiplied by the UNIT value (1000 * 10^18).
+The wNFT protocol is a vault system allowing users to deposit ERC721 tokens (NFTs) and receive ERC20 tokens in return at a fixed exchange rate. The core invariant of the system is that the total ERC20 token supply always equals the number of NFTs held by the vault multiplied by the UNIT value (1000 * 10^18).
 
 ## Test Files
 
-- **RemyVault.t.sol**: Main test file covering all core functionality and security properties
+- **wNFT.t.sol**: Main test file covering all core functionality and security properties
 - **helpers/ReentrancyAttacker.sol**: Helper contract used to test reentrancy protection
 
 ## Test Categories

@@ -6,20 +6,6 @@ import {DerivativeFactory} from "../src/DerivativeFactory.sol";
 
 /// @notice Test utilities for derivative vault address prediction and salt mining
 abstract contract DerivativeTestUtils is Test {
-    /// @notice Predict the derivative vault address for given parameters and salt
-    /// @param factory The DerivativeFactory instance
-    /// @param nftAddress The address of the derivative NFT collection
-    /// @param maxSupply The maximum supply of derivative NFTs
-    /// @param salt The salt for CREATE2 deployment
-    /// @return The predicted address of the derivative vault
-    function predictDerivativeAddress(DerivativeFactory factory, address nftAddress, uint256 maxSupply, bytes32 salt)
-        internal
-        view
-        returns (address)
-    {
-        return factory.computeDerivativeAddress(nftAddress, maxSupply, salt);
-    }
-
     /// @notice Predict both the NFT and vault addresses for a derivative deployment
     /// @param factory The DerivativeFactory instance
     /// @param maxSupply The maximum supply of derivative NFTs

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {RemyVault} from "../src/RemyVault.sol";
+import {wNFT} from "../src/wNFT.sol";
 import {IERC721} from "../src/interfaces/IERC721.sol";
 import {IERC20} from "../src/interfaces/IERC20.sol";
 
@@ -19,7 +19,7 @@ interface Ownable {
 
 /**
  * @title RemyVaultEIP712Test
- * @dev Comprehensive test suite for EIP712 permit functionality in RemyVault
+ * @dev Comprehensive test suite for EIP712 permit functionality in wNFT
  *
  * Tests cover:
  * - Valid permit signatures with correct parameters
@@ -31,7 +31,7 @@ interface Ownable {
  * - Edge cases (max approvals, expired permits)
  */
 contract RemyVaultEIP712Test is Test {
-    RemyVault public vault;
+    wNFT public vault;
     IMockERC721 public nft;
 
     address public owner;
@@ -54,7 +54,7 @@ contract RemyVaultEIP712Test is Test {
 
         // Deploy contracts
         nft = IMockERC721(deployCode("MockERC721", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
-        vault = new RemyVault(address(nft));
+        vault = new wNFT(address(nft));
 
         // Transfer NFT ownership to vault for minting
         Ownable(address(nft)).transfer_ownership(address(vault));

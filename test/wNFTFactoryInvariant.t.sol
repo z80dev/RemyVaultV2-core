@@ -3,16 +3,16 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
-import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
-import {RemyVault} from "../src/RemyVault.sol";
+import {wNFTFactory} from "../src/wNFTFactory.sol";
+import {wNFT} from "../src/wNFT.sol";
 import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
 
 contract RemyVaultFactoryInvariantTest is Test {
-    RemyVaultFactory internal factory;
+    wNFTFactory internal factory;
     FactoryHandler internal handler;
 
     function setUp() public {
-        factory = new RemyVaultFactory();
+        factory = new wNFTFactory();
         handler = new FactoryHandler(factory);
 
         targetContract(address(handler));
@@ -32,7 +32,7 @@ contract RemyVaultFactoryInvariantTest is Test {
             assertTrue(factory.isVault(vault), "vault flag missing for deployed vault");
             assertFalse(factory.isVault(collection), "collection incorrectly flagged as vault");
             assertEq(factory.vaultFor(vault), address(0), "vault address reused as collection");
-            assertEq(RemyVault(vault).erc721(), collection, "vault erc721 target mismatch");
+            assertEq(wNFT(vault).erc721(), collection, "vault erc721 target mismatch");
 
             address predicted = factory.computeAddress(collection);
             assertEq(predicted, vault, "computeAddress no longer deterministic");
@@ -43,13 +43,13 @@ contract RemyVaultFactoryInvariantTest is Test {
 contract FactoryHandler {
     uint256 internal constant MAX_TRACKED = 32;
 
-    RemyVaultFactory internal immutable factory;
+    wNFTFactory internal immutable factory;
 
     address[] internal collections;
     address[] internal vaults;
     mapping(uint160 => address) internal knownCollections;
 
-    constructor(RemyVaultFactory factory_) {
+    constructor(wNFTFactory factory_) {
         factory = factory_;
     }
 

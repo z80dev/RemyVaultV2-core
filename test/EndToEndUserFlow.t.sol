@@ -6,11 +6,11 @@ import {console2} from "forge-std/console2.sol";
 import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
-import {MinterRemyVault} from "../src/MinterRemyVault.sol";
-import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
-import {RemyVaultHook} from "../src/RemyVaultHook.sol";
-import {RemyVaultNFT} from "../src/RemyVaultNFT.sol";
-import {RemyVault} from "../src/RemyVault.sol";
+import {wNFTMinter} from "../src/wNFTMinter.sol";
+import {wNFTFactory} from "../src/wNFTFactory.sol";
+import {wNFTHook} from "../src/wNFTHook.sol";
+import {wNFTNFT} from "../src/wNFTNFT.sol";
+import {wNFT} from "../src/wNFT.sol";
 import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
@@ -55,8 +55,8 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
     uint160 internal constant HOOK_FLAGS = Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG
         | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG;
 
-    RemyVaultFactory internal vaultFactory;
-    RemyVaultHook internal hook;
+    wNFTFactory internal vaultFactory;
+    wNFTHook internal hook;
     DerivativeFactory internal derivativeFactory;
     PoolManager internal poolManager;
     PoolModifyLiquidityTest internal modifyRouter;
@@ -67,9 +67,9 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
     address internal alice; // Main user for the flow
     address internal bob; // Secondary user for trading
 
-    RemyVault internal parentVault;
-    MinterRemyVault internal derivativeVault;
-    RemyVaultNFT internal derivativeNft;
+    wNFT internal parentVault;
+    wNFTMinter internal derivativeVault;
+    wNFTNFT internal derivativeNft;
     PoolKey internal rootPoolKey;
     PoolKey internal childPoolKey;
     PoolId internal rootPoolId;
@@ -90,15 +90,15 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
         address baseHookAddress = address(0x4444000000000000000000000000000000000000);
         address hookAddress = address(uint160((uint160(baseHookAddress) & CLEAR_HOOK_PERMISSIONS_MASK) | HOOK_FLAGS));
         vm.etch(hookAddress, hex"");
-        deployCodeTo("RemyVaultHook.sol:RemyVaultHook", abi.encode(poolManager, protocolOwner), hookAddress);
-        hook = RemyVaultHook(hookAddress);
+        deployCodeTo("wNFTHook.sol:wNFTHook", abi.encode(poolManager, protocolOwner), hookAddress);
+        hook = wNFTHook(hookAddress);
 
         // Deploy routers
         modifyRouter = new PoolModifyLiquidityTest(IPoolManager(address(poolManager)));
         swapRouter = new PoolSwapTest(IPoolManager(address(poolManager)));
 
         // Deploy factories
-        vaultFactory = new RemyVaultFactory();
+        vaultFactory = new wNFTFactory();
         derivativeFactory = new DerivativeFactory(vaultFactory, hook, protocolOwner);
         hook.transferOwnership(address(derivativeFactory));
 
@@ -128,7 +128,7 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
         (address parentVaultAddr, PoolId rootId) =
             derivativeFactory.createVaultForCollection(address(nftCollection), SQRT_PRICE_1_1);
 
-        parentVault = RemyVault(parentVaultAddr);
+        parentVault = wNFT(parentVaultAddr);
         rootPoolId = rootId;
 
         // Alice deposits NFTs
@@ -190,8 +190,8 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
         parentVault.approve(address(derivativeFactory), type(uint256).max);
         (address derivNftAddr, address derivVaultAddr, PoolId childId) = derivativeFactory.createDerivative(params);
 
-        derivativeNft = RemyVaultNFT(derivNftAddr);
-        derivativeVault = MinterRemyVault(derivVaultAddr);
+        derivativeNft = wNFTNFT(derivNftAddr);
+        derivativeVault = wNFTMinter(derivVaultAddr);
         childPoolId = childId;
         childPoolKey = _buildPoolKey(address(derivativeVault), address(parentVault), 3000, 60, address(hook));
 
@@ -403,7 +403,7 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
         (address setupVaultAddr, PoolId rootId) =
             derivativeFactory.createVaultForCollection(address(nftCollection), SQRT_PRICE_1_1);
 
-        parentVault = RemyVault(setupVaultAddr);
+        parentVault = wNFT(setupVaultAddr);
         rootPoolId = rootId;
 
         uint256[] memory depositIds = new uint256[](100);
@@ -449,8 +449,8 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
         parentVault.approve(address(derivativeFactory), type(uint256).max);
         (address nftAddr, address derivVaultAddr, PoolId childId) = derivativeFactory.createDerivative(params);
 
-        derivativeNft = RemyVaultNFT(nftAddr);
-        derivativeVault = MinterRemyVault(derivVaultAddr);
+        derivativeNft = wNFTNFT(nftAddr);
+        derivativeVault = wNFTMinter(derivVaultAddr);
         childPoolId = childId;
         childPoolKey = _buildPoolKey(address(derivativeVault), address(parentVault), 3000, 60, address(hook));
     }

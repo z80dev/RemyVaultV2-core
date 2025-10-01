@@ -15,17 +15,17 @@
 | **DerivativeFactoryTest** | **20** | **0** | ✅ **PASS** |
 | DerivativeFactoryForkTest | 1 | 0 | ✅ PASS |
 | EndToEndUserFlowTest | 1 | 2 | ⚠️ PARTIAL |
-| **MinterRemyVaultTest** | **24** | **0** | ✅ **PASS** |
-| RemyVaultTest | 22 | 0 | ✅ PASS |
-| RemyVaultAccountInvariantTest | 2 | 0 | ✅ PASS |
-| **RemyVaultEIP712Test** | **14** | **0** | ✅ **PASS** |
-| RemyVaultFactoryTest | 6 | 0 | ✅ PASS |
-| RemyVaultFactoryInvariantTest | 1 | 0 | ✅ PASS |
-| RemyVaultHookForkTest | 6 | 0 | ✅ PASS |
-| RemyVaultHookIntegrationTest | 1 | 0 | ✅ PASS |
-| **MinterRemyVaultInvariantTest** | **4** | **0** | ✅ **PASS** |
-| **RemyVaultInvariantTest** | **6** | **0** | ✅ **PASS** |
-| RemyVaultNFTBatchTest | 4 | 0 | ✅ PASS |
+| **MinterwNFTTest** | **24** | **0** | ✅ **PASS** |
+| wNFTTest | 22 | 0 | ✅ PASS |
+| wNFTAccountInvariantTest | 2 | 0 | ✅ PASS |
+| **wNFTEIP712Test** | **14** | **0** | ✅ **PASS** |
+| wNFTFactoryTest | 6 | 0 | ✅ PASS |
+| wNFTFactoryInvariantTest | 1 | 0 | ✅ PASS |
+| wNFTHookForkTest | 6 | 0 | ✅ PASS |
+| wNFTHookIntegrationTest | 1 | 0 | ✅ PASS |
+| **MinterwNFTInvariantTest** | **4** | **0** | ✅ **PASS** |
+| **wNFTInvariantTest** | **6** | **0** | ✅ **PASS** |
+| wNFTNFTBatchTest | 4 | 0 | ✅ PASS |
 
 **Bold** = New test suites added during this implementation
 
@@ -33,7 +33,7 @@
 
 ## ✅ All New Tests Passing
 
-### 1. RemyVaultEIP712Test (14/14 tests passing)
+### 1. wNFTEIP712Test (14/14 tests passing)
 Complete EIP712 permit functionality validation:
 - ✅ Valid permit signatures
 - ✅ Replay protection (nonce management)
@@ -44,7 +44,7 @@ Complete EIP712 permit functionality validation:
 - ✅ Fuzz testing
 - ✅ Domain separator validation
 
-### 2. MinterRemyVaultTest (24/24 tests passing)
+### 2. MinterwNFTTest (24/24 tests passing)
 Comprehensive derivative vault coverage:
 - ✅ Constructor validations (including overflow protection)
 - ✅ Mint limit enforcement
@@ -67,7 +67,7 @@ Full factory deployment and edge case coverage:
 
 ### 4. Property-Based Invariant Tests (10/10 tests passing)
 
-**RemyVaultInvariantTest** (6 invariants):
+**wNFTInvariantTest** (6 invariants):
 - ✅ Token supply equals NFT balance × UNIT
 - ✅ Sum of balances equals total supply
 - ✅ Vault owns all NFTs
@@ -75,7 +75,7 @@ Full factory deployment and edge case coverage:
 - ✅ No token leakage
 - ✅ Allowance validity
 
-**MinterRemyVaultInvariantTest** (4 invariants):
+**MinterwNFTInvariantTest** (4 invariants):
 - ✅ Supply accounting formula
 - ✅ Minted count within limits
 - ✅ NFT supply equals minted count
@@ -91,7 +91,7 @@ Both failing tests have the same root cause related to Uniswap V4 hook integrati
 1. **test_CompleteUserJourney** - `WrappedError(0x4444...Cc, ...)`
 2. **test_MultipleUsersTrading** - `WrappedError(0x4444...Cc, ...)`
 
-**Root Cause**: These tests interact with the RemyVaultHook in a Uniswap V4 pool context. The error occurs during liquidity modification or swap operations, likely due to:
+**Root Cause**: These tests interact with the wNFTHook in a Uniswap V4 pool context. The error occurs during liquidity modification or swap operations, likely due to:
 - Hook callback expectations not matching the test setup
 - Pool initialization state issues
 - Currency/token routing mismatches in the complex pool hierarchy
@@ -123,13 +123,13 @@ Both failing tests have the same root cause related to Uniswap V4 hook integrati
 ### Coverage by Contract
 | Contract | Test Coverage | Status |
 |----------|--------------|--------|
-| RemyVault | Excellent | ✅ |
-| RemyVaultEIP712 | Comprehensive | ✅ |
-| MinterRemyVault | Comprehensive | ✅ |
-| RemyVaultFactory | Good | ✅ |
+| wNFT | Excellent | ✅ |
+| wNFTEIP712 | Comprehensive | ✅ |
+| MinterwNFT | Comprehensive | ✅ |
+| wNFTFactory | Good | ✅ |
 | DerivativeFactory | Comprehensive | ✅ |
-| RemyVaultHook | Good | ✅ |
-| RemyVaultNFT | Good | ✅ |
+| wNFTHook | Good | ✅ |
+| wNFTNFT | Good | ✅ |
 
 ---
 
@@ -146,7 +146,7 @@ Both failing tests have the same root cause related to Uniswap V4 hook integrati
 - Replay protection validated
 - All edge cases handled
 
-### 3. MinterRemyVault Deeply Tested
+### 3. MinterwNFT Deeply Tested
 - Grew from 7 to 24 test cases
 - Supply overflow protection verified
 - Boundary conditions fuzzed
@@ -194,10 +194,10 @@ Both failing tests have the same root cause related to Uniswap V4 hook integrati
 
 ### For Immediate Use
 The protocol is **production-ready** for core functionality:
-- ✅ Deploy RemyVault for NFT fractionalization
+- ✅ Deploy wNFT for NFT fractionalization
 - ✅ Use EIP712 permits for gasless approvals
-- ✅ Deploy MinterRemyVault for derivatives
-- ✅ Use RemyVaultFactory for deterministic deployments
+- ✅ Deploy MinterwNFT for derivatives
+- ✅ Use wNFTFactory for deterministic deployments
 
 ### For Full Integration
 To enable complete Uniswap V4 integration:
@@ -217,7 +217,7 @@ To enable complete Uniswap V4 integration:
 
 ## 🏆 Summary
 
-This implementation successfully added **comprehensive test coverage** to RemyVault V2:
+This implementation successfully added **comprehensive test coverage** to wNFT V2:
 
 - **113 tests passing** (98.3% pass rate)
 - **2,430 new lines of tests**

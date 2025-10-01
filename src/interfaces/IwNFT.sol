@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import {IERC20} from "./IERC20.sol";
 
-interface IRemyVault is IERC20 {
+interface IwNFT is IERC20 {
     // Events
     event Deposit(address indexed recipient, uint256[] tokenIds, uint256 erc20Amt);
     event Withdraw(address indexed recipient, uint256[] tokenIds, uint256 erc20Amt);

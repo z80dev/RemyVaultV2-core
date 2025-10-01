@@ -6,8 +6,8 @@ import "forge-std/StdJson.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
-import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
-import {RemyVaultHook} from "../src/RemyVaultHook.sol";
+import {wNFTFactory} from "../src/wNFTFactory.sol";
+import {wNFTHook} from "../src/wNFTHook.sol";
 
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
@@ -32,17 +32,17 @@ contract DeployProtocol is Script {
 
         bytes memory hookArgs = abi.encode(poolManager, DEPLOYER);
         (address predictedHook, bytes32 hookSalt) =
-            HookMiner.find(DEPLOYER, HOOK_FLAGS, type(RemyVaultHook).creationCode, hookArgs);
-        console2.log("predicted RemyVaultHook", predictedHook);
+            HookMiner.find(DEPLOYER, HOOK_FLAGS, type(wNFTHook).creationCode, hookArgs);
+        console2.log("predicted wNFTHook", predictedHook);
         console2.logBytes32(hookSalt);
 
         vm.startPrank(DEPLOYER);
-        RemyVaultHook hook = new RemyVaultHook{salt: hookSalt}(poolManager, DEPLOYER);
+        wNFTHook hook = new wNFTHook{salt: hookSalt}(poolManager, DEPLOYER);
         require(address(hook) == predictedHook, "Deploy: hook address mismatch");
-        console2.log("RemyVaultHook deployed", address(hook));
+        console2.log("wNFTHook deployed", address(hook));
 
-        RemyVaultFactory vaultFactory = new RemyVaultFactory();
-        console2.log("RemyVaultFactory deployed", address(vaultFactory));
+        wNFTFactory vaultFactory = new wNFTFactory();
+        console2.log("wNFTFactory deployed", address(vaultFactory));
 
         DerivativeFactory derivativeFactory = new DerivativeFactory(vaultFactory, hook, DEPLOYER);
         console2.log("DerivativeFactory deployed", address(derivativeFactory));
@@ -52,8 +52,8 @@ contract DeployProtocol is Script {
         console2.log("hook ownership moved to factory", hook.owner());
 
         console2.log("=== Deployment Summary ===");
-        console2.log("RemyVaultHook", address(hook));
-        console2.log("RemyVaultFactory", address(vaultFactory));
+        console2.log("wNFTHook", address(hook));
+        console2.log("wNFTFactory", address(vaultFactory));
         console2.log("DerivativeFactory", address(derivativeFactory));
     }
 

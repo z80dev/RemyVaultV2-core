@@ -1,17 +1,17 @@
 # Test Coverage Improvements Summary
 
 ## Overview
-This document summarizes the comprehensive test improvements implemented for RemyVault V2, addressing all recommendations from the initial codebase analysis.
+This document summarizes the comprehensive test improvements implemented for wNFT V2, addressing all recommendations from the initial codebase analysis.
 
 ## Implementation Summary
 
 ### ✅ All Recommendations Completed
 
-1. **EIP712 Permit Tests** - NEW FILE: `test/RemyVaultEIP712.t.sol` (403 lines)
-2. **Expanded MinterRemyVault Tests** - ENHANCED: `test/MinterRemyVault.t.sol` (288 lines, +213 lines)
+1. **EIP712 Permit Tests** - NEW FILE: `test/wNFTEIP712.t.sol` (403 lines)
+2. **Expanded MinterwNFT Tests** - ENHANCED: `test/MinterwNFT.t.sol` (288 lines, +213 lines)
 3. **Enhanced DerivativeFactory Tests** - ENHANCED: `test/DerivativeFactory.t.sol` (695 lines, +351 lines)
 4. **End-to-End Integration Tests** - NEW FILE: `test/EndToEndUserFlow.t.sol` (526 lines)
-5. **Property-Based Invariant Tests** - NEW FILE: `test/RemyVaultInvariants.t.sol` (518 lines)
+5. **Property-Based Invariant Tests** - NEW FILE: `test/wNFTInvariants.t.sol` (518 lines)
 6. **README Updates** - ENHANCED: Documentation for all contracts with accurate descriptions
 
 **Total New/Updated Test Lines**: 2,430 lines
@@ -19,7 +19,7 @@ This document summarizes the comprehensive test improvements implemented for Rem
 
 ---
 
-## 1. EIP712 Permit Tests (`test/RemyVaultEIP712.t.sol`)
+## 1. EIP712 Permit Tests (`test/wNFTEIP712.t.sol`)
 
 ### Coverage Added
 - ✅ Valid permit signatures with correct parameters
@@ -66,7 +66,7 @@ assertEq(domainSeparator, expectedDomainSeparator);
 
 ---
 
-## 2. Expanded MinterRemyVault Tests
+## 2. Expanded MinterwNFT Tests
 
 ### New Coverage Added
 - ✅ Constructor with zero max supply
@@ -94,8 +94,8 @@ assertEq(domainSeparator, expectedDomainSeparator);
 // Supply overflow protection
 function testConstructorSupplyOverflow() public {
     uint256 overflowSupply = type(uint256).max / vault.UNIT() + 1;
-    vm.expectRevert(MinterRemyVault.SupplyOverflow.selector);
-    new MinterRemyVault("Overflow Token", "OVR", address(nft), overflowSupply);
+    vm.expectRevert(MinterwNFT.SupplyOverflow.selector);
+    new MinterwNFT("Overflow Token", "OVR", address(nft), overflowSupply);
 }
 
 // Mint counter invariant
@@ -178,11 +178,11 @@ console2.log("Fees distributed to pool liquidity providers");
 
 ---
 
-## 5. Property-Based Invariant Tests (`test/RemyVaultInvariants.t.sol`)
+## 5. Property-Based Invariant Tests (`test/wNFTInvariants.t.sol`)
 
 ### Two Handler-Based Invariant Suites
 
-#### RemyVaultInvariantTest
+#### wNFTInvariantTest
 **Handler Actions**:
 - Random deposits (1-10 NFTs)
 - Random withdrawals (based on available balance)
@@ -198,7 +198,7 @@ console2.log("Fees distributed to pool liquidity providers");
 5. ✅ No token leakage (all tokens accounted for)
 6. ✅ Allowances are valid and non-negative
 
-#### MinterRemyVaultInvariantTest
+#### MinterwNFTInvariantTest
 **Handler Actions**:
 - Random minting (up to max supply)
 - Random deposits (derivative NFTs back to vault)
@@ -214,7 +214,7 @@ console2.log("Fees distributed to pool liquidity providers");
 ### Implementation Approach
 ```solidity
 // Fuzzer calls handler methods randomly
-contract RemyVaultInvariantHandler {
+contract wNFTInvariantHandler {
     function deposit(uint256 actorSeed, uint256 count) public {
         // Bounded random operations
         count = bound(count, 1, 10);
@@ -237,12 +237,12 @@ function invariant_tokenSupplyEqualsNftBalance() public view {
 ### New Sections Added
 
 #### Smart Contract Documentation
-- **RemyVault.sol**: Added EIP-2612 permit mention
-- **RemyVaultFactory.sol**: NEW - Complete documentation (formerly missing)
-- **MinterRemyVault.sol**: NEW - Derivative vault mechanics explained
+- **wNFT.sol**: Added EIP-2612 permit mention
+- **wNFTFactory.sol**: NEW - Complete documentation (formerly missing)
+- **MinterwNFT.sol**: NEW - Derivative vault mechanics explained
 - **DerivativeFactory.sol**: NEW - Orchestration and deployment flow
-- **RemyVaultHook.sol**: ENHANCED - Accurate fee structure (10% total, 75/25 split)
-- **RemyVaultNFT.sol**: NEW - Enumeration and permission system
+- **wNFTHook.sol**: ENHANCED - Accurate fee structure (10% total, 75/25 split)
+- **wNFTNFT.sol**: NEW - Enumeration and permission system
 
 #### Uniswap V4 Integration Section - REWRITTEN
 **Before**: Claimed "direct NFT trading" and "buy/sell functionality" within pools
@@ -259,7 +259,7 @@ function invariant_tokenSupplyEqualsNftBalance() public view {
 ### Before Implementation
 - Test Files: 12
 - Total Test Lines: 2,066
-- MinterRemyVault Tests: 7
+- MinterwNFT Tests: 7
 - DerivativeFactory Tests: 3
 - EIP712 Tests: 0
 - Integration Tests: 0 end-to-end
@@ -268,7 +268,7 @@ function invariant_tokenSupplyEqualsNftBalance() public view {
 ### After Implementation
 - Test Files: 17 (+5 new files)
 - Total Test Lines: 4,496 (+2,430 lines, 118% increase)
-- MinterRemyVault Tests: 27 (+20)
+- MinterwNFT Tests: 27 (+20)
 - DerivativeFactory Tests: 18 (+15)
 - EIP712 Tests: 16 (+16)
 - Integration Tests: 3 comprehensive end-to-end scenarios
@@ -278,12 +278,12 @@ function invariant_tokenSupplyEqualsNftBalance() public view {
 
 | Contract | Before | After | Improvement |
 |----------|--------|-------|-------------|
-| RemyVault | Good | Excellent | +EIP712 tests |
-| MinterRemyVault | Minimal | Comprehensive | +285% test cases |
+| wNFT | Good | Excellent | +EIP712 tests |
+| MinterwNFT | Minimal | Comprehensive | +285% test cases |
 | DerivativeFactory | Basic | Comprehensive | +500% test cases |
-| RemyVaultHook | Good | Good | No changes needed |
-| RemyVaultNFT | Good | Good | Covered in existing |
-| RemyVaultFactory | Good | Good | Covered in existing |
+| wNFTHook | Good | Good | No changes needed |
+| wNFTNFT | Good | Good | Covered in existing |
+| wNFTFactory | Good | Good | Covered in existing |
 
 ---
 
@@ -294,7 +294,7 @@ function invariant_tokenSupplyEqualsNftBalance() public view {
 - Validates replay protection, deadline enforcement, parameter matching
 - Includes fuzz testing for edge cases
 
-### 2. ✅ MinterRemyVault Shallow Coverage - RESOLVED
+### 2. ✅ MinterwNFT Shallow Coverage - RESOLVED
 - Expanded from 7 to 27 test cases
 - Added supply overflow protection tests
 - Comprehensive mint limit enforcement
@@ -317,7 +317,7 @@ function invariant_tokenSupplyEqualsNftBalance() public view {
 ### 5. ✅ Property-Based Testing - RESOLVED
 - Two handler-based invariant test suites
 - 10 critical invariants validated through random operation sequences
-- Covers both RemyVault and MinterRemyVault
+- Covers both wNFT and MinterwNFT
 - Catches edge cases that manual tests might miss
 
 ---
@@ -351,14 +351,14 @@ All new tests pass once Vyper compilation is configured. The core protocol logic
 forge test
 
 # Run specific test suites
-forge test --match-path test/RemyVaultEIP712.t.sol
-forge test --match-path test/MinterRemyVault.t.sol
+forge test --match-path test/wNFTEIP712.t.sol
+forge test --match-path test/MinterwNFT.t.sol
 forge test --match-path test/DerivativeFactory.t.sol
 forge test --match-path test/EndToEndUserFlow.t.sol
-forge test --match-path test/RemyVaultInvariants.t.sol
+forge test --match-path test/wNFTInvariants.t.sol
 
 # Run invariant tests with extended runs
-forge test --match-path test/RemyVaultInvariants.t.sol --fuzz-runs 1000
+forge test --match-path test/wNFTInvariants.t.sol --fuzz-runs 1000
 
 # Run with gas reporting
 forge test --gas-report
@@ -399,10 +399,10 @@ With this test coverage, the codebase is well-prepared for:
 All recommendations from the initial analysis have been fully implemented:
 
 ✅ **EIP712 Permit Tests**: 16 comprehensive tests covering all signature paths
-✅ **MinterRemyVault Coverage**: Expanded from 7 to 27 tests (+285%)
+✅ **MinterwNFT Coverage**: Expanded from 7 to 27 tests (+285%)
 ✅ **DerivativeFactory Edge Cases**: 15 new failure mode tests
 ✅ **End-to-End Integration**: Complete user journey validation
 ✅ **Property-Based Invariants**: 10 critical invariants with random testing
 ✅ **README Accuracy**: All contracts documented, hook functionality clarified
 
-The RemyVault V2 protocol now has **enterprise-grade test coverage** with 4,496 lines of tests validating all critical functionality, edge cases, and invariants. The codebase is production-ready and audit-ready.
+The wNFT V2 protocol now has **enterprise-grade test coverage** with 4,496 lines of tests validating all critical functionality, edge cases, and invariants. The codebase is production-ready and audit-ready.

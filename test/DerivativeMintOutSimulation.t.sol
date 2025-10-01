@@ -5,10 +5,10 @@ import {BaseTest} from "./BaseTest.t.sol";
 import {console2 as console} from "forge-std/console2.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
-import {MinterRemyVault} from "../src/MinterRemyVault.sol";
-import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
-import {RemyVaultHook} from "../src/RemyVaultHook.sol";
-import {RemyVault} from "../src/RemyVault.sol";
+import {wNFTMinter} from "../src/wNFTMinter.sol";
+import {wNFTFactory} from "../src/wNFTFactory.sol";
+import {wNFTHook} from "../src/wNFTHook.sol";
+import {wNFT} from "../src/wNFT.sol";
 import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
 import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
@@ -53,8 +53,8 @@ contract DerivativeMintOutSimulation is BaseTest, DerivativeTestUtils {
     uint256 internal constant CHILD_FEE_BPS = 750; // 7.5%
     uint256 internal constant PARENT_FEE_BPS = 250; // 2.5%
 
-    RemyVaultFactory internal vaultFactory;
-    RemyVaultHook internal hook;
+    wNFTFactory internal vaultFactory;
+    wNFTHook internal hook;
     DerivativeFactory internal factory;
     MockERC721Simple internal parentCollection;
     PoolSwapTest internal swapRouter;
@@ -66,12 +66,12 @@ contract DerivativeMintOutSimulation is BaseTest, DerivativeTestUtils {
         super.setUp();
         vm.deal(address(this), 1_000_000 ether);
 
-        vaultFactory = new RemyVaultFactory();
+        vaultFactory = new wNFTFactory();
         parentCollection = new MockERC721Simple("Parent Collection", "PRNT");
 
         vm.etch(HOOK_ADDRESS, hex"");
-        deployCodeTo("RemyVaultHook.sol:RemyVaultHook", abi.encode(POOL_MANAGER, address(this)), HOOK_ADDRESS);
-        hook = RemyVaultHook(HOOK_ADDRESS);
+        deployCodeTo("wNFTHook.sol:wNFTHook", abi.encode(POOL_MANAGER, address(this)), HOOK_ADDRESS);
+        hook = wNFTHook(HOOK_ADDRESS);
 
         factory = new DerivativeFactory(vaultFactory, hook, address(this));
         hook.transferOwnership(address(factory));
@@ -169,12 +169,12 @@ contract DerivativeMintOutSimulation is BaseTest, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         // Add liquidity to root pool
         (PoolKey memory rootKey,) = factory.rootPool(parentVault);
-        RemyVault(parentVault).approve(address(liquidityRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(liquidityRouter), type(uint256).max);
 
         IPoolManager.ModifyLiquidityParams memory rootLiqParams = IPoolManager.ModifyLiquidityParams({
             tickLower: -887220,
@@ -187,11 +187,11 @@ contract DerivativeMintOutSimulation is BaseTest, DerivativeTestUtils {
         console.log("\n--- INITIAL STATE ---");
         (uint160 initialParentPrice,,,) = POOL_MANAGER.getSlot0(rootPoolId);
         console.log("Parent/ETH sqrtPrice:", initialParentPrice);
-        console.log("Parent total supply:", RemyVault(parentVault).totalSupply() / 1e18);
+        console.log("Parent total supply:", wNFT(parentVault).totalSupply() / 1e18);
 
         // Create derivative
         DerivativeFactory.DerivativeParams memory params;
-        params.parentCollection = RemyVault(parentVault).erc721();
+        params.parentCollection = wNFT(parentVault).erc721();
         params.nftName = name;
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://test/";
@@ -212,7 +212,7 @@ contract DerivativeMintOutSimulation is BaseTest, DerivativeTestUtils {
         bool parentIsCurrency0 = Currency.unwrap(childKey.currency0) == parentVault;
 
         (uint160 initialDerivPrice,,,) = POOL_MANAGER.getSlot0(childPoolId);
-        uint256 derivativeSupply = MinterRemyVault(derivativeVault).totalSupply();
+        uint256 derivativeSupply = wNFTMinter(derivativeVault).totalSupply();
 
         console.log("\n--- DERIVATIVE POOL CREATED ---");
         console.log("Collection name:", name);
@@ -222,8 +222,8 @@ contract DerivativeMintOutSimulation is BaseTest, DerivativeTestUtils {
         console.log("Parent is currency0:", parentIsCurrency0);
 
         // Approve tokens for swapping
-        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
-        MinterRemyVault(derivativeVault).approve(address(swapRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(swapRouter), type(uint256).max);
+        wNFTMinter(derivativeVault).approve(address(swapRouter), type(uint256).max);
 
         console.log("\n--- SIMULATING MINT-OUT (BUYING ALL DERIVATIVES) ---");
 
@@ -236,7 +236,7 @@ contract DerivativeMintOutSimulation is BaseTest, DerivativeTestUtils {
         uint256 swapCount = 0;
 
         // Try to buy all available derivatives in chunks
-        uint256 derivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(this));
+        uint256 derivativeBalance = wNFTMinter(derivativeVault).balanceOf(address(this));
         uint256 targetToBuy = derivativeSupply - derivativeBalance; // Buy what we don't have
 
         // Attempt swaps until we've bought most of the supply or hit limits
@@ -244,8 +244,8 @@ contract DerivativeMintOutSimulation is BaseTest, DerivativeTestUtils {
         uint256 maxSwaps = 20; // Limit number of swaps to prevent infinite loops
 
         while (swapCount < maxSwaps) {
-            uint256 parentBalBefore = RemyVault(parentVault).balanceOf(address(this));
-            uint256 derivBalBefore = MinterRemyVault(derivativeVault).balanceOf(address(this));
+            uint256 parentBalBefore = wNFT(parentVault).balanceOf(address(this));
+            uint256 derivBalBefore = wNFTMinter(derivativeVault).balanceOf(address(this));
 
             // Adjust chunk size if we're running low on parent tokens
             uint256 actualChunkSize = chunkSize;
@@ -262,8 +262,8 @@ contract DerivativeMintOutSimulation is BaseTest, DerivativeTestUtils {
             });
 
             try swapRouter.swap(childKey, swapParams, settings, bytes("")) {
-                uint256 parentBalAfter = RemyVault(parentVault).balanceOf(address(this));
-                uint256 derivBalAfter = MinterRemyVault(derivativeVault).balanceOf(address(this));
+                uint256 parentBalAfter = wNFT(parentVault).balanceOf(address(this));
+                uint256 derivBalAfter = wNFTMinter(derivativeVault).balanceOf(address(this));
 
                 uint256 parentSpent = parentBalBefore - parentBalAfter;
                 uint256 derivReceived = derivBalAfter - derivBalBefore;
@@ -333,13 +333,13 @@ contract DerivativeMintOutSimulation is BaseTest, DerivativeTestUtils {
         }
 
         // Final supply check
-        uint256 finalDerivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(this));
+        uint256 finalDerivativeBalance = wNFTMinter(derivativeVault).balanceOf(address(this));
         uint256 percentBought = (finalDerivativeBalance * 100) / derivativeSupply;
 
         console.log("\n--- FINAL STATE ---");
         console.log("Derivative balance:", finalDerivativeBalance / 1e18, ".", (finalDerivativeBalance % 1e18) / 1e16);
         console.log("Percentage of supply acquired:", percentBought, "%");
-        console.log("Parent total supply:", RemyVault(parentVault).totalSupply() / 1e18);
+        console.log("Parent total supply:", wNFT(parentVault).totalSupply() / 1e18);
 
         console.log("\n================================================================");
         console.log("  SIMULATION COMPLETE");

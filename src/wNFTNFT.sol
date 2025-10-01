@@ -5,7 +5,7 @@ import {ERC721} from "solady/tokens/ERC721.sol";
 import {Ownable} from "solady/auth/Ownable.sol";
 import {LibString} from "solady/utils/LibString.sol";
 
-contract RemyVaultNFT is ERC721, Ownable {
+contract wNFTNFT is ERC721, Ownable {
     using LibString for uint256;
 
     event BaseUriSet(string baseUri);

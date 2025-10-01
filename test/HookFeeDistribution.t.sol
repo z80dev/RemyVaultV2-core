@@ -5,10 +5,10 @@ import {BaseTest} from "./BaseTest.t.sol";
 import {console2 as console} from "forge-std/console2.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
-import {MinterRemyVault} from "../src/MinterRemyVault.sol";
-import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
-import {RemyVaultHook} from "../src/RemyVaultHook.sol";
-import {RemyVault} from "../src/RemyVault.sol";
+import {wNFTMinter} from "../src/wNFTMinter.sol";
+import {wNFTFactory} from "../src/wNFTFactory.sol";
+import {wNFTHook} from "../src/wNFTHook.sol";
+import {wNFT} from "../src/wNFT.sol";
 import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
 import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
@@ -25,7 +25,7 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 
 /**
  * @title HookFeeDistributionTest
- * @notice Tests that verify the RemyVaultHook properly collects and distributes fees
+ * @notice Tests that verify the wNFTHook properly collects and distributes fees
  *
  * Fee Structure:
  * - Total fee: 10% of swap amount (1000 bps)
@@ -50,8 +50,8 @@ contract HookFeeDistributionTest is BaseTest, DerivativeTestUtils {
     address internal constant POOL_MANAGER_ADDRESS = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     IPoolManager internal constant POOL_MANAGER = IPoolManager(POOL_MANAGER_ADDRESS);
 
-    RemyVaultFactory internal vaultFactory;
-    RemyVaultHook internal hook;
+    wNFTFactory internal vaultFactory;
+    wNFTHook internal hook;
     DerivativeFactory internal factory;
     MockERC721Simple internal parentCollection;
     PoolSwapTest internal swapRouter;
@@ -63,12 +63,12 @@ contract HookFeeDistributionTest is BaseTest, DerivativeTestUtils {
         super.setUp();
         vm.deal(address(this), 1_000_000 ether);
 
-        vaultFactory = new RemyVaultFactory();
+        vaultFactory = new wNFTFactory();
         parentCollection = new MockERC721Simple("Parent Collection", "PRNT");
 
         vm.etch(HOOK_ADDRESS, hex"");
-        deployCodeTo("RemyVaultHook.sol:RemyVaultHook", abi.encode(POOL_MANAGER, address(this)), HOOK_ADDRESS);
-        hook = RemyVaultHook(HOOK_ADDRESS);
+        deployCodeTo("wNFTHook.sol:wNFTHook", abi.encode(POOL_MANAGER, address(this)), HOOK_ADDRESS);
+        hook = wNFTHook(HOOK_ADDRESS);
 
         factory = new DerivativeFactory(vaultFactory, hook, address(this));
         hook.transferOwnership(address(factory));
@@ -106,12 +106,12 @@ contract HookFeeDistributionTest is BaseTest, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         // Add liquidity to root pool
         (PoolKey memory rootKey,) = factory.rootPool(parentVault);
-        RemyVault(parentVault).approve(address(liquidityRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(liquidityRouter), type(uint256).max);
 
         IPoolManager.ModifyLiquidityParams memory rootLiqParams = IPoolManager.ModifyLiquidityParams({
             tickLower: -887220,
@@ -130,7 +130,7 @@ contract HookFeeDistributionTest is BaseTest, DerivativeTestUtils {
 
         // Create derivative
         DerivativeFactory.DerivativeParams memory params;
-        params.parentCollection = RemyVault(parentVault).erc721();
+        params.parentCollection = wNFT(parentVault).erc721();
         params.nftName = "Derivative";
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://test/";
@@ -160,8 +160,8 @@ contract HookFeeDistributionTest is BaseTest, DerivativeTestUtils {
         console.log("Parent is currency0 in child pool:", parentIsCurrency0);
 
         // Approve for swapping
-        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
-        MinterRemyVault(derivativeVault).approve(address(swapRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(swapRouter), type(uint256).max);
+        wNFTMinter(derivativeVault).approve(address(swapRouter), type(uint256).max);
 
         console.log("\n--- Executing Swap on Child Pool ---");
         console.log("Swapping 10 parent tokens for derivative tokens");
@@ -216,11 +216,11 @@ contract HookFeeDistributionTest is BaseTest, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).deposit(tokenIds, address(this));
 
         // Add liquidity to root pool
         (PoolKey memory rootKey,) = factory.rootPool(parentVault);
-        RemyVault(parentVault).approve(address(liquidityRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(liquidityRouter), type(uint256).max);
 
         IPoolManager.ModifyLiquidityParams memory rootLiqParams = IPoolManager.ModifyLiquidityParams({
             tickLower: -887220,
@@ -234,7 +234,7 @@ contract HookFeeDistributionTest is BaseTest, DerivativeTestUtils {
         console.log("Root pool has no parent - should keep all 10% fee");
 
         // Execute swap on root pool
-        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(swapRouter), type(uint256).max);
 
         console.log("\n--- Executing Swap on Root Pool ---");
         console.log("Swapping 5 parent tokens for ETH");
@@ -275,11 +275,11 @@ contract HookFeeDistributionTest is BaseTest, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         (PoolKey memory rootKey,) = factory.rootPool(parentVault);
-        RemyVault(parentVault).approve(address(liquidityRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(liquidityRouter), type(uint256).max);
 
         IPoolManager.ModifyLiquidityParams memory rootLiqParams = IPoolManager.ModifyLiquidityParams({
             tickLower: -887220,
@@ -291,7 +291,7 @@ contract HookFeeDistributionTest is BaseTest, DerivativeTestUtils {
 
         // Create derivative
         DerivativeFactory.DerivativeParams memory params;
-        params.parentCollection = RemyVault(parentVault).erc721();
+        params.parentCollection = wNFT(parentVault).erc721();
         params.nftName = "Derivative";
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://test/";
@@ -311,8 +311,8 @@ contract HookFeeDistributionTest is BaseTest, DerivativeTestUtils {
         PoolKey memory childKey = _buildChildKey(derivativeVault, parentVault, 3000, 60);
         bool parentIsCurrency0 = Currency.unwrap(childKey.currency0) == parentVault;
 
-        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
-        MinterRemyVault(derivativeVault).approve(address(swapRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(swapRouter), type(uint256).max);
+        wNFTMinter(derivativeVault).approve(address(swapRouter), type(uint256).max);
 
         console.log("--- Executing 5 Sequential Swaps ---\n");
 

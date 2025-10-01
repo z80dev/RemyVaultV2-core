@@ -3,20 +3,20 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 
-import {MinterRemyVault} from "../src/MinterRemyVault.sol";
-import {RemyVaultNFT} from "../src/RemyVaultNFT.sol";
+import {wNFTMinter} from "../src/wNFTMinter.sol";
+import {wNFTNFT} from "../src/wNFTNFT.sol";
 
 contract MinterRemyVaultTest is Test {
-    MinterRemyVault internal vault;
-    RemyVaultNFT internal nft;
+    wNFTMinter internal vault;
+    wNFTNFT internal nft;
     address internal alice;
     address internal bob;
 
     function setUp() public {
         alice = makeAddr("alice");
         bob = makeAddr("bob");
-        nft = new RemyVaultNFT("Derivative", "DRV", "ipfs://", address(this));
-        vault = new MinterRemyVault(address(nft), 10);
+        nft = new wNFTNFT("Derivative", "DRV", "ipfs://", address(this));
+        vault = new wNFTMinter(address(nft), 10);
         nft.setMinter(address(vault), true);
     }
 
@@ -34,8 +34,8 @@ contract MinterRemyVaultTest is Test {
     }
 
     function testConstructorWithZeroMaxSupply() public {
-        RemyVaultNFT zeroNft = new RemyVaultNFT("Zero", "ZERO", "ipfs://", address(this));
-        MinterRemyVault zeroVault = new MinterRemyVault(address(zeroNft), 0);
+        wNFTNFT zeroNft = new wNFTNFT("Zero", "ZERO", "ipfs://", address(this));
+        wNFTMinter zeroVault = new wNFTMinter(address(zeroNft), 0);
 
         assertEq(zeroVault.totalSupply(), 0, "should have zero supply");
         assertEq(zeroVault.maxSupply(), 0, "should have zero max supply");
@@ -43,13 +43,13 @@ contract MinterRemyVaultTest is Test {
     }
 
     function testConstructorSupplyOverflow() public {
-        RemyVaultNFT overflowNft = new RemyVaultNFT("Overflow", "OVR", "ipfs://", address(this));
+        wNFTNFT overflowNft = new wNFTNFT("Overflow", "OVR", "ipfs://", address(this));
 
         // Try to create vault with maxSupply that would overflow when multiplied by UNIT
         uint256 overflowSupply = type(uint256).max / vault.UNIT() + 1;
 
-        vm.expectRevert(MinterRemyVault.SupplyOverflow.selector);
-        new MinterRemyVault(address(overflowNft), overflowSupply);
+        vm.expectRevert(wNFTMinter.SupplyOverflow.selector);
+        new wNFTMinter(address(overflowNft), overflowSupply);
     }
 
     function testMintBurnsAndIssuesNfts() public {
@@ -113,7 +113,7 @@ contract MinterRemyVaultTest is Test {
         vm.prank(address(this));
         vault.mint(10, address(this));
 
-        vm.expectRevert(MinterRemyVault.MintLimitExceeded.selector);
+        vm.expectRevert(wNFTMinter.MintLimitExceeded.selector);
         vault.mint(1, address(this));
     }
 
@@ -122,7 +122,7 @@ contract MinterRemyVaultTest is Test {
         vault.mint(5, address(this));
 
         // Try to mint 6 more when only 5 remain
-        vm.expectRevert(MinterRemyVault.MintLimitExceeded.selector);
+        vm.expectRevert(wNFTMinter.MintLimitExceeded.selector);
         vault.mint(6, address(this));
     }
 
@@ -193,17 +193,17 @@ contract MinterRemyVaultTest is Test {
         vault.deposit(someIds, address(this));
 
         // Now have tokens but still cannot mint
-        vm.expectRevert(MinterRemyVault.MintLimitExceeded.selector);
+        vm.expectRevert(wNFTMinter.MintLimitExceeded.selector);
         vault.mint(1, address(this));
     }
 
     function testMintZeroRecipientReverts() public {
-        vm.expectRevert(MinterRemyVault.RecipientZero.selector);
+        vm.expectRevert(wNFTMinter.RecipientZero.selector);
         vault.mint(1, address(0));
     }
 
     function testMintZeroCountReverts() public {
-        vm.expectRevert(MinterRemyVault.MintZeroCount.selector);
+        vm.expectRevert(wNFTMinter.MintZeroCount.selector);
         vault.mint(0, address(this));
     }
 
@@ -229,7 +229,7 @@ contract MinterRemyVaultTest is Test {
 
         vault.mint(firstMint, address(this));
 
-        vm.expectRevert(MinterRemyVault.MintLimitExceeded.selector);
+        vm.expectRevert(wNFTMinter.MintLimitExceeded.selector);
         vault.mint(secondMint, address(this));
     }
 
@@ -258,7 +258,7 @@ contract MinterRemyVaultTest is Test {
         expectedIds[2] = 2;
 
         vm.expectEmit(true, false, false, true);
-        emit MinterRemyVault.DerivativeMint(address(this), 3, expectedIds);
+        emit wNFTMinter.DerivativeMint(address(this), 3, expectedIds);
 
         vault.mint(3, address(this));
     }

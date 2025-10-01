@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {RemyVault} from "./RemyVault.sol";
-import {RemyVaultNFT} from "./RemyVaultNFT.sol";
+import {wNFT} from "./wNFT.sol";
+import {wNFTNFT} from "./wNFTNFT.sol";
 
-contract MinterRemyVault is RemyVault {
+contract wNFTMinter is wNFT {
     /// @dev Strongly-typed interface for minting derivative NFTs.
-    RemyVaultNFT private immutable DERIVATIVE_NFT;
+    wNFTNFT private immutable DERIVATIVE_NFT;
 
     /// @notice Maximum number of NFTs that can be minted via this vault.
     uint256 public immutable maxSupply;
@@ -21,8 +21,8 @@ contract MinterRemyVault is RemyVault {
 
     event DerivativeMint(address indexed account, uint256 count, uint256[] tokenIds);
 
-    constructor(address erc721_, uint256 maxSupply_) RemyVault(erc721_) {
-        DERIVATIVE_NFT = RemyVaultNFT(erc721_);
+    constructor(address erc721_, uint256 maxSupply_) wNFT(erc721_) {
+        DERIVATIVE_NFT = wNFTNFT(erc721_);
         maxSupply = maxSupply_;
 
         if (maxSupply_ != 0 && maxSupply_ > type(uint256).max / UNIT) {

@@ -4,9 +4,9 @@ pragma solidity ^0.8.24;
 
 import "forge-std/Test.sol";
 
-import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
-import {RemyVault} from "../src/RemyVault.sol";
-import {RemyVaultHook} from "../src/RemyVaultHook.sol";
+import {wNFTFactory} from "../src/wNFTFactory.sol";
+import {wNFT} from "../src/wNFT.sol";
+import {wNFTHook} from "../src/wNFTHook.sol";
 import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
@@ -23,7 +23,7 @@ contract RemyVaultHookIntegrationTest is Test {
     using CurrencyLibrary for Currency;
     using StateLibrary for IPoolManager;
 
-    RemyVaultFactory internal factory;
+    wNFTFactory internal factory;
     MockERC721Simple internal collection;
     PoolManager internal managerImpl;
     IPoolManager internal manager;
@@ -34,7 +34,7 @@ contract RemyVaultHookIntegrationTest is Test {
         managerImpl = new PoolManager(address(this));
         manager = IPoolManager(address(managerImpl));
 
-        factory = new RemyVaultFactory();
+        factory = new wNFTFactory();
         collection = new MockERC721Simple("Remy Collection", "REMY");
 
         vm.deal(address(this), 100 ether);
@@ -42,7 +42,7 @@ contract RemyVaultHookIntegrationTest is Test {
 
     function testDeployVaultTokenAndInitializeHookedPool() public {
         address vaultAddr = factory.deployVault(address(collection));
-        RemyVault vault = RemyVault(vaultAddr);
+        wNFT vault = wNFT(vaultAddr);
 
         uint256 depositCount = 50;
         for (uint256 i = 0; i < depositCount; ++i) {
@@ -66,9 +66,9 @@ contract RemyVaultHookIntegrationTest is Test {
                     | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
             )
         );
-        vm.label(hookAddress, "RemyVaultHook");
-        deployCodeTo("RemyVaultHook.sol:RemyVaultHook", abi.encode(manager, address(this)), hookAddress);
-        RemyVaultHook hook = RemyVaultHook(hookAddress);
+        vm.label(hookAddress, "wNFTHook");
+        deployCodeTo("wNFTHook.sol:wNFTHook", abi.encode(manager, address(this)), hookAddress);
+        wNFTHook hook = wNFTHook(hookAddress);
         assertEq(hook.owner(), address(this), "Hook owner not set");
 
         PoolKey memory rootKey = PoolKey({

@@ -1,8 +1,8 @@
-# RemyVaultHook for Uniswap v4
+# wNFTHook for Uniswap v4
 
 ## Overview
 
-RemyVaultHook is a Uniswap v4 hook that enables trading NFTs through a liquidity pool by leveraging RemyVault's NFT tokenization system. It allows users to buy and sell NFTs using standard token swaps, creating a seamless trading experience that benefits from Uniswap's concentrated liquidity.
+wNFTHook is a Uniswap v4 hook that enables trading NFTs through a liquidity pool by leveraging wNFT's NFT tokenization system. It allows users to buy and sell NFTs using standard token swaps, creating a seamless trading experience that benefits from Uniswap's concentrated liquidity.
 
 ## Key Features
 
@@ -22,14 +22,14 @@ RemyVaultHook is a Uniswap v4 hook that enables trading NFTs through a liquidity
 
 2. **Selling NFTs**:
    - Users can sell NFTs to the hook using the `sellNFTs` function
-   - The NFTs are deposited into RemyVault to mint vault tokens
+   - The NFTs are deposited into wNFT to mint vault tokens
    - User receives full payment in vault tokens (no sell fee)
 
 ### Inventory Management
 
 The hook maintains its own inventory of NFTs available for trading, which can be:
 - Added by the owner using `addNFTsToInventory`
-- Redeemed from RemyVault using `redeemNFTsFromVault`
+- Redeemed from wNFT using `redeemNFTsFromVault`
 - Acquired from users who sell NFTs to the hook
 
 ## Security Considerations
@@ -40,18 +40,18 @@ The hook maintains its own inventory of NFTs available for trading, which can be
 
 ## Contract Structure
 
-- **RemyVaultHook.sol**: Main hook implementation
-- **RemyVault.sol**: Core vault contract for NFT fractionalization
-- **MinterRemyVault.sol**: Derivative vault that pre-mints supply and handles NFT minting for derivative drops
-- **IRemyVault.sol**: Interface to interact with RemyVault
+- **wNFTHook.sol**: Main hook implementation
+- **wNFT.sol**: Core vault contract for NFT fractionalization
+- **MinterwNFT.sol**: Derivative vault that pre-mints supply and handles NFT minting for derivative drops
+- **IwNFT.sol**: Interface to interact with wNFT
 
 ## Setup and Deployment
 
-1. Deploy RemyVault if not already deployed
+1. Deploy wNFT if not already deployed
 2. Generate a valid hook address using HookMiner
-3. Deploy RemyVaultHook with required parameters:
+3. Deploy wNFTHook with required parameters:
    - Pool Manager address
-   - RemyVault address
+   - wNFT address
    - Fee recipient address
    - Buy and sell fee percentages
 
@@ -72,7 +72,7 @@ The hook works with Uniswap v4 pools that include the vault token as one of the 
 
 ```solidity
 // Buy NFTs directly from the hook
-function buyNFTsExample(RemyVaultHook hook, uint256[] memory tokenIds) external {
+function buyNFTsExample(wNFTHook hook, uint256[] memory tokenIds) external {
     // Approve tokens for the hook
     IERC20(hook.vaultToken()).approve(address(hook), 10 ether);
     
@@ -82,7 +82,7 @@ function buyNFTsExample(RemyVaultHook hook, uint256[] memory tokenIds) external 
 }
 
 // Sell NFTs to the hook
-function sellNFTsExample(RemyVaultHook hook, uint256[] memory tokenIds) external {
+function sellNFTsExample(wNFTHook hook, uint256[] memory tokenIds) external {
     // Approve NFTs for the hook
     IERC721(hook.nftCollection()).setApprovalForAll(address(hook), true);
     

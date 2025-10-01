@@ -1,12 +1,12 @@
 # Test Helper Contracts
 
-This directory contains helper contracts used in testing the RemyVault protocol.
+This directory contains helper contracts used in testing the wNFT protocol.
 
 ## Available Helpers
 
 ### ReentrancyAttacker.sol
 
-A specialized contract designed to test the reentrancy protection mechanisms in the RemyVault protocol.
+A specialized contract designed to test the reentrancy protection mechanisms in the wNFT protocol.
 
 #### Key Features:
 

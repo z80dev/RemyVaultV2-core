@@ -3,13 +3,13 @@
 pragma solidity >=0.8.7 <0.9.0;
 
 import {Test} from "forge-std/Test.sol";
-import {IRemyVault} from "../src/interfaces/IRemyVault.sol";
+import {IwNFT} from "../src/interfaces/IwNFT.sol";
 import {IERC721} from "../src/interfaces/IERC721.sol";
 import {IERC20} from "../src/interfaces/IERC20.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {ReentrancyAttacker} from "./helpers/ReentrancyAttacker.sol";
-import {RemyVault} from "../src/RemyVault.sol";
-import {RemyVaultEIP712} from "../src/RemyVaultEIP712.sol";
+import {wNFT} from "../src/wNFT.sol";
+import {wNFTEIP712} from "../src/wNFTEIP712.sol";
 
 interface IMockERC721 is IERC721 {
     function mint(address to, uint256 tokenId) external;
@@ -29,9 +29,9 @@ interface Ownable {
 
 /**
  * @title RemyVaultTest
- * @dev Comprehensive test suite for the RemyVault contract
+ * @dev Comprehensive test suite for the wNFT contract
  *
- * This test suite validates all aspects of the RemyVault protocol including:
+ * This test suite validates all aspects of the wNFT protocol including:
  * - Deposit/withdraw functionality for single and multiple NFTs
  * - Token balance tracking and invariants
  * - Security properties (reentrancy protection)
@@ -46,8 +46,8 @@ contract RemyVaultTest is Test {
     /// @notice Mock ERC20 token representing fungible tokens
     IERC20 public token;
 
-    /// @notice RemyVault contract instance being tested (also the ERC20 token)
-    IRemyVault public vault;
+    /// @notice wNFT contract instance being tested (also the ERC20 token)
+    IwNFT public vault;
 
     /// @notice Test user address
     address public alice;
@@ -63,7 +63,7 @@ contract RemyVaultTest is Test {
      *
      * This function:
      * 1. Deploys the mock ERC721 contract
-     * 2. Deploys the RemyVault contract which mints/burns its own ERC20 supply
+     * 2. Deploys the wNFT contract which mints/burns its own ERC20 supply
      * 3. Transfers ownership of the NFT contract to the vault so it can mint/burn
      * 4. Creates test user addresses and the reentrancy attack contract
      * 5. Configures Foundry's invariant testing properties
@@ -73,8 +73,8 @@ contract RemyVaultTest is Test {
         nft = IMockERC721(deployCode("MockERC721", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
 
         // Deploy the vault (which manages its own ERC20 supply)
-        RemyVault deployedVault = new RemyVault(address(nft));
-        vault = IRemyVault(address(deployedVault));
+        wNFT deployedVault = new wNFT(address(nft));
+        vault = IwNFT(address(deployedVault));
         UNIT = deployedVault.quoteDeposit(1);
 
         // Treat the vault itself as the ERC20 token
@@ -94,8 +94,8 @@ contract RemyVaultTest is Test {
         excludeSender(address(vault));
 
         bytes4[] memory selectors = new bytes4[](2);
-        selectors[0] = IRemyVault.deposit.selector;
-        selectors[1] = IRemyVault.withdraw.selector;
+        selectors[0] = IwNFT.deposit.selector;
+        selectors[1] = IwNFT.withdraw.selector;
         targetSelector(StdInvariant.FuzzSelector({addr: address(vault), selectors: selectors}));
     }
 
@@ -597,7 +597,7 @@ contract RemyVaultTest is Test {
     /**
      * @dev Invariant test to verify core protocol balance relationship
      *
-     * This test ensures that the fundamental invariant of the RemyVault protocol is maintained:
+     * This test ensures that the fundamental invariant of the wNFT protocol is maintained:
      * token_total_supply = vault_nft_balance * UNIT
      *
      * This invariant should hold true no matter what operations are performed on the vault.
@@ -644,9 +644,9 @@ contract RemyVaultTest is Test {
 
         // Attempt to deploy a vault for this non-compliant NFT should fail
         vm.expectRevert(
-            abi.encodeWithSelector(RemyVaultEIP712.MetadataQueryFailed.selector, address(nonCompliant))
+            abi.encodeWithSelector(wNFTEIP712.MetadataQueryFailed.selector, address(nonCompliant))
         );
-        new RemyVault(address(nonCompliant));
+        new wNFT(address(nonCompliant));
     }
 
     function onERC721Received(address, address, uint256, bytes memory) public pure returns (bytes4) {

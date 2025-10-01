@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {MinterRemyVault} from "./MinterRemyVault.sol";
-import {RemyVault} from "./RemyVault.sol";
+import {wNFTMinter} from "./wNFTMinter.sol";
+import {wNFT} from "./wNFT.sol";
 
-/// @notice Deploys deterministic `RemyVault` instances keyed by ERC721 collection.
-contract RemyVaultFactory {
+/// @notice Deploys deterministic `wNFT` instances keyed by ERC721 collection.
+contract wNFTFactory {
     /// @dev Track deployed vault per collection to prevent duplicates.
     mapping(address => address) public vaultFor;
 
@@ -27,7 +27,7 @@ contract RemyVaultFactory {
         if (isVault[collection]) revert CollectionIsVault(collection);
 
         bytes32 salt = _salt(collection);
-        vault = address(new RemyVault{salt: salt}(collection));
+        vault = address(new wNFT{salt: salt}(collection));
 
         vaultFor[collection] = vault;
         isVault[vault] = true;
@@ -43,11 +43,11 @@ contract RemyVaultFactory {
         if (vaultFor[collection] != address(0)) revert CollectionAlreadyDeployed(collection);
         if (isVault[collection]) revert CollectionIsVault(collection);
 
-        vault = address(new MinterRemyVault{salt: salt}(collection, maxSupply));
+        vault = address(new wNFTMinter{salt: salt}(collection, maxSupply));
 
-        uint256 mintedSupply = MinterRemyVault(vault).balanceOf(address(this));
+        uint256 mintedSupply = wNFTMinter(vault).balanceOf(address(this));
         if (mintedSupply != 0) {
-            MinterRemyVault(vault).transfer(msg.sender, mintedSupply);
+            wNFTMinter(vault).transfer(msg.sender, mintedSupply);
         }
 
         vaultFor[collection] = vault;
@@ -60,7 +60,7 @@ contract RemyVaultFactory {
         if (collection == address(0)) revert CollectionAddressZero();
         if (isVault[collection]) revert CollectionIsVault(collection);
 
-        bytes32 bytecodeHash = keccak256(abi.encodePacked(type(RemyVault).creationCode, abi.encode(collection)));
+        bytes32 bytecodeHash = keccak256(abi.encodePacked(type(wNFT).creationCode, abi.encode(collection)));
         return _computeCreate2Address(_salt(collection), bytecodeHash);
     }
 
@@ -74,7 +74,7 @@ contract RemyVaultFactory {
         if (isVault[collection]) revert CollectionIsVault(collection);
 
         bytes32 bytecodeHash =
-            keccak256(abi.encodePacked(type(MinterRemyVault).creationCode, abi.encode(collection, maxSupply)));
+            keccak256(abi.encodePacked(type(wNFTMinter).creationCode, abi.encode(collection, maxSupply)));
         return _computeCreate2Address(salt, bytecodeHash);
     }
 

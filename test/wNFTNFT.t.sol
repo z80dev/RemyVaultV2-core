@@ -3,16 +3,16 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 
-import {RemyVaultNFT} from "../src/RemyVaultNFT.sol";
+import {wNFTNFT} from "../src/wNFTNFT.sol";
 import {ERC721} from "solady/tokens/ERC721.sol";
 
 contract RemyVaultNFTBatchTest is Test {
-    RemyVaultNFT internal nft;
+    wNFTNFT internal nft;
     address internal holder;
 
     function setUp() public {
         holder = makeAddr("holder");
-        nft = new RemyVaultNFT("Remy NFT", "RMN", "ipfs://remy/", address(this));
+        nft = new wNFTNFT("Remy NFT", "RMN", "ipfs://remy/", address(this));
         nft.setMinter(address(this), true);
     }
 
@@ -45,10 +45,10 @@ contract RemyVaultNFTBatchTest is Test {
         string[] memory suffixes = new string[](1);
         suffixes[0] = "only.json";
 
-        vm.expectRevert(RemyVaultNFT.InvalidBatchLength.selector);
+        vm.expectRevert(wNFTNFT.InvalidBatchLength.selector);
         nft.batchMint(holder, 2, suffixes);
 
-        vm.expectRevert(RemyVaultNFT.InvalidBatchLength.selector);
+        vm.expectRevert(wNFTNFT.InvalidBatchLength.selector);
         nft.batchMint(holder, 0, new string[](0));
     }
 
@@ -63,5 +63,27 @@ contract RemyVaultNFTBatchTest is Test {
 
         vm.expectRevert(ERC721.TokenDoesNotExist.selector);
         nft.ownerOf(minted[0]);
+    }
+
+    function testSupportsInterfaceEnumeration() public view {
+        // ERC721 interface ID
+        bytes4 erc721InterfaceId = 0x80ac58cd;
+        assertTrue(nft.supportsInterface(erc721InterfaceId), "should support ERC721");
+
+        // ERC721Metadata interface ID
+        bytes4 erc721MetadataInterfaceId = 0x5b5e139f;
+        assertTrue(nft.supportsInterface(erc721MetadataInterfaceId), "should support ERC721Metadata");
+
+        // ERC721Enumerable interface ID (0x780e9d63)
+        bytes4 erc721EnumerableInterfaceId = 0x780e9d63;
+        assertTrue(nft.supportsInterface(erc721EnumerableInterfaceId), "should support ERC721Enumerable");
+
+        // ERC165 interface ID
+        bytes4 erc165InterfaceId = 0x01ffc9a7;
+        assertTrue(nft.supportsInterface(erc165InterfaceId), "should support ERC165");
+
+        // Random interface ID (should not be supported)
+        bytes4 randomInterfaceId = 0x12345678;
+        assertFalse(nft.supportsInterface(randomInterfaceId), "should not support random interface");
     }
 }

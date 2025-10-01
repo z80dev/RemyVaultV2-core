@@ -5,10 +5,10 @@ import {BaseTest} from "./BaseTest.t.sol";
 import {console2 as console} from "forge-std/console2.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
-import {MinterRemyVault} from "../src/MinterRemyVault.sol";
-import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
-import {RemyVaultHook} from "../src/RemyVaultHook.sol";
-import {RemyVault} from "../src/RemyVault.sol";
+import {wNFTMinter} from "../src/wNFTMinter.sol";
+import {wNFTFactory} from "../src/wNFTFactory.sol";
+import {wNFTHook} from "../src/wNFTHook.sol";
+import {wNFT} from "../src/wNFT.sol";
 import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
 import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
@@ -55,8 +55,8 @@ contract UniversalRouterMintOut is BaseTest, DerivativeTestUtils {
     address internal constant POOL_MANAGER_ADDRESS = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     IPoolManager internal constant POOL_MANAGER = IPoolManager(POOL_MANAGER_ADDRESS);
 
-    RemyVaultFactory internal vaultFactory;
-    RemyVaultHook internal hook;
+    wNFTFactory internal vaultFactory;
+    wNFTHook internal hook;
     DerivativeFactory internal factory;
     MockERC721Simple internal parentCollection;
     PoolModifyLiquidityTest internal liquidityRouter;
@@ -70,12 +70,12 @@ contract UniversalRouterMintOut is BaseTest, DerivativeTestUtils {
         super.setUp();
         vm.deal(address(this), 1_000_000 ether);
 
-        vaultFactory = new RemyVaultFactory();
+        vaultFactory = new wNFTFactory();
         parentCollection = new MockERC721Simple("Parent Collection", "PRNT");
 
         vm.etch(HOOK_ADDRESS, hex"");
-        deployCodeTo("RemyVaultHook.sol:RemyVaultHook", abi.encode(POOL_MANAGER, address(this)), HOOK_ADDRESS);
-        hook = RemyVaultHook(HOOK_ADDRESS);
+        deployCodeTo("wNFTHook.sol:wNFTHook", abi.encode(POOL_MANAGER, address(this)), HOOK_ADDRESS);
+        hook = wNFTHook(HOOK_ADDRESS);
 
         factory = new DerivativeFactory(vaultFactory, hook, address(this));
         hook.transferOwnership(address(factory));
@@ -241,12 +241,12 @@ contract UniversalRouterMintOut is BaseTest, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         // Add liquidity to root pool
         (PoolKey memory rootKey,) = factory.rootPool(parentVault);
-        RemyVault(parentVault).approve(address(liquidityRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(liquidityRouter), type(uint256).max);
 
         IPoolManager.ModifyLiquidityParams memory rootLiqParams = IPoolManager.ModifyLiquidityParams({
             tickLower: -887220,
@@ -258,7 +258,7 @@ contract UniversalRouterMintOut is BaseTest, DerivativeTestUtils {
 
         // Create derivative
         DerivativeFactory.DerivativeParams memory params;
-        params.parentCollection = RemyVault(parentVault).erc721();
+        params.parentCollection = wNFT(parentVault).erc721();
         params.nftName = "Test Derivative";
         params.nftSymbol = "TDRV";
         params.nftBaseUri = "ipfs://test/";

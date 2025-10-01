@@ -2,7 +2,7 @@
 ## Derivative Collection Mint-Out Analysis
 
 **Test Date:** 2025-09-29
-**Protocol:** RemyVault V2
+**Protocol:** wNFT V2
 **Test Environment:** Isolated simulations with clean state per scenario
 
 ---
@@ -375,7 +375,7 @@ If each derivative collection generates similar trading:
 
 ## Conclusion
 
-The RemyVault protocol demonstrates:
+The wNFT protocol demonstrates:
 
 1. ✅ **Working fee mechanism** with proper distribution
 2. ✅ **Price discovery** across multiple scenarios

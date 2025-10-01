@@ -5,7 +5,7 @@ import {ERC20} from "solady/tokens/ERC20.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 import {IERC721Metadata} from "./interfaces/IERC721Metadata.sol";
 
-abstract contract RemyVaultEIP712 is ERC20, EIP712 {
+abstract contract wNFTEIP712 is ERC20, EIP712 {
     /// @dev Cached keccak256 hash of the token name for the permit domain separator.
     bytes32 private immutable NAME_HASH;
 

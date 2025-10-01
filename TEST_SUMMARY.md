@@ -1,4 +1,4 @@
-# RemyVault Testing Summary
+# wNFT Testing Summary
 
 ## Overview
 Comprehensive test suite covering price ranges, fee distribution, mint-out simulations, and V4Router/Quoter integration.
@@ -31,7 +31,7 @@ Comprehensive test suite covering price ranges, fee distribution, mint-out simul
 ---
 
 ### 2. `HookFeeDistribution.t.sol` - Fee Collection & Distribution Tests
-**Verifies RemyVaultHook correctly collects and distributes fees**
+**Verifies wNFTHook correctly collects and distributes fees**
 
 #### Fee Structure Tested:
 - Total fee: 10% of swap amount (1000 bps)
@@ -174,7 +174,7 @@ Root Pools (Parent/ETH):
 
 ### Fee Distribution Mechanism
 ```solidity
-// In RemyVaultHook.sol
+// In wNFTHook.sol
 uint16 constant TOTAL_FEE_BPS = 1_000;           // 10%
 uint16 constant CHILD_SHARE_WITH_PARENT_BPS = 750; // 7.5% of total
 
@@ -302,7 +302,7 @@ uv run forge test --match-path test/UniversalRouterMintOut.t.sol -vv
 
 ## Conclusion
 
-The RemyVault protocol has been thoroughly tested across:
+The wNFT protocol has been thoroughly tested across:
 - ✅ Multiple price ranges and scenarios
 - ✅ Fee collection and distribution mechanics
 - ✅ Real-world trading patterns

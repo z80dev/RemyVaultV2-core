@@ -3,7 +3,7 @@ pragma solidity ^0.8.19;
 
 import "forge-std/Script.sol";
 
-import {RemyVault} from "../src/RemyVault.sol";
+import {wNFT} from "../src/wNFT.sol";
 
 interface ICreateX {
     function deployCreate(bytes memory initCode) external payable returns (address newContract);

@@ -6,11 +6,11 @@ import {Vm} from "forge-std/Vm.sol";
 import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
-import {MinterRemyVault} from "../src/MinterRemyVault.sol";
-import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
-import {RemyVaultHook} from "../src/RemyVaultHook.sol";
-import {RemyVaultNFT} from "../src/RemyVaultNFT.sol";
-import {RemyVault} from "../src/RemyVault.sol";
+import {wNFTMinter} from "../src/wNFTMinter.sol";
+import {wNFTFactory} from "../src/wNFTFactory.sol";
+import {wNFTHook} from "../src/wNFTHook.sol";
+import {wNFTNFT} from "../src/wNFTNFT.sol";
+import {wNFT} from "../src/wNFT.sol";
 import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
@@ -36,8 +36,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     uint160 internal constant HOOK_FLAGS = Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG
         | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG;
 
-    RemyVaultFactory internal vaultFactory;
-    RemyVaultHook internal hook;
+    wNFTFactory internal vaultFactory;
+    wNFTHook internal hook;
     DerivativeFactory internal factory;
     PoolManager internal managerImpl;
     IPoolManager internal manager;
@@ -52,10 +52,10 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         address baseHookAddress = address(0x4444000000000000000000000000000000000000);
         hookAddress = address(uint160((uint160(baseHookAddress) & CLEAR_HOOK_PERMISSIONS_MASK) | HOOK_FLAGS));
         vm.etch(hookAddress, hex"");
-        deployCodeTo("RemyVaultHook.sol:RemyVaultHook", abi.encode(manager, address(this)), hookAddress);
-        hook = RemyVaultHook(hookAddress);
+        deployCodeTo("wNFTHook.sol:wNFTHook", abi.encode(manager, address(this)), hookAddress);
+        hook = wNFTHook(hookAddress);
 
-        vaultFactory = new RemyVaultFactory();
+        vaultFactory = new wNFTFactory();
         factory = new DerivativeFactory(vaultFactory, hook, address(this));
         hook.transferOwnership(address(factory));
 
@@ -126,7 +126,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
             factory.createVaultForCollection(address(parentCollection), SQRT_PRICE_1_1);
 
         assertEq(vaultFactory.vaultFor(address(parentCollection)), parentVault, "vault mapping mismatch");
-        RemyVault vaultToken = RemyVault(parentVault);
+        wNFT vaultToken = wNFT(parentVault);
         assertEq(vaultToken.name(), parentCollection.name(), "vault name mismatch");
         assertEq(vaultToken.symbol(), parentCollection.symbol(), "vault symbol mismatch");
 
@@ -158,9 +158,9 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
             tokenIds[i] = tokenId;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
-        uint256 availableParentTokens = RemyVault(parentVault).balanceOf(address(this));
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
+        uint256 availableParentTokens = wNFT(parentVault).balanceOf(address(this));
 
         address nftOwner = makeAddr("nftOwner");
         address saleMinter = makeAddr("saleMinter");
@@ -196,7 +196,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         console.log("Initial SqrtPriceX96:", params.sqrtPriceX96);
         console.log("Fee Tier (bps):", params.fee);
 
-        uint256 parentBalanceBefore = RemyVault(parentVault).balanceOf(address(this));
+        uint256 parentBalanceBefore = wNFT(parentVault).balanceOf(address(this));
         console.log("\n=== PRE-LAUNCH BALANCES ===");
         console.log("Creator Parent Token Balance (tokens):", parentBalanceBefore / 1e18);
 
@@ -205,9 +205,9 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         // ============ POST-LAUNCH TOKEN METRICS ============
-        MinterRemyVault derivativeToken = MinterRemyVault(derivativeVault);
-        uint256 parentBalanceAfter = RemyVault(parentVault).balanceOf(address(this));
-        uint256 parentBalanceRefunded = RemyVault(parentVault).balanceOf(params.parentTokenRefundRecipient);
+        wNFTMinter derivativeToken = wNFTMinter(derivativeVault);
+        uint256 parentBalanceAfter = wNFT(parentVault).balanceOf(address(this));
+        uint256 parentBalanceRefunded = wNFT(parentVault).balanceOf(params.parentTokenRefundRecipient);
         uint256 parentBalanceConsumed = parentBalanceBefore - parentBalanceAfter;
         uint256 derivativeBalanceRecipient = derivativeToken.balanceOf(derivativeTokenSink);
         uint256 derivativeTotalSupply = derivativeToken.totalSupply();
@@ -278,7 +278,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         assertEq(infoParent, parentVault, "info parent mismatch");
         assertEq(PoolId.unwrap(infoPoolId), PoolId.unwrap(childPoolId), "info pool mismatch");
 
-        RemyVaultNFT nft = RemyVaultNFT(derivativeNft);
+        wNFTNFT nft = wNFTNFT(derivativeNft);
         assertEq(nft.owner(), nftOwner, "NFT ownership not transferred");
         assertEq(nft.baseUri(), "ipfs://deriv/", "base URI mismatch");
         assertTrue(nft.isMinter(saleMinter), "minter not configured");
@@ -304,7 +304,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         assertEq(liquidity, params.liquidity, "liquidity mismatch");
 
         assertLt(parentBalanceAfter, parentBalanceBefore, "parent tokens not consumed");
-        assertEq(RemyVault(parentVault).balanceOf(address(factory)), 0, "factory retains parent tokens");
+        assertEq(wNFT(parentVault).balanceOf(address(factory)), 0, "factory retains parent tokens");
 
         address collector = makeAddr("collector");
         vm.prank(derivativeVault);
@@ -440,8 +440,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        // Deliberately skip: RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        // Deliberately skip: wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         DerivativeFactory.DerivativeParams memory params;
         params.parentCollection = address(parentCollection);
@@ -471,8 +471,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         DerivativeFactory.DerivativeParams memory params;
         params.parentCollection = address(parentCollection);
@@ -503,11 +503,11 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         address refundRecipient = makeAddr("refundRecipient");
-        uint256 parentBalanceBefore = RemyVault(parentVault).balanceOf(address(this));
+        uint256 parentBalanceBefore = wNFT(parentVault).balanceOf(address(this));
 
         DerivativeFactory.DerivativeParams memory params;
         params.parentCollection = address(parentCollection);
@@ -527,11 +527,11 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         factory.createDerivative(params);
 
         // Refund recipient should receive leftover parent tokens
-        uint256 refundBalance = RemyVault(parentVault).balanceOf(refundRecipient);
+        uint256 refundBalance = wNFT(parentVault).balanceOf(refundRecipient);
         assertGt(refundBalance, 0, "refund recipient should receive leftover tokens");
 
         // Test contract should have less than before (some consumed)
-        uint256 parentBalanceAfter = RemyVault(parentVault).balanceOf(address(this));
+        uint256 parentBalanceAfter = wNFT(parentVault).balanceOf(address(this));
         assertLt(parentBalanceAfter, parentBalanceBefore, "parent balance should decrease");
     }
 
@@ -545,8 +545,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         address derivativeRecipient = makeAddr("derivativeRecipient");
 
@@ -567,7 +567,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
 
         (, address derivativeVault,) = factory.createDerivative(params);
 
-        MinterRemyVault derivative = MinterRemyVault(derivativeVault);
+        wNFTMinter derivative = wNFTMinter(derivativeVault);
         uint256 recipientBalance = derivative.balanceOf(derivativeRecipient);
         assertGt(recipientBalance, 0, "derivative recipient should receive tokens");
         assertEq(derivative.balanceOf(address(factory)), 0, "factory should not retain tokens");
@@ -583,8 +583,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         address nftOwner = makeAddr("nftOwner");
 
@@ -606,7 +606,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
 
         (, address derivativeVault,) = factory.createDerivative(params);
 
-        MinterRemyVault derivative = MinterRemyVault(derivativeVault);
+        wNFTMinter derivative = wNFTMinter(derivativeVault);
         uint256 ownerBalance = derivative.balanceOf(nftOwner);
         assertGt(ownerBalance, 0, "nft owner should receive derivative tokens by default");
     }
@@ -655,8 +655,8 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         // Scenario configurations: (name, tickLower, tickUpper, liquidity, parentContribution, maxSupply)
         _testScenario("Narrow Range - Small Size", parentVault, -60, 60, 1e3, 5 * 1e18, 10);
@@ -697,7 +697,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         console.log("SCENARIO:", name);
         console.log("========================================");
 
-        uint256 parentBalanceBefore = RemyVault(parentVault).balanceOf(address(this));
+        uint256 parentBalanceBefore = wNFT(parentVault).balanceOf(address(this));
 
         address recipient = makeAddr(string.concat("recipient_", name));
 
@@ -728,10 +728,10 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
 
         (, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
-        MinterRemyVault derivativeToken = MinterRemyVault(derivativeVault);
-        uint256 parentBalanceAfter = RemyVault(parentVault).balanceOf(address(this));
+        wNFTMinter derivativeToken = wNFTMinter(derivativeVault);
+        uint256 parentBalanceAfter = wNFT(parentVault).balanceOf(address(this));
         uint256 parentBalanceRefunded =
-            RemyVault(parentVault).balanceOf(address(this)) - (parentBalanceBefore - parentContribution);
+            wNFT(parentVault).balanceOf(address(this)) - (parentBalanceBefore - parentContribution);
         uint256 parentConsumed = parentContribution - parentBalanceRefunded;
         uint256 derivativeToRecipient = derivativeToken.balanceOf(recipient);
         uint256 derivativeTotalSupply = derivativeToken.totalSupply();
@@ -802,6 +802,210 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         lower = -tickUpper;
         upper = -tickLower;
         priceX96 = uint160((uint256(1) << 192) / sqrtPriceX96);
+    }
+
+    function testSaltCollisionPreventsDerivativeLessThanParent() public {
+        (address parentVault,) = factory.createVaultForCollection(address(parentCollection), SQRT_PRICE_1_1);
+
+        // Provide parent tokens
+        uint256[] memory tokenIds = new uint256[](100);
+        for (uint256 i; i < 100; ++i) {
+            parentCollection.mint(address(this), i + 1);
+            tokenIds[i] = i + 1;
+        }
+        parentCollection.setApprovalForAll(parentVault, true);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
+
+        DerivativeFactory.DerivativeParams memory params;
+        params.parentCollection = address(parentCollection);
+        params.nftName = "Derivative";
+        params.nftSymbol = "DRV";
+        params.nftBaseUri = "ipfs://";
+        params.fee = 3000;
+        params.sqrtPriceX96 = SQRT_PRICE_1_1;
+        params.maxSupply = 50;
+        params.tickLower = -60;
+        params.tickUpper = 60;
+        params.liquidity = 1e3;
+        params.parentTokenContribution = 50 * 1e18;
+
+        // Find a bad salt that would make derivative < parent
+        bytes32 badSalt = bytes32(0);
+        uint64 factoryNonce = vm.getNonce(address(factory));
+        address predictedNFT = _computeCreateAddress(address(factory), factoryNonce);
+
+        for (uint256 i = 0; i < 10000; i++) {
+            bytes32 testSalt = bytes32(i);
+            address testPredictedVault = factory.computeDerivativeAddress(predictedNFT, params.maxSupply, testSalt);
+            if (testPredictedVault < parentVault) {
+                badSalt = testSalt;
+                break;
+            }
+        }
+
+        // Attempt to deploy with bad salt should fail
+        params.salt = badSalt;
+
+        address predictedVault = factory.computeDerivativeAddress(predictedNFT, params.maxSupply, badSalt);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DerivativeFactory.DerivativeVaultMustBeToken1.selector,
+                predictedVault,
+                parentVault
+            )
+        );
+        factory.createDerivative(params);
+    }
+
+    function testMultipleDerivativesForSameOriginal() public {
+        (address parentVault,) = factory.createVaultForCollection(address(parentCollection), SQRT_PRICE_1_1);
+
+        // Mint enough parent tokens
+        uint256[] memory tokenIds = new uint256[](200);
+        for (uint256 i; i < 200; ++i) {
+            parentCollection.mint(address(this), i + 1);
+            tokenIds[i] = i + 1;
+        }
+        parentCollection.setApprovalForAll(parentVault, true);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
+
+        // Create first derivative
+        DerivativeFactory.DerivativeParams memory params1;
+        params1.parentCollection = address(parentCollection);
+        params1.nftName = "First Derivative";
+        params1.nftSymbol = "DRV1";
+        params1.nftBaseUri = "ipfs://first/";
+        params1.fee = 3000;
+        params1.sqrtPriceX96 = SQRT_PRICE_1_1;
+        params1.maxSupply = 50;
+        params1.tickLower = -60;
+        params1.tickUpper = 60;
+        params1.liquidity = 1e3;
+        params1.parentTokenContribution = 50 * 1e18;
+        params1.salt = mineSaltForToken1(factory, parentVault, params1.maxSupply);
+
+        (address nft1, address vault1, PoolId pool1) = factory.createDerivative(params1);
+
+        // Create second derivative for same parent
+        DerivativeFactory.DerivativeParams memory params2;
+        params2.parentCollection = address(parentCollection);
+        params2.nftName = "Second Derivative";
+        params2.nftSymbol = "DRV2";
+        params2.nftBaseUri = "ipfs://second/";
+        params2.fee = 3000;
+        params2.sqrtPriceX96 = SQRT_PRICE_1_1;
+        params2.maxSupply = 75;
+        params2.tickLower = -120;
+        params2.tickUpper = 120;
+        params2.liquidity = 2e3;
+        params2.parentTokenContribution = 75 * 1e18;
+        params2.salt = mineSaltForToken1(factory, parentVault, params2.maxSupply);
+
+        (address nft2, address vault2, PoolId pool2) = factory.createDerivative(params2);
+
+        // Verify both derivatives are distinct and properly configured
+        assertTrue(nft1 != nft2, "NFTs should be different");
+        assertTrue(vault1 != vault2, "Vaults should be different");
+        assertTrue(PoolId.unwrap(pool1) != PoolId.unwrap(pool2), "Pools should be different");
+
+        (address infoNft1, address infoParent1,) = factory.derivativeForVault(vault1);
+        (address infoNft2, address infoParent2,) = factory.derivativeForVault(vault2);
+
+        assertEq(infoNft1, nft1, "first NFT lookup mismatch");
+        assertEq(infoParent1, parentVault, "first parent mismatch");
+        assertEq(infoNft2, nft2, "second NFT lookup mismatch");
+        assertEq(infoParent2, parentVault, "second parent should be same");
+    }
+
+    function testDerivativeOfDerivative() public {
+        (address parentVault, PoolId parentPoolId) = factory.createVaultForCollection(address(parentCollection), SQRT_PRICE_1_1);
+
+        // Mint parent tokens
+        uint256[] memory tokenIds = new uint256[](200);
+        for (uint256 i; i < 200; ++i) {
+            parentCollection.mint(address(this), i + 1);
+            tokenIds[i] = i + 1;
+        }
+        parentCollection.setApprovalForAll(parentVault, true);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
+
+        // Create first-generation derivative
+        DerivativeFactory.DerivativeParams memory params1;
+        params1.parentCollection = address(parentCollection);
+        params1.nftName = "First Gen";
+        params1.nftSymbol = "GEN1";
+        params1.nftBaseUri = "ipfs://gen1/";
+        params1.nftOwner = address(this);
+        params1.fee = 3000;
+        params1.sqrtPriceX96 = SQRT_PRICE_1_1;
+        params1.maxSupply = 100;
+        params1.tickLower = -60;
+        params1.tickUpper = 60;
+        params1.liquidity = 1e3;
+        params1.parentTokenContribution = 100 * 1e18;
+        params1.salt = mineSaltForToken1(factory, parentVault, params1.maxSupply);
+
+        (address gen1Nft, address gen1Vault, PoolId gen1PoolId) = factory.createDerivative(params1);
+
+        // For gen1 to be a parent, it needs a root pool
+        // Since deployDerivativeVault was called, the vault exists but not the root pool
+        // We need to manually initialize the root pool for gen1
+        PoolKey memory gen1RootKey = PoolKey({
+            currency0: CurrencyLibrary.ADDRESS_ZERO,
+            currency1: Currency.wrap(gen1Vault),
+            fee: 0x800000, // Dynamic fee flag
+            tickSpacing: 60,
+            hooks: IHooks(hookAddress)
+        });
+        PoolId gen1RootPoolId = gen1RootKey.toId();
+
+        // Register with hook
+        PoolKey memory emptyKey;
+        vm.prank(address(factory));
+        hook.addChild(gen1RootKey, false, emptyKey);
+
+        // Initialize the pool
+        manager.initialize(gen1RootKey, SQRT_PRICE_1_1);
+
+        // We already have gen1 vault tokens from the derivative creation
+        // Just approve the factory to use them for creating gen2
+        wNFTMinter(gen1Vault).approve(address(factory), type(uint256).max);
+
+        // Now create a second-generation derivative (derivative of gen1)
+        DerivativeFactory.DerivativeParams memory params2;
+        params2.parentCollection = gen1Nft;
+        params2.nftName = "Second Gen";
+        params2.nftSymbol = "GEN2";
+        params2.nftBaseUri = "ipfs://gen2/";
+        params2.fee = 3000;
+        params2.sqrtPriceX96 = SQRT_PRICE_1_1;
+        params2.maxSupply = 50;
+        params2.tickLower = -120;
+        params2.tickUpper = 120;
+        params2.liquidity = 5e2;
+        params2.parentTokenContribution = 50 * wNFTMinter(gen1Vault).UNIT();
+        params2.salt = mineSaltForToken1(factory, gen1Vault, params2.maxSupply);
+
+        (address gen2Nft, address gen2Vault, PoolId gen2PoolId) = factory.createDerivative(params2);
+
+        // Verify the second-generation derivative
+        (address gen2InfoNft, address gen2InfoParent, PoolId gen2InfoPool) = factory.derivativeForVault(gen2Vault);
+        assertEq(gen2InfoNft, gen2Nft, "gen2 NFT mismatch");
+        assertEq(gen2InfoParent, gen1Vault, "gen2 parent should be gen1 vault");
+        assertEq(PoolId.unwrap(gen2InfoPool), PoolId.unwrap(gen2PoolId), "gen2 pool mismatch");
+
+        // Verify hook configuration for gen2
+        (bool initialized, bool hasParent, PoolKey memory parentKey, Currency sharedCurrency,,) =
+            hook.poolConfig(gen2PoolId);
+        assertTrue(initialized, "gen2 pool not initialized");
+        assertTrue(hasParent, "gen2 should have parent");
+
+        // Gen2's parent should be gen1's root pool (ETH/gen1Vault pool)
+        assertEq(PoolId.unwrap(parentKey.toId()), PoolId.unwrap(gen1RootPoolId), "gen2 parent pool should be gen1 root");
+        assertEq(Currency.unwrap(sharedCurrency), gen1Vault, "gen2 shared currency should be gen1 vault");
     }
 
     function _buildKey(address tokenA, address tokenB, uint24 fee, int24 spacing)

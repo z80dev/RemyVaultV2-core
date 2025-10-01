@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import {BaseTest} from "./BaseTest.t.sol";
 
-import {RemyVaultHook} from "../src/RemyVaultHook.sol";
+import {wNFTHook} from "../src/wNFTHook.sol";
 
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
@@ -46,7 +46,7 @@ contract RemyVaultHookForkTest is BaseTest {
 
     PoolModifyLiquidityTest internal modifyRouter;
     PoolSwapTest internal swapRouter;
-    RemyVaultHook internal hook;
+    wNFTHook internal hook;
 
     MockERC20 internal sharedToken;
     MockERC20 internal altToken;
@@ -83,8 +83,8 @@ contract RemyVaultHookForkTest is BaseTest {
         altToken.approve(address(swapRouter), type(uint256).max);
 
         vm.etch(HOOK_ADDRESS, hex"");
-        deployCodeTo("RemyVaultHook.sol:RemyVaultHook", abi.encode(POOL_MANAGER, address(this)), HOOK_ADDRESS);
-        hook = RemyVaultHook(HOOK_ADDRESS);
+        deployCodeTo("wNFTHook.sol:wNFTHook", abi.encode(POOL_MANAGER, address(this)), HOOK_ADDRESS);
+        hook = wNFTHook(HOOK_ADDRESS);
         assertEq(hook.owner(), address(this), "owner not configured");
 
         remyCurrency = Currency.wrap(address(sharedToken));
@@ -160,7 +160,7 @@ contract RemyVaultHookForkTest is BaseTest {
             hooks: IHooks(HOOK_ADDRESS)
         });
 
-        vm.expectRevert(RemyVaultHook.ChildPoolCannotUseEth.selector);
+        vm.expectRevert(wNFTHook.ChildPoolCannotUseEth.selector);
         hook.addChild(invalidChild, true, rootKey);
     }
 
@@ -174,7 +174,7 @@ contract RemyVaultHookForkTest is BaseTest {
         });
 
         PoolKey memory emptyKey;
-        vm.expectRevert(RemyVaultHook.RootPoolRequiresEth.selector);
+        vm.expectRevert(wNFTHook.RootPoolRequiresEth.selector);
         hook.addChild(invalidRoot, false, emptyKey);
     }
 
@@ -309,6 +309,102 @@ contract RemyVaultHookForkTest is BaseTest {
 
     function _abs(int256 value) internal pure returns (uint256) {
         return uint256(value >= 0 ? value : -value);
+    }
+
+    function testSecondGenerationDerivative_FeeDistribution() public {
+        // Create a second-level child pool (derivative of derivative)
+        MockERC20 thirdToken = new MockERC20("Third Token", "THIRD", 18);
+        thirdToken.mint(address(this), 1e36);
+        thirdToken.approve(address(modifyRouter), type(uint256).max);
+        thirdToken.approve(address(swapRouter), type(uint256).max);
+
+        Currency thirdCurrency = Currency.wrap(address(thirdToken));
+
+        // Create grandchild pool that shares remyCurrency with child pool
+        (Currency grandchildCurrency0, Currency grandchildCurrency1) = _sortCurrencies(remyCurrency, thirdCurrency);
+        PoolKey memory grandchildKey = PoolKey({
+            currency0: grandchildCurrency0,
+            currency1: grandchildCurrency1,
+            fee: 3000,
+            tickSpacing: 60,
+            hooks: IHooks(HOOK_ADDRESS)
+        });
+        PoolId grandchildPoolId = grandchildKey.toId();
+
+        // Register grandchild with child as parent
+        hook.addChild(grandchildKey, true, childKey);
+
+        // Initialize and add liquidity to grandchild pool
+        POOL_MANAGER.initialize(grandchildKey, SQRT_PRICE_1_1);
+        modifyRouter.modifyLiquidity(grandchildKey, liquidityParams, bytes(""));
+
+        // Perform swap on grandchild pool
+        IPoolManager.SwapParams memory params = _swapParams(true, -int256(1e16));
+
+        vm.recordLogs();
+        _executeSwap(grandchildKey, params);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        // Verify donations to all three levels
+        (bool grandchildFound, uint256 gc0, uint256 gc1) = _findDonation(logs, grandchildPoolId);
+        (bool childFound, uint256 c0, uint256 c1) = _findDonation(logs, childPoolId);
+        (bool rootFound, uint256 r0, uint256 r1) = _findDonation(logs, rootPoolId);
+
+        assertTrue(grandchildFound, "grandchild donation missing");
+        assertTrue(childFound, "child (parent of grandchild) donation missing");
+        assertFalse(rootFound, "root should not receive fees from grandchild");
+
+        // Grandchild keeps 7.5% of the 10% total fee
+        // Child (as parent of grandchild) receives 2.5% of the 10% total fee
+        assertGt(gc0 + gc1, 0, "grandchild should receive fees");
+        assertGt(c0 + c1, 0, "child should receive fees as parent");
+    }
+
+    function testChildSwapWithNoParentLiquidity_ChildKeepsAllFees() public {
+        // Remove all liquidity from the root pool
+        liquidityParams.liquidityDelta = -int256(uint256(LIQUIDITY));
+        modifyRouter.modifyLiquidity{value: 50_000 ether}(rootKey, liquidityParams, bytes(""));
+
+        // Root pool should have no liquidity now (we don't verify exact value, just test behavior)
+
+        IPoolManager.SwapParams memory params = _swapParams(true, -int256(1e16));
+
+        (bool initialized, bool hasParent,, Currency sharedCurrency, bool sharedIsChild0,) =
+            hook.poolConfig(childPoolId);
+        assertTrue(initialized, "child not configured");
+        assertTrue(hasParent, "child missing parent");
+
+        vm.recordLogs();
+        BalanceDelta swapDelta = _executeSwap(childKey, params);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        bool exactIn = params.amountSpecified < 0;
+        bool specifiedIsC0 = params.zeroForOne ? exactIn : !exactIn;
+        bool sharedIsSpecified = sharedIsChild0 == specifiedIsC0;
+        uint256 basisAmount = _feeBasis(sharedIsSpecified, specifiedIsC0, params, swapDelta);
+        uint256 totalFee;
+        if (sharedIsSpecified) {
+            totalFee = (basisAmount * TOTAL_FEE_BPS) / FEE_DENOMINATOR;
+        } else if (params.amountSpecified < 0) {
+            totalFee = (basisAmount * TOTAL_FEE_BPS) / (FEE_DENOMINATOR - TOTAL_FEE_BPS);
+        } else {
+            totalFee = (basisAmount * TOTAL_FEE_BPS) / (FEE_DENOMINATOR + TOTAL_FEE_BPS);
+        }
+
+        // When parent has no liquidity, only child fee is charged/donated
+        (bool childFound, uint256 childAmount0, uint256 childAmount1) = _findDonation(logs, childPoolId);
+        (bool parentFound,,) = _findDonation(logs, rootPoolId);
+
+        assertTrue(childFound, "child donation missing");
+        assertFalse(parentFound, "parent should not receive donation when it has no liquidity");
+
+        uint256 childDonation = sharedIsChild0 ? childAmount0 : childAmount1;
+        uint256 childOther = sharedIsChild0 ? childAmount1 : childAmount0;
+
+        // Child gets fees, parent gets nothing due to no liquidity
+        assertGt(childDonation, 0, "child should receive some fees");
+        assertEq(childOther, 0, "unexpected child donation for other token");
+        assertEq(POOL_MANAGER.currencyDelta(address(hook), sharedCurrency), 0, "hook delta not cleared");
     }
 
     function _sortCurrencies(Currency a, Currency b) internal pure returns (Currency, Currency) {

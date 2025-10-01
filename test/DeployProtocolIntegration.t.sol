@@ -5,8 +5,8 @@ import {BaseTest} from "./BaseTest.t.sol";
 
 import {DeployProtocol} from "../scripts/DeployProtocol.s.sol";
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
-import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
-import {RemyVaultHook} from "../src/RemyVaultHook.sol";
+import {wNFTFactory} from "../src/wNFTFactory.sol";
+import {wNFTHook} from "../src/wNFTHook.sol";
 
 import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
@@ -28,7 +28,7 @@ contract DeployProtocolIntegrationTest is BaseTest {
 
     function testDeploymentScriptFlow_OnBaseFork() public {
         bytes memory hookArgs = abi.encode(POOL_MANAGER, DEPLOYER);
-        (address expectedHook,) = HookMiner.find(DEPLOYER, HOOK_FLAGS, type(RemyVaultHook).creationCode, hookArgs);
+        (address expectedHook,) = HookMiner.find(DEPLOYER, HOOK_FLAGS, type(wNFTHook).creationCode, hookArgs);
 
         uint256 nonceBefore = vm.getNonce(DEPLOYER);
         address expectedVaultFactory = vm.computeCreateAddress(DEPLOYER, nonceBefore + 1);
@@ -41,8 +41,8 @@ contract DeployProtocolIntegrationTest is BaseTest {
         DeployProtocol script = new DeployProtocol();
         script.run();
 
-        RemyVaultHook hook = RemyVaultHook(expectedHook);
-        RemyVaultFactory vaultFactory = RemyVaultFactory(expectedVaultFactory);
+        wNFTHook hook = wNFTHook(expectedHook);
+        wNFTFactory vaultFactory = wNFTFactory(expectedVaultFactory);
         DerivativeFactory derivativeFactory = DerivativeFactory(expectedDerivativeFactory);
 
         assertEq(address(hook.poolManager()), address(POOL_MANAGER), "hook pool manager mismatch");

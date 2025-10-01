@@ -5,11 +5,11 @@ import {BaseTest} from "./BaseTest.t.sol";
 import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 import {console} from "forge-std/console.sol";
 
-import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
-import {RemyVault} from "../src/RemyVault.sol";
-import {MinterRemyVault} from "../src/MinterRemyVault.sol";
+import {wNFTFactory} from "../src/wNFTFactory.sol";
+import {wNFT} from "../src/wNFT.sol";
+import {wNFTMinter} from "../src/wNFTMinter.sol";
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
-import {RemyVaultHook} from "../src/RemyVaultHook.sol";
+import {wNFTHook} from "../src/wNFTHook.sol";
 import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
@@ -49,8 +49,8 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
     address internal constant QUOTER_ADDRESS = 0x0d5e0F971ED27FBfF6c2837bf31316121532048D;
     IV4Quoter internal constant QUOTER = IV4Quoter(QUOTER_ADDRESS);
 
-    RemyVaultFactory internal vaultFactory;
-    RemyVaultHook internal hook;
+    wNFTFactory internal vaultFactory;
+    wNFTHook internal hook;
     DerivativeFactory internal factory;
     PoolModifyLiquidityTest internal liquidityHelper;
     PoolSwapTest internal swapRouter;
@@ -64,11 +64,11 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
     function setUp() public override {
         super.setUp();
 
-        vaultFactory = new RemyVaultFactory();
+        vaultFactory = new wNFTFactory();
 
         vm.etch(HOOK_ADDRESS, hex"");
-        deployCodeTo("RemyVaultHook.sol:RemyVaultHook", abi.encode(POOL_MANAGER, address(this)), HOOK_ADDRESS);
-        hook = RemyVaultHook(HOOK_ADDRESS);
+        deployCodeTo("wNFTHook.sol:wNFTHook", abi.encode(POOL_MANAGER, address(this)), HOOK_ADDRESS);
+        hook = wNFTHook(HOOK_ADDRESS);
 
         factory = new DerivativeFactory(vaultFactory, hook, address(this));
         hook.transferOwnership(address(factory));
@@ -98,7 +98,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).deposit(tokenIds, address(this));
 
         // Create root pool with price ≈ 0.01 ETH per parent token
         // Initialize at exactly tick 46020 to enable single-sided liquidity
@@ -144,10 +144,10 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         // Deal userA with 10 ETH
         vm.deal(userA, 10 ether);
 
-        // Create RemyVault for the OG NFT collection
+        // Create wNFT for the OG NFT collection
         vm.prank(userA);
         address vaultAddress = vaultFactory.deployVault(address(ogNFT));
-        RemyVault vault = RemyVault(vaultAddress);
+        wNFT vault = wNFT(vaultAddress);
 
         // Verify the vault was created correctly
         assertEq(vault.erc721(), address(ogNFT));
@@ -157,7 +157,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
 
     function test_DerivativeCreation_EntireSupplyAsLiquidity() public {
         // Approve parent vault tokens for derivative creation
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         // Setup derivative parameters
         uint256 maxSupply = 50;
@@ -221,9 +221,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
 
         // Verify factory has no leftover tokens
         assertEq(
-            MinterRemyVault(derivativeVault).balanceOf(address(factory)), 0, "Factory should have 0 derivative tokens"
+            wNFTMinter(derivativeVault).balanceOf(address(factory)), 0, "Factory should have 0 derivative tokens"
         );
-        assertEq(RemyVault(parentVault).balanceOf(address(factory)), 0, "Factory should have 0 parent tokens");
+        assertEq(wNFT(parentVault).balanceOf(address(factory)), 0, "Factory should have 0 parent tokens");
     }
 
     function _initRootPool(address vault, uint24, /* fee */ int24 tickSpacing, uint160 sqrtPriceX96)
@@ -267,7 +267,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
 
     function test_DerivativeCreation_1kSupply_PointOneToOnePrice() public {
         // Approve parent vault tokens for derivative creation
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         // Setup derivative parameters for 500 token supply
         uint256 maxSupply = 500;
@@ -316,7 +316,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
 
         // Prime the pool with a tiny swap to enable quotes
         console.log("=== PRIMING POOL WITH SWAP ==");
-        RemyVault(parentVault).approve(address(swapRouter), 1e18);
+        wNFT(parentVault).approve(address(swapRouter), 1e18);
         IPoolManager.SwapParams memory swapParams = IPoolManager.SwapParams({
             zeroForOne: parentIsZero,
             amountSpecified: -1, // Sell 1 wei of parent token
@@ -398,9 +398,9 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
 
         // Verify factory has no leftover tokens
         assertEq(
-            MinterRemyVault(derivativeVault).balanceOf(address(factory)), 0, "Factory should have 0 derivative tokens"
+            wNFTMinter(derivativeVault).balanceOf(address(factory)), 0, "Factory should have 0 derivative tokens"
         );
-        assertEq(RemyVault(parentVault).balanceOf(address(factory)), 0, "Factory should have 0 parent tokens");
+        assertEq(wNFT(parentVault).balanceOf(address(factory)), 0, "Factory should have 0 parent tokens");
     }
 
     function _addLiquidityToPool(
@@ -426,10 +426,10 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         // Approve tokens if needed
         if (amount0Desired > 0 && Currency.unwrap(key.currency0) != address(0)) {
             // ERC20 token
-            RemyVault(Currency.unwrap(key.currency0)).approve(address(liquidityHelper), amount0Desired);
+            wNFT(Currency.unwrap(key.currency0)).approve(address(liquidityHelper), amount0Desired);
         }
         if (amount1Desired > 0) {
-            RemyVault(Currency.unwrap(key.currency1)).approve(address(liquidityHelper), amount1Desired);
+            wNFT(Currency.unwrap(key.currency1)).approve(address(liquidityHelper), amount1Desired);
         }
 
         // Add liquidity
@@ -449,7 +449,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("=======================================================");
 
         // Approve parent vault tokens for derivative creation
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         // Setup derivative parameters for 500 token supply
         uint256 maxSupply = 500;
@@ -488,7 +488,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("Target starting price: 0.3 parent per derivative");
 
         // Record initial balances and parent pool state
-        uint256 initialDerivativeInPool = MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER));
+        uint256 initialDerivativeInPool = wNFTMinter(derivativeVault).balanceOf(address(POOL_MANAGER));
         console.log("Derivative tokens in pool:", initialDerivativeInPool);
 
         // Track parent pool state before minting
@@ -514,7 +514,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         );
 
         // Prime child pool (parent -> derivative)
-        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(swapRouter), type(uint256).max);
         IPoolManager.SwapParams memory primeChildSwap = IPoolManager.SwapParams({
             zeroForOne: parentIsZero,
             amountSpecified: -1, // Sell 1 wei of parent
@@ -591,7 +591,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("\n=== STEP 1: BUY PARENT TOKENS WITH ETH ===");
         uint256 ethToSpend = 9 ether; // Testing with 9 ETH for 5x range (0.3-1.5)
         vm.deal(address(this), address(this).balance + ethToSpend); // Ensure we have enough ETH
-        uint256 parentBalanceBeforeEthSwap = RemyVault(parentVault).balanceOf(address(this));
+        uint256 parentBalanceBeforeEthSwap = wNFT(parentVault).balanceOf(address(this));
         console.log("ETH to spend:", ethToSpend);
 
         IPoolManager.SwapParams memory ethSwapParams = IPoolManager.SwapParams({
@@ -604,14 +604,14 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             rootKey, ethSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
         );
 
-        uint256 parentTokensAcquired = RemyVault(parentVault).balanceOf(address(this)) - parentBalanceBeforeEthSwap;
+        uint256 parentTokensAcquired = wNFT(parentVault).balanceOf(address(this)) - parentBalanceBeforeEthSwap;
         console.log("Parent tokens acquired:", parentTokensAcquired);
         console.log("ETH spent:", ethToSpend);
         console.log("Parent tokens per ETH:", parentTokensAcquired / 1e18);
 
         // STEP 2: Buy derivative tokens with parent tokens
         console.log("\n=== STEP 2: BUY DERIVATIVE TOKENS WITH PARENT ===");
-        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(swapRouter), type(uint256).max);
 
         // Prime the pool with a tiny swap first to enable proper execution
         console.log("Priming pool with tiny swap...");
@@ -623,7 +623,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         swapRouter.swap(childKey, primeSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
         console.log("Pool primed successfully");
 
-        uint256 parentBalanceBeforeDerivSwap = RemyVault(parentVault).balanceOf(address(this));
+        uint256 parentBalanceBeforeDerivSwap = wNFT(parentVault).balanceOf(address(this));
         uint256 parentToSpend = parentTokensAcquired - 1; // Use acquired tokens minus the 1 wei for priming
 
         console.log("Parent tokens to spend:", parentToSpend);
@@ -638,8 +638,8 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             childKey, derivSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
         );
 
-        uint256 derivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(this));
-        uint256 parentSpent = parentBalanceBeforeDerivSwap - RemyVault(parentVault).balanceOf(address(this));
+        uint256 derivativeBalance = wNFTMinter(derivativeVault).balanceOf(address(this));
+        uint256 parentSpent = parentBalanceBeforeDerivSwap - wNFT(parentVault).balanceOf(address(this));
 
         console.log("Derivative tokens acquired:", derivativeBalance);
         console.log("Parent tokens actually spent:", parentSpent);
@@ -650,7 +650,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("Final pool tick:", finalTick);
         console.log("Tick movement:", int256(finalTick) - int256(initialTick));
         console.log(
-            "Derivative tokens remaining in pool:", MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER))
+            "Derivative tokens remaining in pool:", wNFTMinter(derivativeVault).balanceOf(address(POOL_MANAGER))
         );
 
         // STEP 3: Mint NFTs from derivative tokens
@@ -658,7 +658,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         uint256 nftsToMint = derivativeBalance / 1e18;
         console.log("NFTs we can mint:", nftsToMint);
 
-        uint256[] memory mintedTokenIds = MinterRemyVault(derivativeVault).mint(nftsToMint, address(this));
+        uint256[] memory mintedTokenIds = wNFTMinter(derivativeVault).mint(nftsToMint, address(this));
 
         console.log("NFTs successfully minted:", MockERC721Simple(nft).balanceOf(address(this)));
         console.log("First NFT ID minted:", mintedTokenIds[0]);
@@ -731,7 +731,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("=========================================================");
 
         // Approve parent vault tokens for derivative creation
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         // Setup derivative parameters for 250 token supply
         uint256 maxSupply = 250;
@@ -772,7 +772,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("Target starting price: 0.5 parent per derivative");
 
         // Record initial balances and parent pool state
-        uint256 initialDerivativeInPool = MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER));
+        uint256 initialDerivativeInPool = wNFTMinter(derivativeVault).balanceOf(address(POOL_MANAGER));
         console.log("Derivative tokens in pool:", initialDerivativeInPool);
 
         // Track parent pool state before minting
@@ -796,7 +796,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             rootKey, primeRootSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
         );
 
-        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(swapRouter), type(uint256).max);
         IPoolManager.SwapParams memory primeChildSwap = IPoolManager.SwapParams({
             zeroForOne: parentIsZero,
             amountSpecified: -1,
@@ -866,7 +866,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         // STEP 1: Buy parent tokens with ETH
         console.log("\n=== STEP 1: BUY PARENT TOKENS WITH ETH ===");
         vm.deal(address(this), address(this).balance + ethToSpend); // Ensure we have enough ETH
-        uint256 parentBalanceBeforeEthSwap = RemyVault(parentVault).balanceOf(address(this));
+        uint256 parentBalanceBeforeEthSwap = wNFT(parentVault).balanceOf(address(this));
         console.log("ETH to spend:", ethToSpend);
 
         IPoolManager.SwapParams memory ethSwapParams = IPoolManager.SwapParams({
@@ -879,14 +879,14 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             rootKey, ethSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
         );
 
-        uint256 parentTokensAcquired = RemyVault(parentVault).balanceOf(address(this)) - parentBalanceBeforeEthSwap;
+        uint256 parentTokensAcquired = wNFT(parentVault).balanceOf(address(this)) - parentBalanceBeforeEthSwap;
         console.log("Parent tokens acquired:", parentTokensAcquired);
         console.log("ETH spent:", ethToSpend);
         console.log("Parent tokens per ETH:", parentTokensAcquired / 1e18);
 
         // STEP 2: Buy derivative tokens with parent tokens
         console.log("\n=== STEP 2: BUY DERIVATIVE TOKENS WITH PARENT ===");
-        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(swapRouter), type(uint256).max);
 
         // Prime the pool with a tiny swap first to enable proper execution
         console.log("Priming pool with tiny swap...");
@@ -898,7 +898,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         swapRouter.swap(childKey, primeSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
         console.log("Pool primed successfully");
 
-        uint256 parentBalanceBeforeDerivSwap = RemyVault(parentVault).balanceOf(address(this));
+        uint256 parentBalanceBeforeDerivSwap = wNFT(parentVault).balanceOf(address(this));
         uint256 parentToSpend = parentTokensAcquired - 1; // Use acquired tokens minus the 1 wei for priming
 
         console.log("Parent tokens to spend:", parentToSpend);
@@ -913,8 +913,8 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             childKey, derivSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
         );
 
-        uint256 derivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(this));
-        uint256 parentSpent = parentBalanceBeforeDerivSwap - RemyVault(parentVault).balanceOf(address(this));
+        uint256 derivativeBalance = wNFTMinter(derivativeVault).balanceOf(address(this));
+        uint256 parentSpent = parentBalanceBeforeDerivSwap - wNFT(parentVault).balanceOf(address(this));
 
         console.log("Derivative tokens acquired:", derivativeBalance);
         console.log("Parent tokens actually spent:", parentSpent);
@@ -925,7 +925,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("Final pool tick:", finalTick);
         console.log("Tick movement:", int256(finalTick) - int256(initialTick));
         console.log(
-            "Derivative tokens remaining in pool:", MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER))
+            "Derivative tokens remaining in pool:", wNFTMinter(derivativeVault).balanceOf(address(POOL_MANAGER))
         );
 
         // STEP 3: Mint NFTs from derivative tokens
@@ -933,7 +933,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         uint256 nftsToMint = derivativeBalance / 1e18;
         console.log("NFTs we can mint:", nftsToMint);
 
-        uint256[] memory mintedTokenIds = MinterRemyVault(derivativeVault).mint(nftsToMint, address(this));
+        uint256[] memory mintedTokenIds = wNFTMinter(derivativeVault).mint(nftsToMint, address(this));
 
         console.log("NFTs successfully minted:", MockERC721Simple(nft).balanceOf(address(this)));
         console.log("First NFT ID minted:", mintedTokenIds[0]);
@@ -1006,7 +1006,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("===========================================================");
 
         // Approve parent vault tokens for derivative creation
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         // Setup derivative parameters for 1000 token supply
         uint256 maxSupply = 1000;
@@ -1045,7 +1045,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("Target starting price: 0.25 parent per derivative");
 
         // Record initial balances and parent pool state
-        uint256 initialDerivativeInPool = MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER));
+        uint256 initialDerivativeInPool = wNFTMinter(derivativeVault).balanceOf(address(POOL_MANAGER));
         console.log("Derivative tokens in pool:", initialDerivativeInPool);
 
         // Track parent pool state before minting
@@ -1069,7 +1069,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             rootKey, primeRootSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
         );
 
-        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(swapRouter), type(uint256).max);
         IPoolManager.SwapParams memory primeChildSwap = IPoolManager.SwapParams({
             zeroForOne: parentIsZero,
             amountSpecified: -1,
@@ -1148,7 +1148,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("\n=== STEP 1: BUY PARENT TOKENS WITH ETH ===");
         uint256 ethToSpend = 15 ether; // Large supply needs more ETH
         vm.deal(address(this), address(this).balance + ethToSpend);
-        uint256 parentBalanceBeforeEthSwap = RemyVault(parentVault).balanceOf(address(this));
+        uint256 parentBalanceBeforeEthSwap = wNFT(parentVault).balanceOf(address(this));
         console.log("ETH to spend:", ethToSpend);
 
         IPoolManager.SwapParams memory ethSwapParams = IPoolManager.SwapParams({
@@ -1161,14 +1161,14 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             rootKey, ethSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
         );
 
-        uint256 parentTokensAcquired = RemyVault(parentVault).balanceOf(address(this)) - parentBalanceBeforeEthSwap;
+        uint256 parentTokensAcquired = wNFT(parentVault).balanceOf(address(this)) - parentBalanceBeforeEthSwap;
         console.log("Parent tokens acquired:", parentTokensAcquired);
         console.log("ETH spent:", ethToSpend);
         console.log("Parent tokens per ETH:", parentTokensAcquired / 1e18);
 
         // STEP 2: Buy derivative tokens with parent tokens
         console.log("\n=== STEP 2: BUY DERIVATIVE TOKENS WITH PARENT ===");
-        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(swapRouter), type(uint256).max);
 
         // Prime the pool with a tiny swap first to enable proper execution
         console.log("Priming pool with tiny swap...");
@@ -1180,7 +1180,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         swapRouter.swap(childKey, primeSwap, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), "");
         console.log("Pool primed successfully");
 
-        uint256 parentBalanceBeforeDerivSwap = RemyVault(parentVault).balanceOf(address(this));
+        uint256 parentBalanceBeforeDerivSwap = wNFT(parentVault).balanceOf(address(this));
         uint256 parentToSpend = parentTokensAcquired - 1; // Use acquired tokens minus the 1 wei for priming
 
         console.log("Parent tokens to spend:", parentToSpend);
@@ -1195,8 +1195,8 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             childKey, derivSwapParams, PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}), ""
         );
 
-        uint256 derivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(this));
-        uint256 parentSpent = parentBalanceBeforeDerivSwap - RemyVault(parentVault).balanceOf(address(this));
+        uint256 derivativeBalance = wNFTMinter(derivativeVault).balanceOf(address(this));
+        uint256 parentSpent = parentBalanceBeforeDerivSwap - wNFT(parentVault).balanceOf(address(this));
 
         console.log("Derivative tokens acquired:", derivativeBalance);
         console.log("Parent tokens actually spent:", parentSpent);
@@ -1207,7 +1207,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("Final pool tick:", finalTick);
         console.log("Tick movement:", int256(finalTick) - int256(initialTick));
         console.log(
-            "Derivative tokens remaining in pool:", MinterRemyVault(derivativeVault).balanceOf(address(POOL_MANAGER))
+            "Derivative tokens remaining in pool:", wNFTMinter(derivativeVault).balanceOf(address(POOL_MANAGER))
         );
 
         // STEP 3: Mint NFTs from derivative tokens
@@ -1215,7 +1215,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         uint256 nftsToMint = derivativeBalance / 1e18;
         console.log("NFTs we can mint:", nftsToMint);
 
-        uint256[] memory mintedTokenIds = MinterRemyVault(derivativeVault).mint(nftsToMint, address(this));
+        uint256[] memory mintedTokenIds = wNFTMinter(derivativeVault).mint(nftsToMint, address(this));
 
         console.log("NFTs successfully minted:", MockERC721Simple(nft).balanceOf(address(this)));
         console.log("First NFT ID minted:", mintedTokenIds[0]);

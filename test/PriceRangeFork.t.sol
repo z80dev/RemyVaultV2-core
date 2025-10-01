@@ -5,11 +5,11 @@ import {BaseTest} from "./BaseTest.t.sol";
 import {console2 as console} from "forge-std/console2.sol";
 
 import {DerivativeFactory} from "../src/DerivativeFactory.sol";
-import {MinterRemyVault} from "../src/MinterRemyVault.sol";
-import {RemyVaultFactory} from "../src/RemyVaultFactory.sol";
-import {RemyVaultHook} from "../src/RemyVaultHook.sol";
-import {RemyVaultNFT} from "../src/RemyVaultNFT.sol";
-import {RemyVault} from "../src/RemyVault.sol";
+import {wNFTMinter} from "../src/wNFTMinter.sol";
+import {wNFTFactory} from "../src/wNFTFactory.sol";
+import {wNFTHook} from "../src/wNFTHook.sol";
+import {wNFTNFT} from "../src/wNFTNFT.sol";
+import {wNFT} from "../src/wNFT.sol";
 import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
 import {DerivativeTestUtils} from "./DerivativeTestUtils.sol";
 
@@ -49,8 +49,8 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
     address internal constant POOL_MANAGER_ADDRESS = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     IPoolManager internal constant POOL_MANAGER = IPoolManager(POOL_MANAGER_ADDRESS);
 
-    RemyVaultFactory internal vaultFactory;
-    RemyVaultHook internal hook;
+    wNFTFactory internal vaultFactory;
+    wNFTHook internal hook;
     DerivativeFactory internal factory;
     MockERC721Simple internal parentCollection;
     PoolSwapTest internal swapRouter;
@@ -79,12 +79,12 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         super.setUp();
         vm.deal(address(this), 1_000_000 ether);
 
-        vaultFactory = new RemyVaultFactory();
+        vaultFactory = new wNFTFactory();
         parentCollection = new MockERC721Simple("Parent Collection", "PRNT");
 
         vm.etch(HOOK_ADDRESS, hex"");
-        deployCodeTo("RemyVaultHook.sol:RemyVaultHook", abi.encode(POOL_MANAGER, address(this)), HOOK_ADDRESS);
-        hook = RemyVaultHook(HOOK_ADDRESS);
+        deployCodeTo("wNFTHook.sol:wNFTHook", abi.encode(POOL_MANAGER, address(this)), HOOK_ADDRESS);
+        hook = wNFTHook(HOOK_ADDRESS);
 
         factory = new DerivativeFactory(vaultFactory, hook, address(this));
         hook.transferOwnership(address(factory));
@@ -137,8 +137,8 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
             tokenIds[i] = tokenId;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(liquidityRouter), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(liquidityRouter), type(uint256).max);
 
         // Add liquidity in the calculated range
         IPoolManager.ModifyLiquidityParams memory params = IPoolManager.ModifyLiquidityParams({
@@ -165,9 +165,9 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
 
         // Test swap: Buy parent tokens with ETH (should work - parent gets cheaper)
         console.log("\n--- Testing Swap: Buy Parent with ETH ---");
-        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(swapRouter), type(uint256).max);
 
-        uint256 parentBefore = RemyVault(parentVault).balanceOf(address(this));
+        uint256 parentBefore = wNFT(parentVault).balanceOf(address(this));
 
         IPoolManager.SwapParams memory swapParams = IPoolManager.SwapParams({
             zeroForOne: true, // ETH -> Parent
@@ -180,7 +180,7 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
 
         swapRouter.swap{value: 0.1 ether}(rootKey, swapParams, settings, bytes(""));
 
-        uint256 parentAfter = RemyVault(parentVault).balanceOf(address(this));
+        uint256 parentAfter = wNFT(parentVault).balanceOf(address(this));
         uint256 parentReceived = parentAfter - parentBefore;
 
         console.log("ETH spent: 0.1");
@@ -211,11 +211,11 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
             tokenIds[i] = tokenId;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).deposit(tokenIds, address(this));
 
         // Add liquidity to root pool first (required by hook)
         (PoolKey memory rootKey,) = factory.rootPool(parentVault);
-        RemyVault(parentVault).approve(address(liquidityRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(liquidityRouter), type(uint256).max);
 
         IPoolManager.ModifyLiquidityParams memory rootLiqParams = IPoolManager.ModifyLiquidityParams({
             tickLower: -887220,
@@ -227,7 +227,7 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         liquidityRouter.modifyLiquidity{value: 10 ether}(rootKey, rootLiqParams, bytes(""));
         console.log("Root pool liquidity added");
 
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         // Create derivative with calculated ticks
         DerivativeFactory.DerivativeParams memory params;
@@ -288,14 +288,14 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         console.log("\n--- Testing Swap: Buy Derivative with Parent ---");
 
         // Approve tokens for swap router
-        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
-        MinterRemyVault(derivativeVault).approve(address(swapRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(swapRouter), type(uint256).max);
+        wNFTMinter(derivativeVault).approve(address(swapRouter), type(uint256).max);
 
-        console.log("Parent balance before swap:", RemyVault(parentVault).balanceOf(address(this)) / 1e18);
-        console.log("Derivative balance before swap:", MinterRemyVault(derivativeVault).balanceOf(address(this)) / 1e18);
+        console.log("Parent balance before swap:", wNFT(parentVault).balanceOf(address(this)) / 1e18);
+        console.log("Derivative balance before swap:", wNFTMinter(derivativeVault).balanceOf(address(this)) / 1e18);
 
-        uint256 derivativeBefore = MinterRemyVault(derivativeVault).balanceOf(address(this));
-        uint256 parentBefore = RemyVault(parentVault).balanceOf(address(this));
+        uint256 derivativeBefore = wNFTMinter(derivativeVault).balanceOf(address(this));
+        uint256 parentBefore = wNFT(parentVault).balanceOf(address(this));
 
         // Determine swap direction based on which token is currency0
         bool parentIsCurrency0 = Currency.unwrap(childKey.currency0) == parentVault;
@@ -311,8 +311,8 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
 
         swapRouter.swap(childKey, swapParams, settings, bytes(""));
 
-        uint256 derivativeAfter = MinterRemyVault(derivativeVault).balanceOf(address(this));
-        uint256 parentAfter = RemyVault(parentVault).balanceOf(address(this));
+        uint256 derivativeAfter = wNFTMinter(derivativeVault).balanceOf(address(this));
+        uint256 parentAfter = wNFT(parentVault).balanceOf(address(this));
 
         int256 derivativeDelta = int256(derivativeAfter) - int256(derivativeBefore);
         int256 parentDelta = int256(parentAfter) - int256(parentBefore);
@@ -354,11 +354,11 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).deposit(tokenIds, address(this));
 
         // Add liquidity to root pool first
         (PoolKey memory rootKey,) = factory.rootPool(parentVault);
-        RemyVault(parentVault).approve(address(liquidityRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(liquidityRouter), type(uint256).max);
 
         IPoolManager.ModifyLiquidityParams memory rootLiqParams = IPoolManager.ModifyLiquidityParams({
             tickLower: -887220,
@@ -370,7 +370,7 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         liquidityRouter.modifyLiquidity{value: 10 ether}(rootKey, rootLiqParams, bytes(""));
         console.log("Root pool liquidity added\n");
 
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         // Create derivative
         DerivativeFactory.DerivativeParams memory params;
@@ -400,8 +400,8 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         console.log("Initial sqrtPriceX96:", initialPrice);
 
         // Prepare for swaps
-        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
-        MinterRemyVault(derivativeVault).approve(address(swapRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(swapRouter), type(uint256).max);
+        wNFTMinter(derivativeVault).approve(address(swapRouter), type(uint256).max);
 
         // Swap 1: Move price up (make derivative more expensive)
         console.log("\n--- Swap 1: Push derivative price up ---");
@@ -446,12 +446,12 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         collection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         // Add liquidity to root pool
         (PoolKey memory rootKey,) = factory.rootPool(parentVault);
-        RemyVault(parentVault).approve(address(liquidityRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(liquidityRouter), type(uint256).max);
 
         IPoolManager.ModifyLiquidityParams memory rootLiqParams = IPoolManager.ModifyLiquidityParams({
             tickLower: -887220,
@@ -493,12 +493,12 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         collection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         // Add liquidity to root pool
         (PoolKey memory rootKey,) = factory.rootPool(parentVault);
-        RemyVault(parentVault).approve(address(liquidityRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(liquidityRouter), type(uint256).max);
 
         IPoolManager.ModifyLiquidityParams memory rootLiqParams = IPoolManager.ModifyLiquidityParams({
             tickLower: -887220,
@@ -540,12 +540,12 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         collection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         // Add liquidity to root pool
         (PoolKey memory rootKey,) = factory.rootPool(parentVault);
-        RemyVault(parentVault).approve(address(liquidityRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(liquidityRouter), type(uint256).max);
 
         IPoolManager.ModifyLiquidityParams memory rootLiqParams = IPoolManager.ModifyLiquidityParams({
             tickLower: -887220,
@@ -596,7 +596,7 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
 
         // Create derivative
         DerivativeFactory.DerivativeParams memory params;
-        params.parentCollection = RemyVault(parentVault).erc721();
+        params.parentCollection = wNFT(parentVault).erc721();
         params.nftName = name;
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://test/";
@@ -616,8 +616,8 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         PoolKey memory childKey = _buildChildKey(derivativeVault, parentVault, 3000, 60);
         bool parentIsCurrency0 = Currency.unwrap(childKey.currency0) == parentVault;
 
-        uint256 derivativeSupply = MinterRemyVault(derivativeVault).totalSupply();
-        uint256 initialDerivativeBalance = MinterRemyVault(derivativeVault).balanceOf(address(this));
+        uint256 derivativeSupply = wNFTMinter(derivativeVault).totalSupply();
+        uint256 initialDerivativeBalance = wNFTMinter(derivativeVault).balanceOf(address(this));
 
         console.log("\n--- DERIVATIVE POOL CREATED ---");
         console.log("Derivative supply:", derivativeSupply / 1e18);
@@ -625,8 +625,8 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         console.log("Available to mint:", (derivativeSupply - initialDerivativeBalance) / 1e18);
 
         // Approve tokens for swapping
-        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
-        MinterRemyVault(derivativeVault).approve(address(swapRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(swapRouter), type(uint256).max);
+        wNFTMinter(derivativeVault).approve(address(swapRouter), type(uint256).max);
 
         PoolSwapTest.TestSettings memory settings =
             PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false});
@@ -644,7 +644,7 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         uint256 targetToBuy = derivativeSupply - initialDerivativeBalance;
 
         while (swapCount < maxSwaps) {
-            uint256 derivBalBefore = MinterRemyVault(derivativeVault).balanceOf(address(this));
+            uint256 derivBalBefore = wNFTMinter(derivativeVault).balanceOf(address(this));
             uint256 remainingToBuy = derivativeSupply - derivBalBefore;
 
             if (remainingToBuy < 0.01e18) {
@@ -652,7 +652,7 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
                 break;
             }
 
-            uint256 parentBalBefore = RemyVault(parentVault).balanceOf(address(this));
+            uint256 parentBalBefore = wNFT(parentVault).balanceOf(address(this));
 
             // Try to buy with a reasonable amount
             uint256 buyAmount = 2 * 1e18; // 2 parent tokens per attempt
@@ -675,8 +675,8 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
                 settings,
                 bytes("")
             ) {
-                uint256 parentBalAfter = RemyVault(parentVault).balanceOf(address(this));
-                uint256 derivBalAfter = MinterRemyVault(derivativeVault).balanceOf(address(this));
+                uint256 parentBalAfter = wNFT(parentVault).balanceOf(address(this));
+                uint256 derivBalAfter = wNFTMinter(derivativeVault).balanceOf(address(this));
 
                 uint256 parentSpent = parentBalBefore - parentBalAfter;
                 uint256 derivReceived = derivBalAfter - derivBalBefore;
@@ -761,12 +761,12 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
             tokenIds[i] = i + 1;
         }
         parentCollection.setApprovalForAll(parentVault, true);
-        RemyVault(parentVault).deposit(tokenIds, address(this));
-        RemyVault(parentVault).approve(address(factory), type(uint256).max);
+        wNFT(parentVault).deposit(tokenIds, address(this));
+        wNFT(parentVault).approve(address(factory), type(uint256).max);
 
         // Add liquidity to root pool
         (PoolKey memory rootKey,) = factory.rootPool(parentVault);
-        RemyVault(parentVault).approve(address(liquidityRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(liquidityRouter), type(uint256).max);
 
         IPoolManager.ModifyLiquidityParams memory rootLiqParams = IPoolManager.ModifyLiquidityParams({
             tickLower: -887220,
@@ -816,8 +816,8 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         console.log("Initial liquidity:", params.liquidity);
 
         // Approve tokens for swapping
-        RemyVault(parentVault).approve(address(swapRouter), type(uint256).max);
-        MinterRemyVault(derivativeVault).approve(address(swapRouter), type(uint256).max);
+        wNFT(parentVault).approve(address(swapRouter), type(uint256).max);
+        wNFTMinter(derivativeVault).approve(address(swapRouter), type(uint256).max);
 
         PoolSwapTest.TestSettings memory settings =
             PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false});
@@ -843,8 +843,8 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
             console.log("Trade number:", i + 1);
             console.log("Trade size (parent):", tradeSize / 1e18, ".", (tradeSize % 1e18) / 1e16);
 
-            uint256 parentBal0 = RemyVault(parentVault).balanceOf(address(this));
-            uint256 derivBal0 = MinterRemyVault(derivativeVault).balanceOf(address(this));
+            uint256 parentBal0 = wNFT(parentVault).balanceOf(address(this));
+            uint256 derivBal0 = wNFTMinter(derivativeVault).balanceOf(address(this));
 
             IPoolManager.SwapParams memory swapParams = IPoolManager.SwapParams({
                 zeroForOne: parentIsCurrency0,
@@ -854,8 +854,8 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
 
             swapRouter.swap(childKey, swapParams, settings, bytes(""));
 
-            uint256 parentBal1 = RemyVault(parentVault).balanceOf(address(this));
-            uint256 derivBal1 = MinterRemyVault(derivativeVault).balanceOf(address(this));
+            uint256 parentBal1 = wNFT(parentVault).balanceOf(address(this));
+            uint256 derivBal1 = wNFTMinter(derivativeVault).balanceOf(address(this));
             (uint160 newPrice,,,) = POOL_MANAGER.getSlot0(childPoolId);
 
             uint256 parentSpentNow = parentBal0 - parentBal1;
@@ -916,8 +916,8 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         // Test large trade impact
         console.log("--- Large Trade: 20 parent tokens ---");
 
-        uint256 parentBalBefore = RemyVault(parentVault).balanceOf(address(this));
-        uint256 derivBalBefore = MinterRemyVault(derivativeVault).balanceOf(address(this));
+        uint256 parentBalBefore = wNFT(parentVault).balanceOf(address(this));
+        uint256 derivBalBefore = wNFTMinter(derivativeVault).balanceOf(address(this));
         (uint160 priceBefore,,,) = POOL_MANAGER.getSlot0(childPoolId);
 
         IPoolManager.SwapParams memory largeSwap = IPoolManager.SwapParams({
@@ -928,8 +928,8 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
 
         swapRouter.swap(childKey, largeSwap, settings, bytes(""));
 
-        uint256 parentBalAfter = RemyVault(parentVault).balanceOf(address(this));
-        uint256 derivBalAfter = MinterRemyVault(derivativeVault).balanceOf(address(this));
+        uint256 parentBalAfter = wNFT(parentVault).balanceOf(address(this));
+        uint256 derivBalAfter = wNFTMinter(derivativeVault).balanceOf(address(this));
         (uint160 priceAfter,,,) = POOL_MANAGER.getSlot0(childPoolId);
 
         uint256 parentSpent = parentBalBefore - parentBalAfter;
