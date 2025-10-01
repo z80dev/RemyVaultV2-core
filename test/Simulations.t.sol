@@ -169,7 +169,6 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         params.nftOwner = address(this);
         params.initialMinter = address(0);
         params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
-        params.tickSpacing = 60;
         params.maxSupply = maxSupply;
         params.tickLower = -12000;
         params.tickUpper = -7200;
@@ -184,7 +183,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
         // Multi-hop quote: ETH -> parent -> derivative
-        PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, params.tickSpacing);
+        PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, factory.TICK_SPACING());
 
         // Build the path: ETH -> parent -> derivative
         IV4Quoter.QuoteExactParams memory quoteParams;
@@ -207,7 +206,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         quoteParams.path[1] = PathKey({
             intermediateCurrency: Currency.wrap(derivativeVault),
             fee: params.fee,
-            tickSpacing: params.tickSpacing,
+            tickSpacing: factory.TICK_SPACING(),
             hooks: IHooks(HOOK_ADDRESS),
             hookData: ""
         });
@@ -280,7 +279,6 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         params.nftOwner = address(this);
         params.initialMinter = address(0);
         params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
-        params.tickSpacing = 60;
         params.maxSupply = maxSupply;
 
         // Price range: 0.1 to 1 parent per derivative
@@ -307,7 +305,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
         // Build child pool key
-        PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, params.tickSpacing);
+        PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, factory.TICK_SPACING());
         bool parentIsZero = Currency.unwrap(childKey.currency0) == parentVault;
 
         // Verify pool state
@@ -386,7 +384,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         quoteParams.path[1] = PathKey({
             intermediateCurrency: Currency.wrap(derivativeVault),
             fee: params.fee,
-            tickSpacing: params.tickSpacing,
+            tickSpacing: factory.TICK_SPACING(),
             hooks: IHooks(HOOK_ADDRESS),
             hookData: ""
         });
@@ -463,7 +461,6 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         params.nftOwner = address(this);
         params.initialMinter = address(0);
         params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
-        params.tickSpacing = 60;
         params.maxSupply = maxSupply;
 
         // Price range: 0.3 to 1.5 parent per derivative (5x range)
@@ -483,7 +480,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("\n=== CREATING DERIVATIVE ===");
         (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
-        PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, params.tickSpacing);
+        PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, factory.TICK_SPACING());
         bool parentIsZero = Currency.unwrap(childKey.currency0) == parentVault;
 
         (uint160 initialSqrtPrice, int24 initialTick,,) = POOL_MANAGER.getSlot0(childPoolId);
@@ -570,7 +567,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             quoteParams.path[1] = PathKey({
                 intermediateCurrency: Currency.wrap(derivativeVault),
                 fee: params.fee,
-                tickSpacing: params.tickSpacing,
+                tickSpacing: factory.TICK_SPACING(),
                 hooks: IHooks(HOOK_ADDRESS),
                 hookData: ""
             });
@@ -746,7 +743,6 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         params.nftOwner = address(this);
         params.initialMinter = address(0);
         params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
-        params.tickSpacing = 60;
         params.maxSupply = maxSupply;
 
         // Price range: 0.5 to 2.0 parent per derivative
@@ -768,7 +764,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("\n=== CREATING DERIVATIVE ===");
         (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
-        PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, params.tickSpacing);
+        PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, factory.TICK_SPACING());
         bool parentIsZero = Currency.unwrap(childKey.currency0) == parentVault;
 
         (uint160 initialSqrtPrice, int24 initialTick,,) = POOL_MANAGER.getSlot0(childPoolId);
@@ -846,7 +842,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             quoteParams.path[1] = PathKey({
                 intermediateCurrency: Currency.wrap(derivativeVault),
                 fee: params.fee,
-                tickSpacing: params.tickSpacing,
+                tickSpacing: factory.TICK_SPACING(),
                 hooks: IHooks(HOOK_ADDRESS),
                 hookData: ""
             });
@@ -1022,7 +1018,6 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         params.nftOwner = address(this);
         params.initialMinter = address(0);
         params.fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG - only 10% hook fee
-        params.tickSpacing = 60;
         params.maxSupply = maxSupply;
 
         // Price range: 0.25 to 2.0 parent per derivative (8x range)
@@ -1042,7 +1037,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         console.log("\n=== CREATING DERIVATIVE ===");
         (address nft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
-        PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, params.tickSpacing);
+        PoolKey memory childKey = _buildPoolKey(derivativeVault, parentVault, params.fee, factory.TICK_SPACING());
         bool parentIsZero = Currency.unwrap(childKey.currency0) == parentVault;
 
         (uint160 initialSqrtPrice, int24 initialTick,,) = POOL_MANAGER.getSlot0(childPoolId);
@@ -1130,7 +1125,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
             quoteParams.path[1] = PathKey({
                 intermediateCurrency: Currency.wrap(derivativeVault),
                 fee: params.fee,
-                tickSpacing: params.tickSpacing,
+                tickSpacing: factory.TICK_SPACING(),
                 hooks: IHooks(HOOK_ADDRESS),
                 hookData: ""
             });

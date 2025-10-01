@@ -123,7 +123,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         emit DerivativeFactory.ParentVaultRegistered(address(parentCollection), predictedVault, expectedRootId);
 
         (address parentVault, PoolId rootPoolId) =
-            factory.createVaultForCollection(address(parentCollection), 60, SQRT_PRICE_1_1);
+            factory.createVaultForCollection(address(parentCollection), SQRT_PRICE_1_1);
 
         assertEq(vaultFactory.vaultFor(address(parentCollection)), parentVault, "vault mapping mismatch");
         RemyVault vaultToken = RemyVault(parentVault);
@@ -147,7 +147,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeDeploysArtifacts() public {
-        (address parentVault, PoolId parentPoolId) = factory.createVaultForCollection(address(parentCollection), 60, SQRT_PRICE_1_1);
+        (address parentVault, PoolId parentPoolId) = factory.createVaultForCollection(address(parentCollection), SQRT_PRICE_1_1);
 
         // Seed the parent vault with inventory so the factory can provide liquidity.
         uint256 depositCount = 100;
@@ -174,7 +174,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftOwner = nftOwner;
         params.initialMinter = saleMinter;
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
         params.maxSupply = 100;
         params.tickLower = -120;
@@ -266,7 +265,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
             assertEq(eventDerivativeVault, derivativeVault, "derivative vault mismatch in event");
             assertEq(eventChildPoolId, PoolId.unwrap(childPoolId), "child pool id mismatch");
             assertEq(eventFee, params.fee, "fee mismatch in event");
-            assertEq(eventTickSpacing, params.tickSpacing, "tick spacing mismatch in event");
+            assertEq(eventTickSpacing, factory.TICK_SPACING(), "tick spacing mismatch in event");
             assertEq(eventSqrtPrice, SQRT_PRICE_1_1, "sqrt price mismatch in event");
         }
         assertTrue(foundDerivativeEvent, "DerivativeCreated event not emitted");
@@ -341,7 +340,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
         params.maxSupply = 1;
         params.tickLower = -60;
@@ -354,10 +352,9 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         factory.createDerivative(params);
     }
 
+    // Test skipped - registerRootPool function removed
     function skip_testRegisterRootPoolRequiresFactoryVault() public {
-        address randomToken = address(new RemyVault(address(parentCollection)));
-        vm.expectRevert(abi.encodeWithSelector(DerivativeFactory.ParentVaultNotFromFactory.selector, randomToken));
-        _initializeRootPool(randomToken, 3000, 60, SQRT_PRICE_1_1);
+        // Test no longer applicable
     }
 
     function skip_testRegisterRootPoolWithZeroSqrtPrice() public {
@@ -367,13 +364,9 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         _initializeRootPool(parentVault, 3000, 60, 0);
     }
 
+    // Test skipped - registerRootPool function removed
     function skip_testRegisterRootPoolTwiceReverts() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
-
-        _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
-
-        vm.expectRevert(abi.encodeWithSelector(DerivativeFactory.ParentVaultAlreadyInitialized.selector, parentVault));
-        _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
+        // Test no longer applicable
     }
 
     function testCreateDerivativeWithZeroSqrtPrice() public {
@@ -386,7 +379,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.sqrtPriceX96 = 0; // Invalid
         params.maxSupply = 1;
         params.tickLower = -60;
@@ -407,7 +399,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
         params.maxSupply = 1;
         params.tickLower = 60; // Lower >= Upper
@@ -428,7 +419,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
         params.maxSupply = 1;
         params.tickLower = -60;
@@ -459,7 +449,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
         params.maxSupply = 10;
         params.tickLower = -60;
@@ -491,7 +480,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
         params.maxSupply = 0; // Zero supply
         params.tickLower = -60;
@@ -527,7 +515,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
         params.maxSupply = 50;
         params.tickLower = -60;
@@ -549,7 +536,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testDerivativeTokenRecipientReceivesTokens() public {
-        (address parentVault,) = factory.createVaultForCollection(address(parentCollection), 60, SQRT_PRICE_1_1);
+        (address parentVault,) = factory.createVaultForCollection(address(parentCollection), SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](100);
@@ -569,7 +556,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftSymbol = "DRV";
         params.nftBaseUri = "ipfs://";
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
         params.maxSupply = 50;
         params.tickLower = -60;
@@ -588,7 +574,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeDefaultsToNftOwnerWhenNoRecipient() public {
-        (address parentVault,) = factory.createVaultForCollection(address(parentCollection), 60, SQRT_PRICE_1_1);
+        (address parentVault,) = factory.createVaultForCollection(address(parentCollection), SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](100);
@@ -609,7 +595,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftBaseUri = "ipfs://";
         params.nftOwner = nftOwner;
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
         params.maxSupply = 50;
         params.tickLower = -60;
@@ -626,12 +611,9 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         assertGt(ownerBalance, 0, "nft owner should receive derivative tokens by default");
     }
 
+    // Test skipped - rootPool no longer reverts, always returns key/id
     function skip_testRootPoolQuery() public {
         address parentVault = vaultFactory.deployVault(address(parentCollection));
-
-        // Should revert before registration
-        vm.expectRevert(abi.encodeWithSelector(DerivativeFactory.ParentVaultNotRegistered.selector, parentVault));
-        factory.rootPool(parentVault);
 
         // Register pool
         PoolId registeredId = _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
@@ -648,7 +630,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         address attacker = makeAddr("attacker");
         vm.prank(attacker);
         vm.expectRevert(Ownable.Unauthorized.selector);
-        factory.createVaultForCollection(address(parentCollection), 60, SQRT_PRICE_1_1);
+        factory.createVaultForCollection(address(parentCollection), SQRT_PRICE_1_1);
     }
 
     function skip_testHookOwnershipRequired() public {
@@ -664,7 +646,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
 
     /// @notice Comprehensive test exploring various price ranges and liquidity amounts for derivative launches
     function testDerivativeLaunchScenarios() public {
-        (address parentVault,) = factory.createVaultForCollection(address(parentCollection), 60, SQRT_PRICE_1_1);
+        (address parentVault,) = factory.createVaultForCollection(address(parentCollection), SQRT_PRICE_1_1);
 
         // Mint large inventory for parent vault
         uint256[] memory tokenIds = new uint256[](1000);
@@ -726,7 +708,6 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         params.nftBaseUri = "ipfs://test/";
         params.nftOwner = recipient;
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
         params.maxSupply = maxSupply;
         params.tickLower = tickLower;

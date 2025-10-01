@@ -126,7 +126,7 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
 
         // Protocol owner creates vault for the collection
         (address parentVaultAddr, PoolId rootId) =
-            derivativeFactory.createVaultForCollection(address(nftCollection), 60, SQRT_PRICE_1_1);
+            derivativeFactory.createVaultForCollection(address(nftCollection), SQRT_PRICE_1_1);
 
         parentVault = RemyVault(parentVaultAddr);
         rootPoolId = rootId;
@@ -174,7 +174,6 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
         params.nftBaseUri = "ipfs://minipunks/";
         params.nftOwner = protocolOwner;
         params.fee = 3000;
-        params.tickSpacing = 60;
         // Initialize at price 1 (bottom of range) so all liquidity is derivative tokens
         // Parent is currency0, derivative is currency1, so price = derivative/parent
         params.sqrtPriceX96 = SQRT_PRICE_1_0;
@@ -402,7 +401,7 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
         nftCollection.setApprovalForAll(address(vaultFactory), true);
 
         (address setupVaultAddr, PoolId rootId) =
-            derivativeFactory.createVaultForCollection(address(nftCollection), 60, SQRT_PRICE_1_1);
+            derivativeFactory.createVaultForCollection(address(nftCollection), SQRT_PRICE_1_1);
 
         parentVault = RemyVault(setupVaultAddr);
         rootPoolId = rootId;
@@ -436,7 +435,6 @@ contract EndToEndUserFlowTest is Test, DerivativeTestUtils {
         params.nftBaseUri = "ipfs://deriv/";
         params.nftOwner = protocolOwner;
         params.fee = 3000;
-        params.tickSpacing = 60;
         // Initialize at price 1 (bottom of range) for single-sided derivative liquidity
         params.sqrtPriceX96 = SQRT_PRICE_1_0;
         params.maxSupply = 50;

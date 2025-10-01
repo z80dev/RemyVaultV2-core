@@ -114,7 +114,7 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         console.log("Liquidity: 500 parent tokens + ~5 ETH");
 
         // Deploy parent vault and register root pool through factory
-        (address parentVault, PoolId rootPoolId) = factory.createVaultForCollection(address(parentCollection), 60, PARENT_ETH_SQRT_PRICE);
+        (address parentVault, PoolId rootPoolId) = factory.createVaultForCollection(address(parentCollection), PARENT_ETH_SQRT_PRICE);
 
         // Get root pool key (ETH/Parent)
         (PoolKey memory rootKey,) = factory.rootPool(parentVault);
@@ -201,7 +201,7 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         console.log("Start: 0.1 parent per derivative at mint");
 
         // Set up parent vault through factory
-        (address parentVault, PoolId rootPoolId) = factory.createVaultForCollection(address(parentCollection), 60, SQRT_PRICE_1_1);
+        (address parentVault, PoolId rootPoolId) = factory.createVaultForCollection(address(parentCollection), SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](200);
@@ -237,7 +237,6 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         params.nftBaseUri = "ipfs://derivative/";
         params.nftOwner = address(this);
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.maxSupply = 50;
         params.parentTokenContribution = 20 * 1e18;
         params.derivativeTokenRecipient = address(this);
@@ -346,7 +345,7 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         console.log("\n=== TESTING PRICE MOVEMENT TOWARD BOUNDARIES ===");
 
         // Set up pools through factory
-        (address parentVault,) = factory.createVaultForCollection(address(parentCollection), 60, SQRT_PRICE_1_1);
+        (address parentVault,) = factory.createVaultForCollection(address(parentCollection), SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](300);
@@ -381,7 +380,6 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         params.nftBaseUri = "ipfs://";
         params.nftOwner = address(this);
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.maxSupply = 100;
         params.salt = mineSaltForToken1(factory, parentVault, params.maxSupply);
         // Use ticks for parent as currency0 (derivative > parent)
@@ -439,7 +437,7 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
 
         // Setup - completely fresh through factory
         MockERC721Simple collection = new MockERC721Simple("Low Price Parent", "LPP");
-        (address parentVault,) = factory.createVaultForCollection(address(collection), 60, SQRT_PRICE_1_1);
+        (address parentVault,) = factory.createVaultForCollection(address(collection), SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](500);
@@ -486,7 +484,7 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
 
         // Setup - completely fresh through factory
         MockERC721Simple collection = new MockERC721Simple("Medium Price Parent", "MPP");
-        (address parentVault,) = factory.createVaultForCollection(address(collection), 60, SQRT_PRICE_1_1);
+        (address parentVault,) = factory.createVaultForCollection(address(collection), SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](500);
@@ -533,7 +531,7 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
 
         // Setup - completely fresh through factory
         MockERC721Simple collection = new MockERC721Simple("High Price Parent", "HPP");
-        (address parentVault,) = factory.createVaultForCollection(address(collection), 60, SQRT_PRICE_1_1);
+        (address parentVault,) = factory.createVaultForCollection(address(collection), SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](500);
@@ -604,7 +602,6 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         params.nftBaseUri = "ipfs://test/";
         params.nftOwner = address(this);
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.maxSupply = maxSupply;
         params.parentTokenContribution = parentContribution;
         params.derivativeTokenRecipient = address(this);
@@ -755,7 +752,7 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         console.log("\n=== DETAILED PRICE IMPACT & FEE ANALYSIS ===\n");
 
         // Setup parent vault and root pool through factory
-        (address parentVault,) = factory.createVaultForCollection(address(parentCollection), 60, SQRT_PRICE_1_1);
+        (address parentVault,) = factory.createVaultForCollection(address(parentCollection), SQRT_PRICE_1_1);
 
         // Mint parent tokens
         uint256[] memory tokenIds = new uint256[](500);
@@ -792,7 +789,6 @@ contract PriceRangeForkTest is BaseTest, DerivativeTestUtils {
         params.nftOwner = address(this);
         params.initialMinter = address(this); // Allow this test contract to mint
         params.fee = 3000; // 0.3% fee
-        params.tickSpacing = 60;
         params.maxSupply = 100;
         params.parentTokenContribution = 150 * 1e18; // Increased to match higher liquidity
         params.derivativeTokenRecipient = address(this);

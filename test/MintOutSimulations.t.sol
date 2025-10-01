@@ -210,7 +210,6 @@ contract MintOutSimulations is BaseTest, DerivativeTestUtils {
         params.nftBaseUri = "ipfs://mint-out/";
         params.nftOwner = address(this);
         params.fee = POOL_FEE;
-        params.tickSpacing = POOL_TICK_SPACING;
         params.maxSupply = config.maxSupply;
         params.tickLower = tickLower;
         params.tickUpper = tickUpper;
@@ -448,7 +447,7 @@ contract MintOutSimulations is BaseTest, DerivativeTestUtils {
         // Use factory's method to properly create vault and register root pool
         uint160 parentSqrtPrice = TickMath.getSqrtPriceAtTick(PARENT_INITIAL_TICK);
         (address parentVault, PoolId rootPoolId) =
-            factory.createVaultForCollection(address(parentCollection), POOL_TICK_SPACING, parentSqrtPrice);
+            factory.createVaultForCollection(address(parentCollection), parentSqrtPrice);
 
         state.parentVault = parentVault;
         state.rootPoolId = rootPoolId;

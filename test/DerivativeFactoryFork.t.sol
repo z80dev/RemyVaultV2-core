@@ -97,7 +97,6 @@ contract DerivativeFactoryForkTest is BaseTest, DerivativeTestUtils {
         params.nftOwner = nftOwner;
         params.initialMinter = saleMinter;
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.sqrtPriceX96 = SQRT_PRICE_1_1;
         params.maxSupply = 50;
         params.tickLower = -120;

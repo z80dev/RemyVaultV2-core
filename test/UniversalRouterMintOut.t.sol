@@ -86,19 +86,16 @@ contract UniversalRouterMintOut is BaseTest, DerivativeTestUtils {
     }
 
     // Helper to initialize a root pool directly (for testing the permissionless flow)
-    function _initRootPool(address parentVault, uint24, /* fee */ int24 tickSpacing, uint160 sqrtPriceX96)
+    function _initRootPool(address parentVault, uint24, /* fee */ int24, /* tickSpacing */ uint160 sqrtPriceX96)
         internal
         returns (PoolId poolId)
     {
         uint24 fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG
-        PoolKey memory key = _buildChildKey(address(0), parentVault, fee, tickSpacing);
+        PoolKey memory key = _buildChildKey(address(0), parentVault, fee, factory.TICK_SPACING());
         PoolKey memory emptyKey;
         vm.prank(address(factory));
         hook.addChild(key, false, emptyKey);
         POOL_MANAGER.initialize(key, sqrtPriceX96);
-
-        // Register the root pool with the factory
-        factory.registerRootPool(parentVault, fee, tickSpacing);
 
         return key.toId();
     }
@@ -267,7 +264,6 @@ contract UniversalRouterMintOut is BaseTest, DerivativeTestUtils {
         params.nftBaseUri = "ipfs://test/";
         params.nftOwner = address(this);
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.maxSupply = 100;
         params.tickLower = -11520;
         params.tickUpper = 11520;

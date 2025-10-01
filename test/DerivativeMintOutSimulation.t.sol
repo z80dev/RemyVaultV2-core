@@ -81,19 +81,16 @@ contract DerivativeMintOutSimulation is BaseTest, DerivativeTestUtils {
     }
 
     // Helper to initialize a root pool directly (for testing the permissionless flow)
-    function _initRootPool(address parentVault, uint24, /* fee */ int24 tickSpacing, uint160 sqrtPriceX96)
+    function _initRootPool(address parentVault, uint24, /* fee */ int24, /* tickSpacing */ uint160 sqrtPriceX96)
         internal
         returns (PoolId poolId)
     {
         uint24 fee = 0x800000; // LPFeeLibrary.DYNAMIC_FEE_FLAG
-        PoolKey memory key = _buildChildKey(address(0), parentVault, fee, tickSpacing);
+        PoolKey memory key = _buildChildKey(address(0), parentVault, fee, factory.TICK_SPACING());
         PoolKey memory emptyKey;
         vm.prank(address(factory));
         hook.addChild(key, false, emptyKey);
         POOL_MANAGER.initialize(key, sqrtPriceX96);
-
-        // Register the root pool with the factory
-        factory.registerRootPool(parentVault, fee, tickSpacing);
 
         return key.toId();
     }
@@ -200,7 +197,6 @@ contract DerivativeMintOutSimulation is BaseTest, DerivativeTestUtils {
         params.nftBaseUri = "ipfs://test/";
         params.nftOwner = address(this);
         params.fee = 3000;
-        params.tickSpacing = 60;
         params.maxSupply = maxSupply;
         params.tickLower = tickLower;
         params.tickUpper = tickUpper;
@@ -212,7 +208,7 @@ contract DerivativeMintOutSimulation is BaseTest, DerivativeTestUtils {
 
         (, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
-        PoolKey memory childKey = _buildChildKey(derivativeVault, parentVault, 3000, 60);
+        PoolKey memory childKey = _buildChildKey(derivativeVault, parentVault, 3000, factory.TICK_SPACING());
         bool parentIsCurrency0 = Currency.unwrap(childKey.currency0) == parentVault;
 
         (uint160 initialDerivPrice,,,) = POOL_MANAGER.getSlot0(childPoolId);

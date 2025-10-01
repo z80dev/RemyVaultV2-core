@@ -29,6 +29,9 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
     using StateLibrary for IPoolManager;
     using LPFeeLibrary for uint24;
 
+    /// @notice Standard tick spacing used for all pools (root and child)
+    int24 public constant TICK_SPACING = 60;
+
     struct DerivativeParams {
         address parentCollection;
         string nftName;
@@ -37,7 +40,6 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         address nftOwner;
         address initialMinter;
         uint24 fee;
-        int24 tickSpacing;
         uint160 sqrtPriceX96;
         uint256 maxSupply;
         int24 tickLower;
@@ -47,12 +49,6 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         address derivativeTokenRecipient;
         address parentTokenRefundRecipient;
         bytes32 salt;
-    }
-
-    struct RootPool {
-        bool exists;
-        PoolKey key;
-        PoolId id;
     }
 
     struct DerivativeInfo {
@@ -83,9 +79,6 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
 
     error HookOwnershipMissing();
     error ZeroAddress();
-    error ParentVaultNotFromFactory(address parentVault);
-    error ParentVaultAlreadyInitialized(address parentVault);
-    error ParentVaultNotRegistered(address parentVault);
     error ParentCollectionHasNoVault(address collection);
     error ParentCollectionHasNoPool(address collection, address vault);
     error InvalidSqrtPrice();
@@ -100,7 +93,6 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
     RemyVaultHook public immutable HOOK;
     IPoolManager public immutable POOL_MANAGER;
 
-    mapping(address => RootPool) private _rootPools;
     mapping(address => DerivativeInfo) public derivativeForVault;
     mapping(address => address) public vaultForNft;
 
@@ -115,7 +107,7 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         _initializeOwner(owner_);
     }
 
-    function createVaultForCollection(address collection, int24 tickSpacing, uint160 sqrtPriceX96)
+    function createVaultForCollection(address collection, uint160 sqrtPriceX96)
         external
         onlyOwner
         requiresHookOwnership
@@ -123,22 +115,17 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
     {
         vault = VAULT_FACTORY.deployVault(collection);
 
-        // Initialize the root pool with dynamic fee flag
+        // Initialize the root pool with dynamic fee flag and standard tick spacing
         if (sqrtPriceX96 == 0) revert InvalidSqrtPrice();
         uint24 fee = LPFeeLibrary.DYNAMIC_FEE_FLAG;
-        PoolKey memory key = _buildPoolKey(address(0), vault, fee, tickSpacing);
+        PoolKey memory key = _buildPoolKey(address(0), vault, fee, TICK_SPACING);
         PoolKey memory emptyKey;
         HOOK.addChild(key, false, emptyKey);
         POOL_MANAGER.initialize(key, sqrtPriceX96);
 
-        // Cache the root pool
         poolId = key.toId();
-        RootPool storage root = _rootPools[vault];
-        root.exists = true;
-        root.key = key;
-        root.id = poolId;
 
-        emit RootPoolRegistered(vault, poolId, fee, tickSpacing, sqrtPriceX96);
+        emit RootPoolRegistered(vault, poolId, fee, TICK_SPACING, sqrtPriceX96);
         emit ParentVaultRegistered(collection, vault, poolId);
     }
 
@@ -150,14 +137,12 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         address parentVault = VAULT_FACTORY.vaultFor(params.parentCollection);
         if (parentVault == address(0)) revert ParentCollectionHasNoVault(params.parentCollection);
 
-        // Get or discover the root pool for this parent vault
-        RootPool storage root = _rootPools[parentVault];
-        if (!root.exists) {
-            // Try to discover an existing root pool
-            _discoverAndCacheRootPool(parentVault, params.fee, params.tickSpacing);
-            // Check again after discovery attempt
-            if (!root.exists) revert ParentCollectionHasNoPool(params.parentCollection, parentVault);
-        }
+        // Verify root pool exists with standard parameters
+        PoolKey memory rootKey = _buildPoolKey(address(0), parentVault, LPFeeLibrary.DYNAMIC_FEE_FLAG, TICK_SPACING);
+        PoolId rootPoolId = rootKey.toId();
+        (uint160 rootSqrtPrice,,,) = POOL_MANAGER.getSlot0(rootPoolId);
+        if (rootSqrtPrice == 0) revert ParentCollectionHasNoPool(params.parentCollection, parentVault);
+        if (address(rootKey.hooks) != address(HOOK)) revert ParentCollectionHasNoPool(params.parentCollection, parentVault);
 
         if (params.sqrtPriceX96 == 0) revert InvalidSqrtPrice();
         if (params.tickLower >= params.tickUpper) revert InvalidTickRange();
@@ -183,12 +168,12 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         }
 
         (PoolKey memory childKey, bool derivativeIsCurrency0) =
-            _buildPoolKeyWithOrientation(vault, parentVault, params.fee, params.tickSpacing);
+            _buildPoolKeyWithOrientation(vault, parentVault, params.fee, TICK_SPACING);
 
         (uint160 normalizedSqrtPrice, int24 normalizedLower, int24 normalizedUpper) =
             _normalizePriceAndTicks(derivativeIsCurrency0, params.sqrtPriceX96, params.tickLower, params.tickUpper);
 
-        HOOK.addChild(childKey, true, root.key);
+        HOOK.addChild(childKey, true, rootKey);
         POOL_MANAGER.initialize(childKey, normalizedSqrtPrice);
 
         MinterRemyVault derivativeToken = MinterRemyVault(vault);
@@ -229,47 +214,18 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
             vault,
             childPoolId,
             params.fee,
-            params.tickSpacing,
+            TICK_SPACING,
             normalizedSqrtPrice
         );
     }
 
-    function rootPool(address parentVault) external view returns (PoolKey memory key, PoolId poolId) {
-        RootPool storage root = _rootPools[parentVault];
-        if (!root.exists) revert ParentVaultNotRegistered(parentVault);
-        key = root.key;
-        poolId = root.id;
-    }
-
-    /// @notice Register a root pool for a parent vault (permissionless)
+    /// @notice Get the root pool for a parent vault
     /// @param parentVault The parent vault address
-    /// @param fee The pool fee (must use DYNAMIC_FEE_FLAG for permissionless pools)
-    /// @param tickSpacing The tick spacing for the pool
-    /// @dev Anyone can call this to register an existing initialized pool
-    /// @dev Verifies that: 1) vault is from factory, 2) pool is initialized, 3) pool uses correct hook
-    function registerRootPool(address parentVault, uint24 fee, int24 tickSpacing) external {
-        // Verify vault is from the factory
-        if (!VAULT_FACTORY.isVault(parentVault)) revert ParentVaultNotFromFactory(parentVault);
-
-        // Verify not already registered
-        if (_rootPools[parentVault].exists) revert ParentVaultAlreadyInitialized(parentVault);
-
-        // Build the pool key (ETH/parentVault pool)
-        PoolKey memory key = _buildPoolKey(address(0), parentVault, fee, tickSpacing);
-        PoolId poolId = key.toId();
-
-        // Verify pool is initialized
-        (uint160 sqrtPriceX96,,,) = POOL_MANAGER.getSlot0(poolId);
-        if (sqrtPriceX96 == 0) revert ParentCollectionHasNoPool(RemyVault(parentVault).erc721(), parentVault);
-
-        // Verify the hook matches
-        if (address(key.hooks) != address(HOOK)) revert ParentCollectionHasNoPool(RemyVault(parentVault).erc721(), parentVault);
-
-        // Cache the pool
-        RootPool storage root = _rootPools[parentVault];
-        root.exists = true;
-        root.key = key;
-        root.id = poolId;
+    /// @return key The pool key for the root pool
+    /// @return poolId The pool ID for the root pool
+    function rootPool(address parentVault) external view returns (PoolKey memory key, PoolId poolId) {
+        key = _buildPoolKey(address(0), parentVault, LPFeeLibrary.DYNAMIC_FEE_FLAG, TICK_SPACING);
+        poolId = key.toId();
     }
 
     /// @notice Compute the derivative vault address for the given parameters without deploying
@@ -288,45 +244,6 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
     modifier requiresHookOwnership() {
         if (HOOK.owner() != address(this)) revert HookOwnershipMissing();
         _;
-    }
-
-    function _discoverAndCacheRootPool(address parentVault, uint24 hintFee, int24 hintTickSpacing) private {
-        if (!VAULT_FACTORY.isVault(parentVault)) revert ParentVaultNotFromFactory(parentVault);
-
-        // Always use the dynamic fee flag for permissionless pools
-        uint24 fee = LPFeeLibrary.DYNAMIC_FEE_FLAG;
-
-        // Try the hinted tick spacing first (from derivative params)
-        if (_tryDiscoverPool(parentVault, fee, hintTickSpacing)) return;
-
-        // Try common tick spacings
-        int24[3] memory tickSpacings = [int24(10), int24(60), int24(200)];
-
-        for (uint256 i = 0; i < tickSpacings.length; i++) {
-            // Skip if we already tried this tick spacing
-            if (tickSpacings[i] == hintTickSpacing) continue;
-            if (_tryDiscoverPool(parentVault, fee, tickSpacings[i])) return;
-        }
-    }
-
-    function _tryDiscoverPool(address parentVault, uint24 fee, int24 tickSpacing) private returns (bool) {
-        PoolKey memory key = _buildPoolKey(address(0), parentVault, fee, tickSpacing);
-        PoolId poolId = key.toId();
-
-        // Check if pool is initialized (sqrtPrice != 0)
-        (uint160 sqrtPriceX96,,,) = POOL_MANAGER.getSlot0(poolId);
-        if (sqrtPriceX96 == 0) return false;
-
-        // Verify the hook matches
-        if (address(key.hooks) != address(HOOK)) return false;
-
-        // Cache the discovered pool
-        RootPool storage root = _rootPools[parentVault];
-        root.exists = true;
-        root.key = key;
-        root.id = poolId;
-
-        return true;
     }
 
     function _buildPoolKey(address tokenA, address tokenB, uint24 fee, int24 tickSpacing)
