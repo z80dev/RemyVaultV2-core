@@ -96,7 +96,7 @@ contract HookFeeDistributionTest is BaseTest, DerivativeTestUtils {
         console.log("\n=== TESTING FEE DISTRIBUTION: CHILD -> PARENT ===\n");
 
         // Setup parent vault and root pool
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.create(address(parentCollection));
         PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -206,7 +206,7 @@ contract HookFeeDistributionTest is BaseTest, DerivativeTestUtils {
         console.log("\n=== TESTING ROOT POOL FEE RETENTION ===\n");
 
         // Setup parent vault and root pool
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.create(address(parentCollection));
         PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -266,7 +266,7 @@ contract HookFeeDistributionTest is BaseTest, DerivativeTestUtils {
         console.log("\n=== TESTING CUMULATIVE FEES FROM MULTIPLE SWAPS ===\n");
 
         // Setup
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.create(address(parentCollection));
         _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         uint256[] memory tokenIds = new uint256[](500);

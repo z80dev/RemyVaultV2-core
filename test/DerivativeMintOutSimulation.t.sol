@@ -159,7 +159,7 @@ contract DerivativeMintOutSimulation is BaseTest, DerivativeTestUtils {
         uint128 liquidity
     ) internal {
         // Setup parent vault and root pool
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.create(address(parentCollection));
         PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens

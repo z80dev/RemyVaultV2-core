@@ -17,9 +17,9 @@ contract RemyVaultFactoryTest is Test {
     }
 
     function testDeployVaultRevertsOnDuplicateCollection() public {
-        address firstVault = factory.deployVault(address(collection));
-        assertEq(factory.vaultFor(address(collection)), firstVault);
-        assertTrue(factory.isVault(firstVault));
+        address firstVault = factory.create(address(collection));
+        assertEq(factory.wNFTFor(address(collection)), firstVault);
+        assertTrue(factory.iswNFT(firstVault));
         assertEq(collection.name(), "wNFT");
         assertEq(collection.symbol(), "REM");
         assertEq(wNFT(firstVault).name(), string.concat("Wrapped ", collection.name()), "vault should mirror collection name");
@@ -28,25 +28,25 @@ contract RemyVaultFactoryTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(wNFTFactory.CollectionAlreadyDeployed.selector, address(collection))
         );
-        factory.deployVault(address(collection));
+        factory.create(address(collection));
     }
 
     function testDeployVaultRevertsOnZeroCollection() public {
         vm.expectRevert(wNFTFactory.CollectionAddressZero.selector);
-        factory.deployVault(address(0));
+        factory.create(address(0));
     }
 
     function testDeployVaultRevertsWhenCollectionIsExistingVault() public {
-        address firstVault = factory.deployVault(address(collection));
+        address firstVault = factory.create(address(collection));
 
-        vm.expectRevert(abi.encodeWithSelector(wNFTFactory.CollectionIsVault.selector, firstVault));
-        factory.deployVault(firstVault);
+        vm.expectRevert(abi.encodeWithSelector(wNFTFactory.CollectionIswNFT.selector, firstVault));
+        factory.create(firstVault);
     }
 
     function testPredictVaultAddressRevertsForExistingVault() public {
-        address firstVault = factory.deployVault(address(collection));
+        address firstVault = factory.create(address(collection));
 
-        vm.expectRevert(abi.encodeWithSelector(wNFTFactory.CollectionIsVault.selector, firstVault));
+        vm.expectRevert(abi.encodeWithSelector(wNFTFactory.CollectionIswNFT.selector, firstVault));
         factory.computeAddress(firstVault);
     }
 }

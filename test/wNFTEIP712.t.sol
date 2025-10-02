@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {wNFT} from "../src/wNFT.sol";
 import {IERC721} from "../src/interfaces/IERC721.sol";
 import {IERC20} from "../src/interfaces/IERC20.sol";
+import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
 
 interface IMockERC721 is IERC721 {
     function mint(address to, uint256 tokenId) external;
@@ -53,7 +54,8 @@ contract RemyVaultEIP712Test is Test {
         alice = makeAddr("alice");
 
         // Deploy contracts
-        nft = IMockERC721(deployCode("MockERC721", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
+        MockERC721Simple deployed = new MockERC721Simple("MOCK", "MOCK");
+        nft = IMockERC721(address(deployed));
         vault = new wNFT(address(nft));
 
         // Transfer NFT ownership to vault for minting

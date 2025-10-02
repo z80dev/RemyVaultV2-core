@@ -70,7 +70,7 @@ contract DerivativeFactoryForkTest is BaseTest, DerivativeTestUtils {
     }
 
     function testCreateDerivative_OnBaseFork_ConfiguresPools() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.create(address(parentCollection));
 
         PoolId rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
@@ -110,7 +110,7 @@ contract DerivativeFactoryForkTest is BaseTest, DerivativeTestUtils {
         (address derivativeNft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
         // Derivative vaults are managed by DerivativeFactory, not wNFTFactory
-        assertEq(factory.vaultForNft(derivativeNft), derivativeVault, "factory vault lookup mismatch");
+        assertEq(factory.wNFTForNft(derivativeNft), derivativeVault, "factory vault lookup mismatch");
 
         (address infoNft, address infoParent, PoolId infoPoolId) = factory.derivativeForVault(derivativeVault);
         assertEq(infoNft, derivativeNft, "derivative info nft mismatch");

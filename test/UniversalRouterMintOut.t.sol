@@ -231,7 +231,7 @@ contract UniversalRouterMintOut is BaseTest, DerivativeTestUtils {
         returns (address parentVault, PoolId rootPoolId, address derivativeVault, PoolId childPoolId)
     {
         // Create parent vault and pool
-        parentVault = vaultFactory.deployVault(address(parentCollection));
+        parentVault = vaultFactory.create(address(parentCollection));
         rootPoolId = _initRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint and deposit parent NFTs

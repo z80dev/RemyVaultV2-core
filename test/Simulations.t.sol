@@ -90,7 +90,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
         }
 
         // Create parent vault
-        parentVault = vaultFactory.deployVault(address(parentCollection));
+        parentVault = vaultFactory.create(address(parentCollection));
 
         // Deposit NFTs into parent vault
         uint256[] memory tokenIds = new uint256[](700);
@@ -146,7 +146,7 @@ contract Simulations is BaseTest, DerivativeTestUtils, IERC721Receiver {
 
         // Create wNFT for the OG NFT collection
         vm.prank(userA);
-        address vaultAddress = vaultFactory.deployVault(address(ogNFT));
+        address vaultAddress = vaultFactory.create(address(ogNFT));
         wNFT vault = wNFT(vaultAddress);
 
         // Verify the vault was created correctly

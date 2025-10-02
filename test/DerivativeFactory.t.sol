@@ -82,7 +82,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function skip_testRegisterRootPoolSetsHookConfig() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.create(address(parentCollection));
 
         PoolKey memory expectedRootKey = _buildKey(address(0), parentVault, 3000, 60);
         PoolId expectedRootId = expectedRootKey.toId();
@@ -125,7 +125,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         (address parentVault, PoolId rootPoolId) =
             factory.createVaultForCollection(address(parentCollection), SQRT_PRICE_1_1);
 
-        assertEq(vaultFactory.vaultFor(address(parentCollection)), parentVault, "vault mapping mismatch");
+        assertEq(vaultFactory.wNFTFor(address(parentCollection)), parentVault, "vault mapping mismatch");
         wNFT vaultToken = wNFT(parentVault);
         assertEq(vaultToken.name(), string.concat("Wrapped ", parentCollection.name()), "vault name mismatch");
         assertEq(vaultToken.symbol(), string.concat("w", parentCollection.symbol()), "vault symbol mismatch");
@@ -271,7 +271,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         assertTrue(foundDerivativeEvent, "DerivativeCreated event not emitted");
 
         // Derivative vaults are managed by DerivativeFactory, not wNFTFactory
-        assertEq(factory.vaultForNft(derivativeNft), derivativeVault, "vault lookup mismatch");
+        assertEq(factory.wNFTForNft(derivativeNft), derivativeVault, "vault lookup mismatch");
 
         (address infoNft, address infoParent, PoolId infoPoolId) = factory.derivativeForVault(derivativeVault);
         assertEq(infoNft, derivativeNft, "info nft mismatch");
@@ -358,7 +358,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function skip_testRegisterRootPoolWithZeroSqrtPrice() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.create(address(parentCollection));
 
         vm.expectRevert(DerivativeFactory.InvalidSqrtPrice.selector);
         _initializeRootPool(parentVault, 3000, 60, 0);
@@ -370,7 +370,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeWithZeroSqrtPrice() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.create(address(parentCollection));
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         DerivativeFactory.DerivativeParams memory params;
@@ -390,7 +390,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeWithInvalidTickRange() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.create(address(parentCollection));
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         DerivativeFactory.DerivativeParams memory params;
@@ -410,7 +410,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeWithZeroLiquidity() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.create(address(parentCollection));
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         DerivativeFactory.DerivativeParams memory params;
@@ -430,7 +430,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeWithNoParentTokenApproval() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.create(address(parentCollection));
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens but don't approve factory
@@ -461,7 +461,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testCreateDerivativeWithZeroMaxSupply() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.create(address(parentCollection));
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -493,7 +493,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
     }
 
     function testParentTokenRefundWhenNotFullyConsumed() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.create(address(parentCollection));
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
 
         // Mint parent tokens
@@ -613,7 +613,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
 
     // Test skipped - rootPool no longer reverts, always returns key/id
     function skip_testRootPoolQuery() public {
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.create(address(parentCollection));
 
         // Register pool
         PoolId registeredId = _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);
@@ -638,7 +638,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         vm.prank(address(factory));
         hook.transferOwnership(address(this));
 
-        address parentVault = vaultFactory.deployVault(address(parentCollection));
+        address parentVault = vaultFactory.create(address(parentCollection));
 
         vm.expectRevert(DerivativeFactory.HookOwnershipMissing.selector);
         _initializeRootPool(parentVault, 3000, 60, SQRT_PRICE_1_1);

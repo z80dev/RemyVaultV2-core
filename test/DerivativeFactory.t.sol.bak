@@ -124,7 +124,7 @@ contract DerivativeFactoryTest is Test {
             address(parentCollection), "Parent Token", "PRMT", 60, SQRT_PRICE_1_1
         );
 
-        assertEq(vaultFactory.vaultFor(address(parentCollection)), parentVault, "vault mapping mismatch");
+        assertEq(vaultFactory.wNFTFor(address(parentCollection)), parentVault, "vault mapping mismatch");
         RemyVault vaultToken = RemyVault(parentVault);
         assertEq(vaultToken.name(), "Parent Token", "vault name mismatch");
         assertEq(vaultToken.symbol(), "PRMT", "vault symbol mismatch");
@@ -267,8 +267,8 @@ contract DerivativeFactoryTest is Test {
         }
         assertTrue(foundDerivativeEvent, "DerivativeCreated event not emitted");
 
-        assertEq(vaultFactory.vaultFor(derivativeNft), derivativeVault, "factory should map NFT to vault");
-        assertEq(factory.vaultForNft(derivativeNft), derivativeVault, "vault lookup mismatch");
+        assertEq(vaultFactory.wNFTFor(derivativeNft), derivativeVault, "factory should map NFT to vault");
+        assertEq(factory.wNFTForNft(derivativeNft), derivativeVault, "vault lookup mismatch");
 
         (address infoNft, address infoParent, PoolId infoPoolId) = factory.derivativeForVault(derivativeVault);
         assertEq(infoNft, derivativeNft, "info nft mismatch");

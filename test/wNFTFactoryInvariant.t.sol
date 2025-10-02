@@ -17,7 +17,7 @@ contract RemyVaultFactoryInvariantTest is Test {
 
         targetContract(address(handler));
         bytes4[] memory selectors = new bytes4[](1);
-        selectors[0] = handler.deployVault.selector;
+        selectors[0] = handler.create.selector;
         targetSelector(StdInvariant.FuzzSelector({addr: address(handler), selectors: selectors}));
     }
 
@@ -28,10 +28,10 @@ contract RemyVaultFactoryInvariantTest is Test {
             address collection = handler.collectionAt(i);
             address vault = handler.vaultAt(i);
 
-            assertEq(factory.vaultFor(collection), vault, "vaultFor mapping drifted");
-            assertTrue(factory.isVault(vault), "vault flag missing for deployed vault");
-            assertFalse(factory.isVault(collection), "collection incorrectly flagged as vault");
-            assertEq(factory.vaultFor(vault), address(0), "vault address reused as collection");
+            assertEq(factory.wNFTFor(collection), vault, "wNFTFor mapping drifted");
+            assertTrue(factory.iswNFT(vault), "vault flag missing for deployed vault");
+            assertFalse(factory.iswNFT(collection), "collection incorrectly flagged as vault");
+            assertEq(factory.wNFTFor(vault), address(0), "vault address reused as collection");
             assertEq(wNFT(vault).erc721(), collection, "vault erc721 target mismatch");
 
             address predicted = factory.computeAddress(collection);
@@ -53,16 +53,16 @@ contract FactoryHandler {
         factory = factory_;
     }
 
-    function deployVault(uint160 seed) external {
+    function create(uint160 seed) external {
         address collection = knownCollections[seed];
         if (collection == address(0)) {
             collection = address(new MockERC721Simple("Invariant NFT", "INVT"));
             knownCollections[seed] = collection;
         }
-        if (factory.isVault(collection)) return;
-        if (factory.vaultFor(collection) != address(0)) return;
+        if (factory.iswNFT(collection)) return;
+        if (factory.wNFTFor(collection) != address(0)) return;
 
-        try factory.deployVault(collection) returns (address vault) {
+        try factory.create(collection) returns (address vault) {
             if (collections.length < MAX_TRACKED) {
                 collections.push(collection);
                 vaults.push(vault);

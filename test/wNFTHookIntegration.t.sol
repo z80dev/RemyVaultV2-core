@@ -41,7 +41,7 @@ contract RemyVaultHookIntegrationTest is Test {
     }
 
     function testDeployVaultTokenAndInitializeHookedPool() public {
-        address vaultAddr = factory.deployVault(address(collection));
+        address vaultAddr = factory.create(address(collection));
         wNFT vault = wNFT(vaultAddr);
 
         uint256 depositCount = 50;

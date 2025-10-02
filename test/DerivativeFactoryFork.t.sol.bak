@@ -110,8 +110,8 @@ contract DerivativeFactoryForkTest is BaseTest {
 
         (address derivativeNft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
-        assertEq(vaultFactory.vaultFor(derivativeNft), derivativeVault, "vault mapping mismatch");
-        assertEq(factory.vaultForNft(derivativeNft), derivativeVault, "factory vault lookup mismatch");
+        assertEq(vaultFactory.wNFTFor(derivativeNft), derivativeVault, "vault mapping mismatch");
+        assertEq(factory.wNFTForNft(derivativeNft), derivativeVault, "factory vault lookup mismatch");
 
         (address infoNft, address infoParent, PoolId infoPoolId) = factory.derivativeForVault(derivativeVault);
         assertEq(infoNft, derivativeNft, "derivative info nft mismatch");

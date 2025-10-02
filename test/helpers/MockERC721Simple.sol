@@ -112,4 +112,9 @@ contract MockERC721Simple {
         delete ownedTokensIndex[tokenId];
         delete ownedTokens[from][lastTokenIndex];
     }
+
+    function transfer_ownership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "zero address");
+        owner = newOwner;
+    }
 }
