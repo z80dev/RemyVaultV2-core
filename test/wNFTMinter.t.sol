@@ -149,8 +149,14 @@ contract MinterRemyVaultTest is Test {
     }
 
     function testDepositAndWithdrawFlow() public {
-        // Mint two NFTs through the vault first.
-        uint256[] memory tokenIds = vault.mint(2, address(this));
+        // Must mint 99% (10 NFTs) before deposits are allowed
+        uint256[] memory allTokenIds = vault.mint(10, address(this));
+
+        // Now deposits should work - deposit 2 NFTs
+        uint256[] memory tokenIds = new uint256[](2);
+        tokenIds[0] = allTokenIds[0];
+        tokenIds[1] = allTokenIds[1];
+
         nft.setApprovalForAll(address(vault), true);
         uint256 balanceBefore = vault.balanceOf(address(this));
         uint256 mintedAmount = vault.deposit(tokenIds, address(this));
@@ -162,11 +168,16 @@ contract MinterRemyVaultTest is Test {
     }
 
     function testMintDepositWithdrawCycle() public {
-        // Mint NFTs
-        uint256[] memory tokenIds = vault.mint(5, address(this));
-        assertEq(nft.balanceOf(address(this)), 5);
+        // Must mint 99% first (10 NFTs for maxSupply=10)
+        uint256[] memory allTokenIds = vault.mint(10, address(this));
+        assertEq(nft.balanceOf(address(this)), 10);
 
-        // Deposit them back
+        // Now deposits are allowed - deposit 5 NFTs
+        uint256[] memory tokenIds = new uint256[](5);
+        for (uint256 i = 0; i < 5; i++) {
+            tokenIds[i] = allTokenIds[i];
+        }
+
         nft.setApprovalForAll(address(vault), true);
         uint256 balanceBefore = vault.balanceOf(address(this));
         vault.deposit(tokenIds, address(this));
@@ -175,24 +186,24 @@ contract MinterRemyVaultTest is Test {
         // Withdraw them again
         vault.withdraw(tokenIds, address(this));
         assertEq(vault.balanceOf(address(this)), balanceBefore);
-        assertEq(nft.balanceOf(address(this)), 5);
+        assertEq(nft.balanceOf(address(this)), 10);
 
-        // Mint counter should still be at 5
-        assertEq(vault.mintedCount(), 5);
+        // Mint counter should still be at 10
+        assertEq(vault.mintedCount(), 10);
     }
 
     function testCannotMintAfterReachingLimit() public {
-        // Mint all 10
+        // Mint all 10 (this also unlocks deposits since 100% > 99%)
         vault.mint(10, address(this));
 
-        // Even with tokens from deposits, cannot mint more
+        // Deposits are now allowed - deposit some NFTs to get tokens back
         uint256[] memory someIds = new uint256[](2);
         someIds[0] = 0;
         someIds[1] = 1;
         nft.setApprovalForAll(address(vault), true);
         vault.deposit(someIds, address(this));
 
-        // Now have tokens but still cannot mint
+        // Now have tokens but still cannot mint more NFTs
         vm.expectRevert(wNFTMinter.MintLimitExceeded.selector);
         vault.mint(1, address(this));
     }
@@ -291,5 +302,78 @@ contract MinterRemyVaultTest is Test {
         // totalSupply = (maxSupply - mintedCount) * UNIT + deposited NFTs * UNIT
         // On setup: totalSupply = maxSupply * UNIT (all pre-minted)
         assertEq(totalSupply, expectedTotalSupply - (mintedCount * vault.UNIT()));
+    }
+
+    function testDepositLockedBefore99PercentMinted() public {
+        // Mint only 5 out of 10 (50%)
+        uint256[] memory tokenIds = vault.mint(5, address(this));
+        nft.setApprovalForAll(address(vault), true);
+
+        // Try to deposit - should revert
+        vm.expectRevert(wNFTMinter.DepositsLocked.selector);
+        vault.deposit(tokenIds, address(this));
+    }
+
+    function testDepositLockedAt98Percent() public {
+        // Create vault with larger maxSupply for better precision testing
+        wNFTNFT largeNft = new wNFTNFT("Large", "LRG", "ipfs://", address(this));
+        wNFTMinter largeVault = new wNFTMinter(address(largeNft), 100);
+        largeNft.setMinter(address(largeVault), true);
+
+        // Mint 98 out of 100 (98%)
+        uint256[] memory tokenIds = largeVault.mint(98, address(this));
+        largeNft.setApprovalForAll(address(largeVault), true);
+
+        // Try to deposit - should still be locked at 98%
+        uint256[] memory depositIds = new uint256[](1);
+        depositIds[0] = tokenIds[0];
+        vm.expectRevert(wNFTMinter.DepositsLocked.selector);
+        largeVault.deposit(depositIds, address(this));
+    }
+
+    function testDepositUnlockedAt99Percent() public {
+        // Create vault with larger maxSupply
+        wNFTNFT largeNft = new wNFTNFT("Large", "LRG", "ipfs://", address(this));
+        wNFTMinter largeVault = new wNFTMinter(address(largeNft), 100);
+        largeNft.setMinter(address(largeVault), true);
+
+        // Mint exactly 99 out of 100 (99%)
+        uint256[] memory tokenIds = largeVault.mint(99, address(this));
+        largeNft.setApprovalForAll(address(largeVault), true);
+
+        // Now deposits should work
+        uint256[] memory depositIds = new uint256[](1);
+        depositIds[0] = tokenIds[0];
+        uint256 mintedAmount = largeVault.deposit(depositIds, address(this));
+        assertEq(mintedAmount, largeVault.UNIT());
+    }
+
+    function testDepositUnlockedAt100Percent() public {
+        // Mint all 10 (100%)
+        uint256[] memory tokenIds = vault.mint(10, address(this));
+        nft.setApprovalForAll(address(vault), true);
+
+        // Deposits should work
+        uint256[] memory depositIds = new uint256[](1);
+        depositIds[0] = tokenIds[0];
+        uint256 mintedAmount = vault.deposit(depositIds, address(this));
+        assertEq(mintedAmount, vault.UNIT());
+    }
+
+    function testDepositWithZeroMaxSupplyAlwaysAllowed() public {
+        // Create vault with zero maxSupply
+        wNFTNFT zeroNft = new wNFTNFT("Zero", "ZERO", "ipfs://", address(this));
+        wNFTMinter zeroVault = new wNFTMinter(address(zeroNft), 0);
+
+        // Mint an NFT directly (not through vault) - need to set this contract as minter first
+        zeroNft.setMinter(address(this), true);
+        zeroNft.safeMint(address(this), "");
+        zeroNft.setApprovalForAll(address(zeroVault), true);
+
+        // Deposits should work even with 0 maxSupply
+        uint256[] memory tokenIds = new uint256[](1);
+        tokenIds[0] = 0;
+        uint256 mintedAmount = zeroVault.deposit(tokenIds, address(this));
+        assertEq(mintedAmount, zeroVault.UNIT());
     }
 }

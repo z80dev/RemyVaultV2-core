@@ -43,7 +43,16 @@ contract wNFT is wNFTEIP712, IERCXX {
         return UNIT * count;
     }
 
-    function deposit(uint256[] calldata tokenIds, address recipient) external override returns (uint256 mintedAmount) {
+    function deposit(uint256[] calldata tokenIds, address recipient) external virtual override returns (uint256 mintedAmount) {
+        _beforeDeposit(tokenIds);
+        return _deposit(tokenIds, recipient);
+    }
+
+    function _beforeDeposit(uint256[] calldata tokenIds) internal virtual {
+        // Hook for deposit restrictions - can be overridden by child contracts
+    }
+
+    function _deposit(uint256[] calldata tokenIds, address recipient) internal returns (uint256 mintedAmount) {
         uint256 tokenCount = tokenIds.length;
         require(tokenCount != 0, "Must deposit at least one token");
 

@@ -18,6 +18,7 @@ contract wNFTMinter is wNFT {
     error MintLimitExceeded();
     error RecipientZero();
     error SupplyOverflow();
+    error DepositsLocked();
 
     event DerivativeMint(address indexed account, uint256 count, uint256[] tokenIds);
 
@@ -51,5 +52,17 @@ contract wNFTMinter is wNFT {
 
         tokenIds = DERIVATIVE_NFT.batchMint(recipient, count, new string[](0));
         emit DerivativeMint(recipient, count, tokenIds);
+    }
+
+    // -------------------------------------------------------------------------
+    // Deposit Override - Lock deposits until 99% minted
+    // -------------------------------------------------------------------------
+
+    function _beforeDeposit(uint256[] calldata) internal view override {
+        // Prevent deposits until at least 99% of NFTs have been minted
+        // Using multiplication to avoid rounding issues: mintedCount * 100 >= maxSupply * 99
+        if (maxSupply != 0 && mintedCount * 100 < maxSupply * 99) {
+            revert DepositsLocked();
+        }
     }
 }
