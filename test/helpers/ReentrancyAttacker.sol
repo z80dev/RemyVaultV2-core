@@ -162,11 +162,12 @@ contract ReentrancyAttacker {
     }
 
     /**
-     * @dev ERC721 receiver callback - the point of reentrancy attack during deposit
+     * @dev ERC721 receiver callback - the point of reentrancy attack
      *
      * When an NFT is transferred to this contract, this function is called.
-     * If attackOnDeposit is enabled, it will attempt to call the vault's deposit function again,
-     * which should be prevented by proper reentrancy protection.
+     * During deposit: The NFT goes to the vault, so this isn't called by the attacker.
+     * During withdraw: The NFT is sent to this attacker contract, triggering this callback
+     *                  where we can attempt to call withdraw again.
      */
     function onERC721Received(address, address, uint256, bytes memory) external returns (bytes4) {
         if (attackOnDeposit && !attacked) {
@@ -188,16 +189,35 @@ contract ReentrancyAttacker {
             emit AttackAttempted("deposit", tokenId, success);
         }
 
+        if (attackOnWithdraw && !attacked) {
+            attacked = true;
+
+            // Create token IDs array with a single token
+            uint256[] memory tokenIds = new uint256[](1);
+            tokenIds[0] = tokenId;
+
+            // Try to call withdraw again during the NFT transfer callback
+            // This should fail either due to insufficient balance (tokens already burned)
+            // or reentrancy protection
+            bool success = false;
+            try vault.withdraw(tokenIds, address(this)) {
+                success = true;
+            } catch {
+                // Expected to fail
+            }
+
+            emit AttackAttempted("withdraw", tokenId, success);
+        }
+
         // Must return this value for ERC721 compatibility
         return this.onERC721Received.selector;
     }
 
     /**
-     * @dev Perform withdraw followed by a reentrancy attack if configured
+     * @dev Initiate a withdrawal that will trigger reentrancy attempt if attackOnWithdraw is set
      *
-     * This function doesn't directly demonstrate reentrancy during withdraw
-     * because the vault uses safeTransferFrom which doesn't have a pre-withdrawal hook.
-     * It serves as a helper to perform withdrawals for testing.
+     * The reentrancy attack occurs in the onERC721Received callback when the NFT
+     * is transferred to this contract during the withdrawal.
      */
     function withdrawAttack() external {
         token.approve(address(vault), 1000 * 10 ** 18);
@@ -206,11 +226,9 @@ contract ReentrancyAttacker {
         uint256[] memory tokenIds = new uint256[](1);
         tokenIds[0] = tokenId;
 
-        // Normal withdrawal
+        // Initiate withdrawal - if attackOnWithdraw is set, reentrancy will be attempted
+        // in the onERC721Received callback
         vault.withdraw(tokenIds, address(this));
-
-        // In production, a reentrancy attack would try to occur during the NFT transfer callback,
-        // but we're just testing the normal path since reentrancy should be blocked
     }
 
     /**

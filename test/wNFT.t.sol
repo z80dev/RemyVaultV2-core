@@ -10,6 +10,7 @@ import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {ReentrancyAttacker} from "./helpers/ReentrancyAttacker.sol";
 import {wNFT} from "../src/wNFT.sol";
 import {wNFTEIP712} from "../src/wNFTEIP712.sol";
+import {MockERC721Simple} from "./helpers/MockERC721Simple.sol";
 
 interface IMockERC721 is IERC721 {
     function mint(address to, uint256 tokenId) external;
@@ -70,7 +71,8 @@ contract RemyVaultTest is Test {
      */
     function setUp() public {
         // Deploy mock contracts
-        nft = IMockERC721(deployCode("MockERC721", abi.encode("MOCK", "MOCK", "https://", "MOCK", "1.0")));
+        MockERC721Simple deployed = new MockERC721Simple("MOCK", "MOCK");
+        nft = IMockERC721(address(deployed));
 
         // Deploy the vault (which manages its own ERC20 supply)
         wNFT deployedVault = new wNFT(address(nft));
@@ -456,14 +458,13 @@ contract RemyVaultTest is Test {
     /**
      * @dev Tests that reentrancy protection works during withdraw
      *
-     * This test first deposits a token, then attempts a theoretical reentrancy
-     * attack during the withdrawal process. Although our implementation doesn't
-     * directly trigger the attack (due to safeTransferFrom behavior), this test
-     * validates that a standard withdraw functions correctly with the reentrancy
-     * guard in place.
+     * This test deposits a token, then attempts a reentrancy attack during withdrawal.
+     * When the NFT is transferred to the attacker during withdraw, onERC721Received
+     * is called, where the attacker attempts to call withdraw again. This should fail
+     * because the tokens have already been burned.
      */
     function testReentrancyProtectionOnWithdraw() public {
-        // Set up the attack
+        // Set up the attack - mint token to attacker
         vm.prank(address(vault));
         nft.mint(address(attacker), 42);
 
@@ -474,16 +475,21 @@ contract RemyVaultTest is Test {
         // First perform a legitimate deposit
         attacker.attack(42);
 
+        // Verify deposit succeeded - attacker has tokens and vault has NFT
+        assertEq(token.balanceOf(address(attacker)), UNIT);
+        assertEq(nft.ownerOf(42), address(vault));
+
         // Configure the attack for withdraw phase
         attacker.setAttackOnWithdraw(true);
         attacker.setAttacked(false);
 
-        // Perform the withdrawal with theoretical attack attempt
+        // Perform the withdrawal - this will trigger reentrancy attempt in onERC721Received
         attacker.withdrawAttack();
 
-        // Verify tokens were burned and NFT was withdrawn properly
+        // Verify the withdrawal succeeded despite reentrancy attempt
         assertEq(nft.balanceOf(address(vault)), 0);
         assertEq(nft.ownerOf(42), address(attacker));
+        // Tokens should be burned - reentrancy attempt should not have minted more
         assertEq(token.balanceOf(address(attacker)), 0);
     }
 
