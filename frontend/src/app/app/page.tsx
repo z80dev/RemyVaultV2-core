@@ -13,21 +13,20 @@ export default function App() {
   return (
     <main className="container">
       <header>
-        <h1>wNFT Protocol</h1>
-        <p className="subtitle">NFT Fractionalization on Base</p>
+        <h1>wNFT</h1>
         <ConnectWallet />
       </header>
 
       <section className="section">
-        <h2>Deploy New Vault</h2>
+        <h2>Deploy New wNFT</h2>
         <DeployVault />
       </section>
 
       <section className="section">
-        <h2>Interact with Vault</h2>
+        <h2>Interact with wNFT</h2>
         <div className="card">
           <div className="form-group">
-            <label>Vault Address:</label>
+            <label>wNFT Address:</label>
             <input
               type="text"
               value={vaultAddress}
@@ -55,15 +54,15 @@ export default function App() {
           </p>
           <ul>
             <li>
-              <strong>Deposit NFTs:</strong> Lock your NFTs in a vault and receive
-              fungible ERC-20 tokens (1 NFT = 1e18 tokens)
+              <strong>Deposit NFTs:</strong> Deposit your NFTs in a wNFT contract and receive
+              fungible ERC20 tokens (1 NFT = 1 token)
             </li>
             <li>
               <strong>Withdraw NFTs:</strong> Burn tokens to retrieve specific NFTs from
-              the vault
+              the wNFT contract
             </li>
             <li>
-              <strong>Trade Fractions:</strong> Exchange fractional ownership via AMM
+              <strong>Trade wNFTs:</strong> Exchange fractional ownership via AMM
               pools with integrated liquidity
             </li>
           </ul>
