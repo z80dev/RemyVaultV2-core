@@ -3,15 +3,25 @@ import Link from 'next/link';
 export default function Home() {
   return (
     <main className="landing-page">
+      {/* Navbar */}
+      <nav className="navbar">
+        <div className="navbar-container">
+          <div className="navbar-brand">wNFT</div>
+          <Link href="/app" className="navbar-button">
+            Launch App
+          </Link>
+        </div>
+      </nav>
+
       {/* Hero Section */}
       <section className="hero">
         <div className="hero-content">
-          <span className="hero-badge">Base Native · Open Source</span>
+          <span className="hero-badge">Open Source</span>
           <h1 className="hero-title">
             wNFT
           </h1>
           <p className="hero-subtitle">
-            wETH for NFTs — Bring DeFi composability to your digital assets
+            DeFi Composability For NFTs
           </p>
           <p className="hero-description">
             Transform illiquid NFTs into tradeable, fractional tokens with seamless DeFi integration
@@ -27,9 +37,12 @@ export default function Home() {
         <div className="feature-container">
           <h2 className="section-title">What is wNFT?</h2>
           <p className="section-description">
-            Just as wETH wraps ETH to make it ERC-20 compatible, wNFT wraps your NFTs into fungible tokens,
-            unlocking the full power of DeFi composability. Each NFT becomes a liquid, divisible asset that
-            can be traded, lent, borrowed, and integrated into any DeFi protocol.
+                                               <div>
+            Just like wETH wraps ETH, wNFT wraps your NFTs
+            unlocking the full power of DeFi composability.
+                                                      Each NFT becomes a liquid, divisible token that
+            can be traded, lent, staked, and integrated into any DeFi protocol.
+                                                      </div>
           </p>
         </div>
       </section>
@@ -43,17 +56,25 @@ export default function Home() {
               <div className="feature-number">1</div>
               <h3>Deposit NFTs</h3>
               <p>
-                Lock your NFTs in a vault and receive fungible ERC-20 tokens.
-                Each NFT = 1×10¹⁸ tokens, making them divisible and tradeable.
+                   <div>
+                Deposit NFTs and receive ERC20 tokens.
+                   </div>
+                   <div>
+                1 NFT = 1 token.
+                   </div>
               </p>
             </div>
 
             <div className="feature-card">
               <div className="feature-number">2</div>
-              <h3>Trade Fractions</h3>
+              <h3>Trade wNFTs</h3>
               <p>
-                Trade fractional ownership on Uniswap V4 with automated liquidity pools
-                and hierarchical fee distribution for derivative collections.
+                   <div>
+                Trade, lend, or stake your wNFT tokens on any DeFi protocol.
+                          </div>
+                   <div>
+                Provide liquidity on DEXes and earn real yield on your wNFTs.
+                          </div>
               </p>
             </div>
 
@@ -61,8 +82,9 @@ export default function Home() {
               <div className="feature-number">3</div>
               <h3>Withdraw NFTs</h3>
               <p>
-                Burn your tokens to retrieve specific NFTs from the vault anytime.
-                Full custody and control over your assets.
+                   <div>
+                Burn tokens to unwrap NFTs at any time.
+                          </div>
               </p>
             </div>
           </div>
@@ -75,23 +97,18 @@ export default function Home() {
           <h2 className="section-title">Key Features</h2>
           <div className="benefits-grid">
             <div className="benefit-card">
-              <h3>🔓 Unlock Liquidity</h3>
-              <p>Transform illiquid NFTs into tradeable tokens with instant price discovery</p>
+              <h3>🔓 Unlocks Liquidity</h3>
+              <p>Transform illiquid NFTs into tradeable tokens with efficient price discovery</p>
             </div>
 
             <div className="benefit-card">
               <h3>⚡ Gas Efficient</h3>
-              <p>Minimalist architecture designed for low gas costs on Base L2</p>
+              <p>Minimalist architecture designed for low gas costs</p>
             </div>
 
             <div className="benefit-card">
               <h3>🔄 DeFi Compatible</h3>
-              <p>Standard ERC-20 tokens work with any DeFi protocol out of the box</p>
-            </div>
-
-            <div className="benefit-card">
-              <h3>🎨 Create Derivatives</h3>
-              <p>Launch new collections with custom tokenomics and automated liquidity</p>
+              <p>Standard ERC20 tokens work with any DeFi protocol out of the box</p>
             </div>
           </div>
         </div>
@@ -113,7 +130,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="footer">
         <div className="feature-container">
-          <p>Built on Base · Powered by Uniswap V4</p>
+          <p>A Remy Boys Production</p>
         </div>
       </footer>
     </main>

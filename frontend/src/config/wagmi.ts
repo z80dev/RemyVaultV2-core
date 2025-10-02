@@ -3,7 +3,7 @@ import { base } from 'wagmi/chains';
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 
 export const config = getDefaultConfig({
-  appName: 'wNFT Protocol',
+  appName: 'wNFT',
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
   chains: [base],
   transports: {

@@ -20,7 +20,7 @@ export function DeployVault() {
     writeContract({
       address: CONTRACTS.wNFTFactory,
       abi: wNFTFactoryAbi,
-      functionName: 'deployVault',
+      functionName: 'create',
       args: [collectionAddress as `0x${string}`],
     });
   };

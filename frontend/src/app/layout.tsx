@@ -6,8 +6,8 @@ import { Providers } from './providers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'wNFT Protocol',
-  description: 'NFT Fractionalization Protocol on Base',
+  title: 'wNFT',
+  description: 'NFT Fractionalization Protocol',
 };
 
 export default function RootLayout({
