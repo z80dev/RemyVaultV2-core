@@ -1,155 +1,252 @@
 # wNFT: NFT Fractionalization Protocol
 
-wNFT is a minimalist, gas-efficient NFT fractionalization protocol. The current core vault lives in Solidity (`wNFT`) and lets users deposit ERC-721 NFTs to mint fungible ERC-20 tokens that track vault ownership.
+wNFT is a minimalist, gas-efficient NFT fractionalization protocol that enables permissionless conversion between ERC-721 NFTs and fungible ERC-20 tokens at a fixed 1:1 ratio (1 NFT = 1e18 tokens).
 
 ## Overview
 
-The system focuses on two production components:
+The protocol consists of two core components:
 
-1. **Core Vault (`wNFT`)** – handles the NFT ↔ ERC20 mint/burn cycle
-2. **Derivative & Liquidity Tooling** – `DerivativeFactory`, `wNFTNFT`, `MinterwNFT`, and the Uniswap V4 hook wire the vault into on-chain markets
+1. **wNFT** – Fractionalization contract that handles NFT deposits and withdrawals, minting/burning ERC-20 tokens
+2. **wNFTFactory** – Factory contract that deploys deterministic wNFT instances for any ERC-721 collection
 
-The separation keeps the fractionalization layer small while still enabling new collections and liquidity strategies to launch through the derivative factory.
+The design prioritizes simplicity and composability. Each wNFT contract is a standalone fractionalization primitive that can be integrated into AMMs, lending protocols, or other DeFi systems.
 
-## Key Advantages
+## How wNFT Works
 
-### For NFT Holders
-- **Instant Liquidity**: Convert illiquid NFTs into fungible REMY tokens
-- **Partial Exposure**: Stay long NFTs without committing an entire token
+### Core Mechanics
 
-### For Traders
-- **Deeper Markets**: Trade fractional exposure instead of whole tokens
-- **Arbitrage Windows**: Balance price between the vault token and on-chain pools
+The wNFT contract implements a straightforward deposit/withdraw cycle:
 
-### For Protocols
-- **Composable Primitive**: Integrate REMY as a staked or collateral asset
-- **Deterministic Supply**: The vault always mints 1e18 REMY per NFT and burns on redemption
+**Deposit**: Users transfer NFTs into the wNFT contract and receive fungible ERC-20 tokens in return. Each deposited NFT mints exactly 1e18 tokens (18 decimals, mirroring standard ERC-20 conventions).
 
-## Core Vault
-
-`wNFT` implements the ground-level fractionalization mechanics:
-
-### Purpose
-The vault converts NFTs into fungible ERC20 tokens at a fixed 1e18 REMY per NFT. It maintains the reverse operation so every ERC20 unit can unlock the underlying inventory.
-
-### Mechanics
-- Depositing transfers NFTs into the vault and mints REMY for the recipient
-- Withdrawing burns REMY from the caller before safely returning each NFT
-- Quoting functions expose deterministic pricing (`UNIT = 1e18`)
+**Withdraw**: Users burn tokens to retrieve specific NFTs from the contract. Withdrawing requires burning 1e18 tokens per NFT.
 
 ### Key Properties
-- **Permissionless**: No owner or privileged address; anyone can deposit or withdraw against inventory
-- **Simplicity**: Focuses solely on deposit/withdraw logic
-- **Reliability**: No price or oracle dependency, only inventory-backed accounting
-- **Composability**: Downstream contracts can reason about REMY supply deterministically
-- **Traceability**: Emits structured `Deposit`/`Withdraw` events for off-chain reconciliation
 
-### Interface
+- **Fixed Exchange Rate**: Always 1e18 tokens per NFT, hardcoded as `UNIT`
+- **Permissionless**: No owner or admin; anyone can deposit or withdraw
+- **Non-custodial**: Users maintain full control through token ownership
+- **Deterministic**: Token supply always equals (NFT count × 1e18)
+- **Composable**: Standard ERC-20 interface enables DeFi integration
+- **Auditable**: Events track every deposit/withdrawal for reconciliation
+
+### Example Flow
+
 ```solidity
-interface IwNFT {
-    function deposit(uint256[] calldata tokenIds, address recipient) external returns (uint256);
-    function withdraw(uint256[] calldata tokenIds, address recipient) external returns (uint256);
-    function quoteDeposit(uint256 count) external pure returns (uint256);
-    function quoteWithdraw(uint256 count) external pure returns (uint256);
-}
+// 1. Deposit 3 NFTs (tokenIds: 42, 100, 200)
+nft.setApprovalForAll(address(wNFT), true);
+uint256[] memory tokenIds = [42, 100, 200];
+wNFT.deposit(tokenIds, msg.sender);
+// Result: User receives 3e18 wNFT tokens
+
+// 2. Later, withdraw 1 specific NFT
+uint256[] memory withdrawIds = [42];
+wNFT.withdraw(withdrawIds, msg.sender);
+// Result: User burns 1e18 tokens, receives NFT #42
 ```
 
-## Derivative Factory & Vault NFTs
+### Technical Details
 
-The derivative toolchain extends the vault without modifying core logic:
+**Token Minting**: Uses Solady's gas-optimized ERC-20 implementation with EIP-2612 permit support for gasless approvals.
 
-- `DerivativeFactory` mints new `wNFTNFT` collections and pairs them with freshly deployed `MinterwNFT` instances.
-- Root and child pools are registered with `wNFTHook` to share liquidity across Uniswap V4 markets.
-- Metadata and minter permissions are configured at deployment time so launch scripts can tailor new drops.
+**NFT Transfers**: Uses `safeTransferFrom` on withdrawal to ensure recipient contracts can handle ERC-721 tokens. On deposit, uses standard `transferFrom` after checking approval.
 
-These pieces let integrators spin up their own NFT wrappers while inheriting the redemption guarantees of the base vault.
+**Reentrancy Protection**: Follows checks-effects-interactions pattern. Withdraw burns tokens before transferring NFTs, preventing reentrancy attacks.
 
-## System Benefits
+**Metadata**: Each wNFT automatically generates a name and symbol by prefixing the underlying collection's metadata (e.g., "Wrapped CryptoPunks" → "wCryptoPunks").
 
-A trimmed surface area keeps the protocol auditable while still supporting growth:
+## wNFTFactory
 
-1. **Modularity** – Core vault code stays unchanged while derivative tooling evolves independently
-2. **Composability** – REMY tokens can flow into AMMs, staking contracts, or collateral systems
-3. **Flexibility** – New derivative collections or hooks can launch with factory calls instead of redeploying the base logic
-4. **Security** – Fewer contracts reduce the attack surface and simplify auditing
+### Purpose
 
-## Uniswap V4 Integration
+The factory deploys wNFT contracts deterministically using CREATE2, ensuring that each ERC-721 collection has exactly one canonical wNFT contract with a predictable address.
 
-wNFT includes a custom Uniswap V4 hook (`wNFTHook`) that enables fractional token trading with hierarchical fee distribution:
+### Key Features
 
-- **Hierarchical Liquidity Pools**: Root pools (ETH/VaultToken) and child pools (ParentToken/DerivativeToken) form a fee-sharing network
-- **Automatic Fee Distribution**: 10% fees on trades, split 75/25 between child and parent pools when hierarchies exist
-- **Pool Topology Enforcement**: Root pools must include ETH; child pools share exactly one token with their parent
-- **Fee Routing**: Captured fees are donated back to pools to reward liquidity providers
-- **Gas Efficiency**: Optimized fee calculations with minimal overhead
+**Deterministic Deployment**: Uses the collection address as the CREATE2 salt, so the wNFT address can be computed before deployment:
 
-This integration enables new DeFi primitives:
-- **Automated Price Discovery**: AMM mechanics determine vault token prices against ETH and other tokens
-- **Concentrated Liquidity**: Uniswap V4's tick ranges allow precise liquidity positioning for NFT collections
-- **Cross-Collection Arbitrage**: Trade between parent and derivative vault tokens within the pool hierarchy
-- **Passive Fee Income**: Liquidity providers earn from trading fees across the vault token ecosystem
+```solidity
+address predictedAddress = factory.computeAddress(collectionAddress);
+// Deploy creates contract at this exact address
+address deployed = factory.create(collectionAddress);
+assert(deployed == predictedAddress);
+```
 
-**Note**: NFT fractionalization and redemption occur through vault `deposit`/`withdraw` functions. The hook manages token trading and fee routing within Uniswap pools.
+**One-Per-Collection Invariant**: The factory maintains a `wNFTFor` mapping that prevents duplicate deployments:
+
+```solidity
+mapping(address => address) public wNFTFor;  // collection → wNFT
+mapping(address => bool) public iswNFT;      // prevents circular references
+```
+
+**Circular Reference Prevention**: A wNFT contract itself cannot be used as a collection for another wNFT, preventing confusing nested structures.
+
+### Usage
+
+```solidity
+// Deploy a new wNFT for CryptoPunks
+address wNFTAddress = factory.create(0xb47e3cd837dDF8e4c57F05d70Ab865de6e193BBB);
+
+// Query existing deployments
+address existing = factory.wNFTFor(collectionAddress);
+bool isWNFT = factory.iswNFT(someAddress);
+```
+
+### Interface
+
+```solidity
+interface IwNFTFactory {
+    // Deploy a new wNFT contract for the given collection
+    function create(address collection) external returns (address wNFTAddr);
+
+    // Compute the address before deployment
+    function computeAddress(address collection) external view returns (address);
+
+    // Query deployed wNFT for a collection
+    function wNFTFor(address collection) external view returns (address);
+
+    // Check if an address is a wNFT contract
+    function iswNFT(address addr) external view returns (bool);
+}
+
+event wNFTCreated(address indexed collection, address indexed wNFT);
+```
+
+## Benefits
+
+### For NFT Holders
+- **Instant Liquidity**: Convert illiquid NFTs into fungible tokens
+- **Partial Exposure**: Sell fractions while maintaining some exposure
+- **Composability**: Use tokens as collateral, in liquidity pools, or for yield farming
+
+### For Traders
+- **Fractional Trading**: Trade exposure without buying entire NFTs
+- **Deeper Markets**: More granular price discovery
+- **Arbitrage**: Balance prices between wNFT tokens and NFT floor prices
+
+### For Developers
+- **Simple Integration**: Standard ERC-20 interface
+- **Predictable Addresses**: CREATE2 deployment enables address precomputation
+- **No Upgrades**: Immutable contracts, no admin keys
+- **Deterministic Supply**: Token supply is always verifiable on-chain
+
+## wNFT Interface
+
+```solidity
+interface IwNFT {
+    // Deposit NFTs and mint tokens to recipient
+    function deposit(uint256[] calldata tokenIds, address recipient)
+        external returns (uint256 mintedAmount);
+
+    // Burn tokens and withdraw NFTs to recipient
+    function withdraw(uint256[] calldata tokenIds, address recipient)
+        external returns (uint256 burnedAmount);
+
+    // Calculate tokens minted for N NFTs (returns N × 1e18)
+    function quoteDeposit(uint256 count) external pure returns (uint256);
+
+    // Calculate tokens burned for N NFTs (returns N × 1e18)
+    function quoteWithdraw(uint256 count) external pure returns (uint256);
+
+    // Get underlying NFT collection address
+    function erc721() external view returns (address);
+
+    // Get token address (same as wNFT contract address)
+    function erc20() external view returns (address);
+
+    // Fixed mint/burn amount per NFT
+    function UNIT() external view returns (uint256);
+}
+
+event Deposit(address indexed recipient, uint256[] tokenIds, uint256 erc20Amt);
+event Withdraw(address indexed recipient, uint256[] tokenIds, uint256 erc20Amt);
+```
 
 ## Technical Implementation
 
 ### Core Technology Stack
-- **Languages**: Solidity for the core vault and derivative tooling, plus Vyper 0.4.3 for lightweight mocks used in tests
-- **Architecture**: Modular design with clear separation of concerns
-- **Standards**: ERC20, ERC721, ERC4626 compliant implementations where applicable
-- **Testing Framework**: Comprehensive Foundry test suite with deterministic builds
+- **Language**: Solidity 0.8.26 (Cancun EVM)
+- **ERC-20 Implementation**: Solady (gas-optimized)
+- **EIP-712 Support**: Native permit signatures for gasless approvals
+- **Deployment**: CREATE2 for deterministic addresses
+- **Testing**: Foundry with comprehensive test coverage
 
-### Security Posture
-- The Solidity vault mirrors WETH-style semantics: minting and burning are guarded only by real inventory
-- Factories deploy vaults deterministically via CREATE2 with no upgrade hooks or owner keys
-- Derivative tooling (factories, hooks) layers ownership where needed for routing and pool management
-- Invariant-based Foundry tests assert that ERC20 supply always matches escrowed NFT count
-*Legacy migration contracts now live in the separate `wNFTV1Migration` repository.*
+### Security Design
+- **No Upgrades**: Contracts are immutable once deployed
+- **No Admin Keys**: Fully permissionless operation
+- **Inventory-Backed**: Token supply is always backed 1:1 by escrowed NFTs
+- **Reentrancy Safe**: Burns tokens before external calls on withdrawal
+- **Invariant Testing**: Automated tests verify supply always equals inventory
+- **Event Tracking**: All state changes emit events for off-chain monitoring
 
-## Smart Contract Documentation
-
-### wNFT.sol
-Solidity vault that locks a collection, mints `UNIT` (1e18) REMY per NFT deposit, burns on withdrawal, and exposes deterministic quoting helpers to enforce the 1:1 backing invariant. Deposit and withdraw events mirror each inventory mutation for downstream accounting. Extends `wNFTEIP712` to provide ERC20 functionality with EIP-2612 permit support for gasless approvals.
-
-### wNFTFactory.sol
-Factory contract that deploys deterministic `wNFT` instances using CREATE2, keyed by ERC721 collection address. Enforces one-vault-per-collection invariant and prevents circular references (a vault cannot be used as a collection for another vault). Provides address prediction before deployment and supports both standard `wNFT` and derivative `MinterwNFT` deployments. The factory maintains `wNFTFor` mapping (collection → vault) and `iswNFT` flag to prevent vault address reuse.
-
-### MinterwNFT.sol
-Derivative vault variant extending `wNFT` that pre-mints its full token supply (maxSupply × 1e18) at construction. Users burn vault tokens to mint new derivative NFTs (via `wNFTNFT`). Enforces supply caps through `mintedCount` tracking. Supports the standard deposit/withdraw cycle for derivative NFTs, enabling recursive fractionalization patterns.
-
-### DerivativeFactory.sol
-Orchestrates full derivative ecosystem deployment: creates NFT collections (`wNFTNFT`), deploys derivative vaults (`MinterwNFT`), registers root pools (ETH/ParentToken) and child pools (ParentToken/DerivativeToken) in Uniswap V4, and seeds initial liquidity. Manages ownership transfer, minter permissions, and token distribution. Handles refunds when liquidity provisioning consumes less than provided. Requires hook ownership to configure fee-sharing hierarchy.
-
-### wNFTHook.sol
-Uniswap V4 hook extending `BaseHook` that captures fees on swaps involving vault tokens and distributes them across the pool hierarchy. Implements:
-- **Fee Structure**: 10% total fee (1000 bps) on trades
-- **Fee Splitting**: Child pools retain 75%, parent pools receive 25% when hierarchies exist
-- **Pool Topology**: Root pools must pair with ETH; child pools cannot use ETH and must share exactly one token with their parent
-- **Fee Distribution**: Fees donated back to pools to reward liquidity providers
-
-**Note**: The hook manages fee routing between pools, not direct NFT trading within Uniswap. NFT↔token conversion happens through vault deposit/withdraw functions.
-
-### wNFTNFT.sol
-Enumerable ERC721 with minter permission system for derivative NFT collections. Supports batch minting/burning, per-token URI customization, and base URI management. Implements ERC721Enumerable through internal tracking (`_allTokens`, `_ownedTokens`) for efficient iteration. Ownership and minter permissions independently manageable for flexible collection governance.
-
-### Migration Tooling
-Contracts that interact with wNFT V1 (e.g., the migrator and rescue router) have moved to the dedicated [`wNFTV1Migration`](../wNFTV1Migration) repository so this codebase can remain focused on the V2 primitive and new ecosystem modules.
-
-### Test Helpers
-`src/mock/` contains lightweight ERC-20 and ERC-721 mocks for Foundry tests, and `src/interfaces/` ships the minimal ABI surfaces (ERC standards plus project-specific interfaces) consumed across the ecosystem.
+### Gas Optimization
+- Uses Solady's assembly-optimized ERC-20 implementation
+- Batch deposits/withdrawals in single transaction
+- Minimal storage reads through immutable collection reference
+- Efficient EIP-712 domain separator caching
 
 ## Installation and Testing
 
-This project uses [Foundry](https://book.getfoundry.sh/) for development and testing. If you haven't installed Foundry yet, follow their [installation guide](https://book.getfoundry.sh/getting-started/installation).
+This project uses [Foundry](https://book.getfoundry.sh/) for development and testing.
 
 ```bash
-# Build the project
+# Clone the repository
+git clone https://github.com/yourusername/wnft
+cd wnft
+
+# Install dependencies
+forge install
+
+# Build contracts
 forge build
 
-# Run tests
+# Run test suite
 forge test
+
+# Run tests with gas reporting
+forge test --gas-report
+
+# Run specific test file
+forge test --match-contract wNFTTest
 ```
 
+## Advanced: Derivatives Ecosystem
+
+Beyond the core wNFT and factory, the protocol includes advanced tooling for creating derivative NFT collections with integrated liquidity:
+
+### DerivativeFactory
+
+Orchestrates deployment of derivative NFT collections with automatic Uniswap V4 pool creation and liquidity provisioning. Creates:
+- New ERC-721 collection (`wNFTNFT`)
+- Derivative wNFT contract (`MinterwNFT`)
+- Root pool (ETH/ParentToken) and child pool (ParentToken/DerivativeToken)
+- Initial liquidity seeding with fee-sharing hierarchy
+
+### MinterwNFT
+
+Variant of wNFT that pre-mints its full token supply at construction. Users burn tokens to mint derivative NFTs, enabling supply-capped derivative collections.
+
+### wNFTHook
+
+Uniswap V4 hook that captures trading fees and distributes them across a pool hierarchy:
+- **Fee Structure**: 10% total fee on swaps
+- **Fee Splitting**: 75% to child pools, 25% to parent pools
+- **Topology**: Root pools pair with ETH, child pools connect to parent tokens
+- **Distribution**: Fees donated back to pools to reward liquidity providers
+
+### wNFTNFT
+
+Enumerable ERC-721 implementation with minter permissions for derivative collections. Supports batch minting/burning and per-token URI customization.
+
+### Use Cases
+
+**Derivative Collections**: Launch new NFT collections (e.g., "Mutant" variants) that inherit liquidity from parent collections.
+
+**Cross-Collection Trading**: Trade between parent and derivative tokens within Uniswap V4 pools.
+
+**Fee Income**: Liquidity providers earn fees across the hierarchical pool network.
+
+**Note**: These contracts are production-ready but represent advanced use cases. Most integrations only need the core wNFT and wNFTFactory contracts.
 
 ## Contributing
 
