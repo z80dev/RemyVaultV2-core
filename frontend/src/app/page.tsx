@@ -6,6 +6,7 @@ export default function Home() {
       {/* Hero Section */}
       <section className="hero">
         <div className="hero-content">
+          <span className="hero-badge">Base Native · Open Source</span>
           <h1 className="hero-title">
             wNFT
           </h1>
