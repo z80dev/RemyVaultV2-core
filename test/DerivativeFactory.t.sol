@@ -270,7 +270,7 @@ contract DerivativeFactoryTest is Test, DerivativeTestUtils {
         }
         assertTrue(foundDerivativeEvent, "DerivativeCreated event not emitted");
 
-        assertEq(vaultFactory.vaultFor(derivativeNft), derivativeVault, "factory should map NFT to vault");
+        // Derivative vaults are managed by DerivativeFactory, not wNFTFactory
         assertEq(factory.vaultForNft(derivativeNft), derivativeVault, "vault lookup mismatch");
 
         (address infoNft, address infoParent, PoolId infoPoolId) = factory.derivativeForVault(derivativeVault);

@@ -109,7 +109,7 @@ contract DerivativeFactoryForkTest is BaseTest, DerivativeTestUtils {
 
         (address derivativeNft, address derivativeVault, PoolId childPoolId) = factory.createDerivative(params);
 
-        assertEq(vaultFactory.vaultFor(derivativeNft), derivativeVault, "vault mapping mismatch");
+        // Derivative vaults are managed by DerivativeFactory, not wNFTFactory
         assertEq(factory.vaultForNft(derivativeNft), derivativeVault, "factory vault lookup mismatch");
 
         (address infoNft, address infoParent, PoolId infoPoolId) = factory.derivativeForVault(derivativeVault);

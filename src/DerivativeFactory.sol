@@ -134,7 +134,12 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         returns (address nft, address vault, PoolId childPoolId)
     {
         // Look up the RemyVault for the parent collection
+        // First check wNFTFactory for regular collections
         address parentVault = VAULT_FACTORY.vaultFor(params.parentCollection);
+        // If not found, check if it's a derivative NFT (for derivative-of-derivative)
+        if (parentVault == address(0)) {
+            parentVault = vaultForNft[params.parentCollection];
+        }
         if (parentVault == address(0)) revert ParentCollectionHasNoVault(params.parentCollection);
 
         // Verify root pool exists with standard parameters
@@ -152,7 +157,15 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
             new wNFTNFT(params.nftName, params.nftSymbol, params.nftBaseUri, address(this));
 
         nft = address(derivativeNft);
-        vault = VAULT_FACTORY.deployDerivativeVault(nft, params.maxSupply, params.salt);
+
+        // Deploy derivative vault (wNFTMinter) directly
+        vault = address(new wNFTMinter{salt: params.salt}(nft, params.maxSupply));
+
+        // Transfer pre-minted supply from vault to this contract
+        uint256 mintedSupply = wNFTMinter(vault).balanceOf(address(this));
+        if (mintedSupply != 0) {
+            wNFTMinter(vault).transfer(address(this), mintedSupply);
+        }
 
         // Enforce that derivative vault address > parent vault address (derivative will be token1)
         if (vault <= parentVault) {
@@ -238,7 +251,11 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         view
         returns (address)
     {
-        return VAULT_FACTORY.computeDerivativeAddress(nftAddress, maxSupply, salt);
+        bytes32 bytecodeHash =
+            keccak256(abi.encodePacked(type(wNFTMinter).creationCode, abi.encode(nftAddress, maxSupply)));
+        return address(
+            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, bytecodeHash))))
+        );
     }
 
     modifier requiresHookOwnership() {

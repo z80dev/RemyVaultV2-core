@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {wNFTMinter} from "./wNFTMinter.sol";
 import {wNFT} from "./wNFT.sol";
 
 /// @notice Deploys deterministic `wNFT` instances keyed by ERC721 collection.
@@ -34,27 +33,6 @@ contract wNFTFactory {
         emit VaultCreated(collection, vault);
     }
 
-    /// @notice Deploy a derivative vault that pre-mints its full token supply to the caller.
-    function deployDerivativeVault(address collection, uint256 maxSupply, bytes32 salt)
-        external
-        returns (address vault)
-    {
-        if (collection == address(0)) revert CollectionAddressZero();
-        if (vaultFor[collection] != address(0)) revert CollectionAlreadyDeployed(collection);
-        if (isVault[collection]) revert CollectionIsVault(collection);
-
-        vault = address(new wNFTMinter{salt: salt}(collection, maxSupply));
-
-        uint256 mintedSupply = wNFTMinter(vault).balanceOf(address(this));
-        if (mintedSupply != 0) {
-            wNFTMinter(vault).transfer(msg.sender, mintedSupply);
-        }
-
-        vaultFor[collection] = vault;
-        isVault[vault] = true;
-        emit VaultCreated(collection, vault);
-    }
-
     /// @notice Compute the vault address for the provided constructor arguments without deploying.
     function computeAddress(address collection) external view returns (address) {
         if (collection == address(0)) revert CollectionAddressZero();
@@ -62,20 +40,6 @@ contract wNFTFactory {
 
         bytes32 bytecodeHash = keccak256(abi.encodePacked(type(wNFT).creationCode, abi.encode(collection)));
         return _computeCreate2Address(_salt(collection), bytecodeHash);
-    }
-
-    /// @notice Compute the address for a derivative vault without deploying.
-    function computeDerivativeAddress(address collection, uint256 maxSupply, bytes32 salt)
-        external
-        view
-        returns (address)
-    {
-        if (collection == address(0)) revert CollectionAddressZero();
-        if (isVault[collection]) revert CollectionIsVault(collection);
-
-        bytes32 bytecodeHash =
-            keccak256(abi.encodePacked(type(wNFTMinter).creationCode, abi.encode(collection, maxSupply)));
-        return _computeCreate2Address(salt, bytecodeHash);
     }
 
     /// @notice Helper to derive the salt used for CREATE2 deployments.
