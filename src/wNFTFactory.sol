@@ -6,37 +6,37 @@ import {wNFT} from "./wNFT.sol";
 /// @notice Deploys deterministic `wNFT` instances keyed by ERC721 collection.
 contract wNFTFactory {
     /// @dev Track deployed vault per collection to prevent duplicates.
-    mapping(address => address) public vaultFor;
+    mapping(address => address) public wNFTFor;
 
-    /// @dev Record deployed vault addresses to block them from being re-used as collections.
-    mapping(address => bool) public isVault;
+    /// @dev Record deployed wNFT addresses to block them from being re-used as collections.
+    mapping(address => bool) public iswNFT;
 
-    /// @notice Emitted when a new vault is deployed for an ERC721 collection.
-    event VaultCreated(address indexed collection, address indexed vault);
+    /// @notice Emitted when a new wNFT is deployed for an ERC721 collection.
+    event wNFTCreated(address indexed collection, address indexed wNFT);
 
     error CollectionAlreadyDeployed(address collection);
     error CollectionAddressZero();
-    error CollectionIsVault(address vault);
+    error CollectionIswNFT(address wNFT);
 
-    /// @notice Deploy a new vault for `collection` using `CREATE2` salt derived from the collection address.
-    /// @dev Reverts if the collection already has an associated vault or the collection address is zero.
-    function deployVault(address collection) external returns (address vault) {
+    /// @notice Deploy a new wNFT for `collection` using `CREATE2` salt derived from the collection address.
+    /// @dev Reverts if the collection already has an associated wNFT or the collection address is zero.
+    function create(address collection) external returns (address wNFTAddr) {
         if (collection == address(0)) revert CollectionAddressZero();
-        if (vaultFor[collection] != address(0)) revert CollectionAlreadyDeployed(collection);
-        if (isVault[collection]) revert CollectionIsVault(collection);
+        if (wNFTFor[collection] != address(0)) revert CollectionAlreadyDeployed(collection);
+        if (iswNFT[collection]) revert CollectionIswNFT(collection);
 
         bytes32 salt = _salt(collection);
-        vault = address(new wNFT{salt: salt}(collection));
+        wNFTAddr = address(new wNFT{salt: salt}(collection));
 
-        vaultFor[collection] = vault;
-        isVault[vault] = true;
-        emit VaultCreated(collection, vault);
+        wNFTFor[collection] = wNFTAddr;
+        iswNFT[wNFTAddr] = true;
+        emit wNFTCreated(collection, wNFTAddr);
     }
 
-    /// @notice Compute the vault address for the provided constructor arguments without deploying.
+    /// @notice Compute the wNFT address for the provided constructor arguments without deploying.
     function computeAddress(address collection) external view returns (address) {
         if (collection == address(0)) revert CollectionAddressZero();
-        if (isVault[collection]) revert CollectionIsVault(collection);
+        if (iswNFT[collection]) revert CollectionIswNFT(collection);
 
         bytes32 bytecodeHash = keccak256(abi.encodePacked(type(wNFT).creationCode, abi.encode(collection)));
         return _computeCreate2Address(_salt(collection), bytecodeHash);

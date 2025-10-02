@@ -1,61 +1,25 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.26;
 
 import "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 
-interface ICreateX {
-    function deployCreate2(bytes calldata initCode, bytes32 salt) external payable returns (address newContract);
-}
+import {wNFTFactory} from "../src/wNFTFactory.sol";
+import {wNFT} from "../src/wNFT.sol";
 
 /**
- * @notice Script that deploys the RemyVaultFactory via the shared CreateX factory, using a configurable salt.
+ * @notice Script that deploys the wNFTFactory contract.
  */
-contract DeployRemyVaultFactory is Script {
-    address public constant CREATEX_FACTORY = 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed;
-    bytes32 internal constant DEFAULT_DEPLOYMENT_SALT = keccak256("remyboysincontrol");
+contract DeploywNFTFactory is Script {
+    // Impersonated deployer used throughout the existing scripts/tests.
+    address internal constant DEPLOYER = 0x70f4b83795Af9236dA8211CDa3b031E503C00970;
+    bytes32 salt = keccak256("remyboysincontrol");
 
-    /// @dev Set the salt via env var `SALT` (raw string automatically keccak'd) or `SALT_HEX` for explicit bytes32.
     function run() external {
-        bytes32 salt = _resolveSalt();
-
-        uint256 deployerKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(deployerKey);
-        console2.log("deployer", deployer);
-        console2.log("salt", salt);
-
-        bytes memory initCode = _factoryInitCode();
-        console2.log("init code hash", keccak256(initCode));
-        console2.log("predicted address", _predictAddress(initCode, salt));
-
-        vm.startBroadcast(deployerKey);
-        address deployed = ICreateX(CREATEX_FACTORY).deployCreate2(initCode, salt);
+        vm.startBroadcast();
+        wNFTFactory factory = new wNFTFactory{salt: salt}();
         vm.stopBroadcast();
 
-        console2.log("RemyVaultFactory deployed at", deployed);
-    }
-
-    function _factoryInitCode() internal view returns (bytes memory) {
-        bytes memory creation = vm.getCode("RemyVaultFactory.sol:RemyVaultFactory");
-        require(creation.length != 0, "init code empty");
-        return creation;
-    }
-
-    function _resolveSalt() internal view returns (bytes32) {
-        string memory saltString = vm.envOr("SALT", string(""));
-        if (bytes(saltString).length != 0) {
-            return keccak256(bytes(saltString));
-        }
-
-        bytes32 rawSalt = vm.envOr("SALT_HEX", bytes32(0));
-        if (rawSalt != bytes32(0)) {
-            return rawSalt;
-        }
-
-        return DEFAULT_DEPLOYMENT_SALT;
-    }
-
-    function _predictAddress(bytes memory initCode, bytes32 salt) internal view returns (address) {
-        return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), CREATEX_FACTORY, salt, keccak256(initCode))))));
+        console2.log("wNFTFactory deployed at", address(factory));
     }
 }

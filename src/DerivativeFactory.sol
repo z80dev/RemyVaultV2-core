@@ -94,7 +94,7 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
     IPoolManager public immutable POOL_MANAGER;
 
     mapping(address => DerivativeInfo) public derivativeForVault;
-    mapping(address => address) public vaultForNft;
+    mapping(address => address) public wNFTForNft;
 
     constructor(wNFTFactory vaultFactory_, wNFTHook hook_, address owner_) {
         if (address(vaultFactory_) == address(0) || address(hook_) == address(0) || owner_ == address(0)) {
@@ -113,7 +113,7 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
         requiresHookOwnership
         returns (address vault, PoolId poolId)
     {
-        vault = VAULT_FACTORY.deployVault(collection);
+        vault = VAULT_FACTORY.create(collection);
 
         // Initialize the root pool with dynamic fee flag and standard tick spacing
         if (sqrtPriceX96 == 0) revert InvalidSqrtPrice();
@@ -135,10 +135,10 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
     {
         // Look up the RemyVault for the parent collection
         // First check wNFTFactory for regular collections
-        address parentVault = VAULT_FACTORY.vaultFor(params.parentCollection);
+        address parentVault = VAULT_FACTORY.wNFTFor(params.parentCollection);
         // If not found, check if it's a derivative NFT (for derivative-of-derivative)
         if (parentVault == address(0)) {
-            parentVault = vaultForNft[params.parentCollection];
+            parentVault = wNFTForNft[params.parentCollection];
         }
         if (parentVault == address(0)) revert ParentCollectionHasNoVault(params.parentCollection);
 
@@ -201,7 +201,7 @@ contract DerivativeFactory is Ownable, IUnlockCallback {
 
         childPoolId = childKey.toId();
         derivativeForVault[vault] = DerivativeInfo({nft: nft, parentVault: parentVault, poolId: childPoolId});
-        vaultForNft[nft] = vault;
+        wNFTForNft[nft] = vault;
 
         uint256 parentBalanceAfter = parentToken.balanceOf(address(this));
         uint256 derivativeBalanceAfter = derivativeToken.balanceOf(address(this));
